@@ -1,0 +1,241 @@
+/* =========================================================================
+   collection-carousel.css — ranked collection rail
+   -------------------------------------------------------------------------
+   Measured from the reference storefront:
+
+                            desktop (1280)        mobile (375)
+     section padding        30px 0 20px           same
+     title                  32px / 500 / -0.64px  24px, centred
+     track                  flex, gap 35px,       gap 35px
+                            padding 30px 30px 20px 40px
+     card                   254 x 381             123 x 185
+     image corner           8px radius, clipped
+     image ground           #1a1a1a
+     overlay                linear-gradient(transparent 40%, rgb(0 0 0 / .8) 100%)
+     rank numeral           190px / 800 / -6px / line-height 152px / #f7f7f7
+                            sits behind the card, 68px out to the left
+                            95px on mobile
+     badge                  9px / 600 / .5px / uppercase, white on #a21935,
+                            padding 4px 8px, radius 4px 4px 0 0
+     label                  13px / 600 / 1px / uppercase, white, centred
+     arrows                 44px circles, white at 90%, hidden on mobile
+
+   The rank numeral is the signature of this section: an oversized, almost
+   white numeral that peeks out from behind the lower-left of each card.
+   ========================================================================= */
+
+.collections {
+  padding: 30px 0 20px;
+  background: var(--c-paper);
+  /* The section is inset from the viewport; the track then adds its own
+     padding on top, which is what puts the first card 80px in and leaves
+     room for its rank numeral. */
+  margin-inline: 40px;
+}
+
+.collections__head {
+  padding-inline: var(--sp-6);
+  text-align: center;
+}
+
+.collections__title {
+  margin: 0;
+  font-size: 32px;
+  font-weight: var(--fw-medium);
+  line-height: 1.2;
+  letter-spacing: -.64px;
+  color: #000;
+}
+
+/* -------------------------------------------------------------------------
+   RAIL
+   ------------------------------------------------------------------------- */
+
+.collections__viewport { position: relative; }
+
+.collections__track {
+  display: flex;
+  gap: 35px;
+  /* The generous left padding is what gives the first card's numeral room
+     to sit outside the card without being clipped. */
+  padding: 30px 30px 20px 40px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.collections__track::-webkit-scrollbar { display: none; }
+
+/* -------------------------------------------------------------------------
+   CARD
+   ------------------------------------------------------------------------- */
+
+.collection-card {
+  position: relative;
+  flex: 0 0 auto;
+  width: 254px;
+  height: 381px;
+  color: inherit;
+}
+
+/* The oversized rank numeral, behind the card and bleeding out to the left. */
+.collection-card__rank {
+  position: absolute;
+  left: -68px;
+  top: 237px;
+  z-index: 1;
+  font-size: 190px;
+  font-weight: 800;
+  line-height: 152px;
+  letter-spacing: -6px;
+  color: #f7f7f7;
+  pointer-events: none;
+  user-select: none;
+}
+
+.collection-card__media {
+  position: relative;
+  z-index: 2;          /* covers the part of the numeral behind the card */
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #1a1a1a;
+}
+
+.collection-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--dur-slow) var(--ease-out-quad);
+}
+
+/* Darkens only the lower part, so the label stays readable. */
+.collection-card__overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgb(0 0 0 / 0) 40%, rgb(0 0 0 / .8) 100%);
+  pointer-events: none;
+}
+
+.collection-card__stack {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.collection-card__badge {
+  padding: 4px 8px;
+  background: #a21935;
+  border-radius: 4px 4px 0 0;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 13px;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.collection-card__label {
+  width: 100%;
+  padding: 6px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+/* Restrained zoom, matching the site-wide hover amount. */
+.collection-card:hover .collection-card__media img {
+  transform: scale(var(--hover-zoom));
+}
+
+/* -------------------------------------------------------------------------
+   ARROWS
+   Absolute circles centred on the card band; not shown on small screens,
+   where the rail is swiped instead.
+   ------------------------------------------------------------------------- */
+
+.collections__nav {
+  position: absolute;
+  top: 215px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: rgb(255 255 255 / .9);
+  border: .67px solid rgb(0 0 0 / .1);
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgb(0 0 0 / .15);
+  color: #000;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
+}
+.collections__nav:hover { background: #fff; transform: scale(1.06); }
+.collections__nav:active { transform: scale(.96); }
+
+.collections__nav--prev { left: 10px; }
+.collections__nav--next { right: 10px; }
+
+.collections__nav svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Fade out at the ends of the rail rather than disappearing. */
+.collections__nav[disabled] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* -------------------------------------------------------------------------
+   RESPONSIVE
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 989px) {
+  .collections__nav { display: none; }
+}
+
+@media (max-width: 749px) {
+  .collections__title { font-size: 24px; }
+
+  .collection-card { width: 123px; height: 185px; }
+
+  .collection-card__rank {
+    font-size: 95px;
+    line-height: 76px;
+    top: 118px;
+    left: -34px;
+  }
+
+  .collections__track { padding: 20px 20px 16px 24px; }
+  .collections { margin-inline: 24px; }
+}
+
+/* -------------------------------------------------------------------------
+   REDUCED MOTION
+   ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .collections__track { scroll-behavior: auto; }
+  .collection-card:hover .collection-card__media img { transform: none; }
+  .collections__nav:hover { transform: none; }
+}

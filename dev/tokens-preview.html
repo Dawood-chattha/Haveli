@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Foundation specimen — tokens, type, buttons, motion</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="../assets/css/tokens.css">
+<link rel="stylesheet" href="../assets/css/base.css">
+<link rel="stylesheet" href="../assets/css/layout.css">
+
+<style>
+  /* Specimen-only styling. Nothing here is part of the site. */
+  .spec { padding-block: var(--sp-8); border-top: 1px solid var(--c-line); }
+  .spec:first-of-type { border-top: 0; }
+  .spec h3 { margin-bottom: var(--sp-4); }
+  .swatch { border: 1px solid var(--c-line); }
+  .swatch__chip { height: 72px; }
+  .swatch__label { padding: var(--sp-2) var(--sp-3); font-size: var(--fs-3xs); }
+  .swatch__label code { color: var(--c-muted); display: block; }
+  .row { display: flex; align-items: baseline; gap: var(--sp-4); padding-block: var(--sp-2); border-bottom: 1px dashed var(--c-line-soft); }
+  .row__key { flex: 0 0 7rem; font-size: var(--fs-3xs); color: var(--c-muted); }
+  .sp-bar { background: var(--c-ink); height: 10px; }
+  .demo-card { border: 1px solid var(--c-line); background: #fff; }
+  .demo-card__body { padding: var(--sp-3); }
+  .on-image { background: linear-gradient(135deg, #6b6257, #2e2a24); padding: var(--sp-10); }
+</style>
+</head>
+
+<body class="page">
+<main class="page__main container">
+
+  <div class="section">
+    <p class="eyebrow">Phase 2</p>
+    <h1>Foundation specimen</h1>
+    <p class="lead measure">Every token, type step, button role and motion default in one place, so the
+      foundation can be checked before any section is built on top of it.</p>
+  </div>
+
+  <!-- COLOUR -->
+  <section class="spec">
+    <h3>Colour</h3>
+    <div class="grid grid--5" style="--grid-gap:var(--sp-3)">
+      <div class="swatch"><div class="swatch__chip" style="background:var(--c-ink)"></div><div class="swatch__label">Ink<code>--c-ink</code></div></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--c-body)"></div><div class="swatch__label">Body 76%<code>--c-body</code></div></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--c-muted)"></div><div class="swatch__label">Muted 60%<code>--c-muted</code></div></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--c-faint)"></div><div class="swatch__label">Faint 37%<code>--c-faint</code></div></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--c-line)"></div><div class="swatch__label">Line 12%<code>--c-line</code></div></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--c-paper)"></div><div class="swatch__label">Paper<code>--c-paper</code></div></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--c-paper-alt)"></div><div class="swatch__label">Paper alt<code>--c-paper-alt</code></div></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--c-stone)"></div><div class="swatch__label">Stone<code>--c-stone</code></div></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--c-stone-tint)"></div><div class="swatch__label">Stone tint<code>--c-stone-tint</code></div></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--c-sale)"></div><div class="swatch__label">Sale (provisional)<code>--c-sale</code></div></div>
+    </div>
+  </section>
+
+  <!-- TYPE -->
+  <section class="spec">
+    <h3>Type scale</h3>
+    <div class="row"><span class="row__key">3xs · 11</span><span style="font-size:var(--fs-3xs)">Real fashion, real prices</span></div>
+    <div class="row"><span class="row__key">2xs · 12</span><span style="font-size:var(--fs-2xs)">Real fashion, real prices</span></div>
+    <div class="row"><span class="row__key">xs · 13</span><span style="font-size:var(--fs-xs)">Real fashion, real prices</span></div>
+    <div class="row"><span class="row__key">sm · 14 base</span><span style="font-size:var(--fs-sm)">Real fashion, real prices</span></div>
+    <div class="row"><span class="row__key">md · 16</span><span style="font-size:var(--fs-md)">Real fashion, real prices</span></div>
+    <div class="row"><span class="row__key">lg · 18</span><span style="font-size:var(--fs-lg)">Real fashion, real prices</span></div>
+    <div class="row"><span class="row__key">xl · 22</span><span style="font-size:var(--fs-xl)">Real fashion, real prices</span></div>
+    <div class="row"><span class="row__key">2xl · 28</span><span style="font-size:var(--fs-2xl)">Real fashion, real prices</span></div>
+    <div class="row"><span class="row__key">3xl · 36</span><span style="font-size:var(--fs-3xl)">Real fashion</span></div>
+    <div class="row"><span class="row__key">4xl · 42</span><span style="font-size:var(--fs-4xl);font-weight:var(--fw-bold);letter-spacing:var(--ls-tight)">Real fashion</span></div>
+
+    <h3 style="margin-top:var(--sp-8)">Headings &amp; roles</h3>
+    <p class="eyebrow">Silk-tested. Woman-approved.</p>
+    <h2 style="font-size:var(--fs-banner)">Grace in Every Detail</h2>
+    <p class="lead measure">Intricate embroidery and rich fabric, cut for every occasion that matters.</p>
+    <p class="measure">Default body copy sits at 14px with a 1.4 line height and the ink softened to 76%,
+      which is what keeps long descriptions readable without competing with headings.</p>
+    <p><a href="#" class="link-underline">Hover this link to see the underline sweep</a></p>
+  </section>
+
+  <!-- BUTTONS -->
+  <section class="spec">
+    <h3>Buttons</h3>
+    <div class="cluster">
+      <button class="btn btn--primary">Shop the edit</button>
+      <button class="btn btn--secondary">Discover more</button>
+      <button class="btn btn--primary btn--sm">Small</button>
+      <button class="btn btn--primary" disabled>Disabled</button>
+    </div>
+    <div class="on-image" style="margin-top:var(--sp-5)">
+      <button class="btn btn--on-image">Shop essential pret</button>
+      <p style="color:#fff;opacity:.75;font-size:var(--fs-3xs);margin-top:var(--sp-3)">Frosted CTA as used over banner photography</p>
+    </div>
+  </section>
+
+  <!-- SPACING -->
+  <section class="spec">
+    <h3>Spacing scale</h3>
+    <div class="row"><span class="row__key">sp-1 · 4</span><span class="sp-bar" style="width:var(--sp-1)"></span></div>
+    <div class="row"><span class="row__key">sp-2 · 8</span><span class="sp-bar" style="width:var(--sp-2)"></span></div>
+    <div class="row"><span class="row__key">sp-3 · 12</span><span class="sp-bar" style="width:var(--sp-3)"></span></div>
+    <div class="row"><span class="row__key">sp-4 · 16</span><span class="sp-bar" style="width:var(--sp-4)"></span></div>
+    <div class="row"><span class="row__key">sp-6 · 24</span><span class="sp-bar" style="width:var(--sp-6)"></span></div>
+    <div class="row"><span class="row__key">sp-8 · 32</span><span class="sp-bar" style="width:var(--sp-8)"></span></div>
+    <div class="row"><span class="row__key">sp-12 · 48</span><span class="sp-bar" style="width:var(--sp-12)"></span></div>
+    <div class="row"><span class="row__key">sp-16 · 64</span><span class="sp-bar" style="width:var(--sp-16)"></span></div>
+    <div class="row"><span class="row__key">sp-24 · 96</span><span class="sp-bar" style="width:var(--sp-24)"></span></div>
+  </section>
+
+  <!-- GRID + RATIOS -->
+  <section class="spec">
+    <h3>Product grid &amp; ratio (2 → 3 → 4 up)</h3>
+    <div class="grid grid--products">
+      <div class="demo-card hover-lift hover-zoom">
+        <div class="ratio ratio--product" style="background:var(--c-stone)"></div>
+        <div class="demo-card__body"><strong>Summer Luxury 3 Pc</strong><br><span style="color:var(--c-muted)">PKR 6,990</span></div>
+      </div>
+      <div class="demo-card hover-lift hover-zoom">
+        <div class="ratio ratio--product" style="background:var(--c-paper-alt)"></div>
+        <div class="demo-card__body"><strong>Essential Kurta</strong><br><span style="color:var(--c-muted)">PKR 3,490</span></div>
+      </div>
+      <div class="demo-card hover-lift hover-zoom">
+        <div class="ratio ratio--product" style="background:var(--c-stone-tint)"></div>
+        <div class="demo-card__body"><strong>Eastern Wear</strong><br><span style="color:var(--c-muted)">PKR 4,250</span></div>
+      </div>
+      <div class="demo-card hover-lift hover-zoom">
+        <div class="ratio ratio--product" style="background:var(--c-stone)"></div>
+        <div class="demo-card__body"><strong>Body Mist</strong><br><span style="color:var(--c-muted)">PKR 1,190</span></div>
+      </div>
+    </div>
+    <p style="margin-top:var(--sp-3);color:var(--c-muted);font-size:var(--fs-xs)">
+      Hover a card: 4px lift, soft shadow, 1.015 image zoom — the reference's own hover amounts.</p>
+  </section>
+
+  <!-- MOTION -->
+  <section class="spec">
+    <h3>Scroll reveal (staggered)</h3>
+    <div class="grid grid--3">
+      <div class="demo-card reveal"><div class="demo-card__body">Reveal · no delay</div></div>
+      <div class="demo-card reveal" style="--d:.1s"><div class="demo-card__body">Reveal · 0.1s</div></div>
+      <div class="demo-card reveal" style="--d:.2s"><div class="demo-card__body">Reveal · 0.2s</div></div>
+      <div class="demo-card reveal reveal--left" style="--d:.1s"><div class="demo-card__body">From left</div></div>
+      <div class="demo-card reveal reveal--right" style="--d:.2s"><div class="demo-card__body">From right</div></div>
+      <div class="demo-card reveal reveal--scale" style="--d:.3s"><div class="demo-card__body">Scale in</div></div>
+    </div>
+    <p style="margin-top:var(--sp-4);color:var(--c-muted);font-size:var(--fs-xs)">
+      0.6s, cubic-bezier(.25,.46,.45,.94), 16px rise. Runs once. All motion is switched off under
+      <code>prefers-reduced-motion</code>.</p>
+  </section>
+
+  <div class="section"></div>
+
+</main>
+
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

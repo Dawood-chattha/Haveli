@@ -1,0 +1,208 @@
+/* =========================================================================
+   tokens.css — design tokens
+   -------------------------------------------------------------------------
+   Values extracted from the live reference storefront (computed styles +
+   its own custom properties), then renamed into a scheme that is easier to
+   read. Every other stylesheet spends these; no stylesheet should ever
+   hard-code a colour, duration or radius that exists here.
+   ========================================================================= */
+
+:root {
+
+  /* ---------------------------------------------------------------------
+     COLOUR
+     The palette is almost monochrome: a near-black ink, white paper, and a
+     single warm stone neutral used for hairlines and input fills. Body copy
+     is the ink at 76% — that softening is what stops the page feeling harsh.
+     --------------------------------------------------------------------- */
+
+  --c-ink-rgb: 3 3 2;
+  --c-ink: rgb(var(--c-ink-rgb) / 1);          /* headings, borders, primary button */
+  --c-body: rgb(var(--c-ink-rgb) / .76);       /* default body text */
+  --c-muted: rgb(var(--c-ink-rgb) / .60);      /* secondary text, meta */
+  --c-faint: rgb(var(--c-ink-rgb) / .37);      /* disabled, placeholder */
+  --c-line: rgb(var(--c-ink-rgb) / .12);       /* hairline dividers */
+  --c-line-soft: rgb(var(--c-ink-rgb) / .06);
+
+  --c-paper: #ffffff;                          /* page background */
+  --c-paper-alt: #fafaf9;                      /* alternating section ground */
+
+  --c-stone-rgb: 211 206 197;
+  --c-stone: rgb(var(--c-stone-rgb) / 1);      /* secondary button border */
+  --c-stone-tint: rgb(var(--c-stone-rgb) / .09); /* input fill */
+
+  /* On-image UI — the banner CTAs sit on photography as a frosted panel */
+  --c-on-image: #ffffff;
+  --c-on-image-fill: rgb(255 255 255 / .24);
+  --c-on-image-fill-hover: rgb(255 255 255 / .38);
+
+  /* Measured on a live collection page in the product-card phase, and the
+     answer was that the reference has NO sale accent colour. A reduced
+     product shows its previous price struck through at 40% opacity in the
+     ordinary body ink; the current price is not recoloured at all. The
+     provisional red that stood here was wrong and has been removed.
+       .compare-at-price { opacity: .4; text-decoration: line-through;
+                           text-decoration-thickness: 1.5px; } */
+  --c-compare-opacity: .4;
+  --c-compare-thickness: 1.5px;
+
+  /* Card badges: frosted pill, white type. Measured on .product-badges. */
+  --c-badge-ink: #ffffff;
+  --c-badge-fill: rgb(0 0 0 / .38);
+
+  /* ---- Semantic button roles ---- */
+  --btn-primary-bg: var(--c-ink);
+  --btn-primary-fg: #ffffff;
+  --btn-primary-bg-hover: rgb(var(--c-ink-rgb) / .76);
+
+  --btn-secondary-bg: transparent;
+  --btn-secondary-fg: var(--c-ink);
+  --btn-secondary-border: var(--c-stone);
+  --btn-secondary-border-hover: var(--c-ink);
+
+  /* ---------------------------------------------------------------------
+     TYPOGRAPHY
+     One family does all the work. The reference sets a small 14px base and
+     leans on weight (400 vs 700) rather than family for hierarchy.
+     --------------------------------------------------------------------- */
+
+  --font-sans: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --font-body: var(--font-sans);
+  --font-display: var(--font-sans);
+
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;   /* rail tab, active state */
+  --fw-bold: 700;
+  --fw-black: 900;
+
+  /* Type scale — anchored on the measured 14px body and 42px banner heading */
+  --fs-3xs: .6875rem;   /* 11px — micro labels */
+  --fs-2xs: .75rem;     /* 12px — button text, eyebrows, badges */
+  --fs-xs: .8125rem;    /* 13px — meta, captions */
+  --fs-sm: .875rem;     /* 14px — BODY DEFAULT */
+  --fs-md: 1rem;        /* 16px */
+  --fs-lg: 1.125rem;    /* 18px — small headings, logo */
+  --fs-xl: 1.375rem;    /* 22px — section titles (mobile) */
+  --fs-2xl: 1.75rem;    /* 28px — section titles */
+  --fs-3xl: 2.25rem;    /* 36px */
+  --fs-4xl: 2.625rem;   /* 42px — banner headline (desktop) */
+  --fs-5xl: 3.5rem;     /* 56px — oversized display */
+
+  /* Fluid headline: mobile 28px → desktop 42px */
+  --fs-banner: clamp(1.75rem, 1.1rem + 2.6vw, 2.625rem);
+
+  --lh-tight: 1.12;     /* measured on the 42px banner headline */
+  --lh-snug: 1.25;
+  --lh-normal: 1.4;     /* measured on 14px body */
+  --lh-relaxed: 1.6;
+
+  --ls-tight: -.02em;   /* measured: -0.84px on 42px */
+  --ls-normal: 0;
+  --ls-wide: .08em;
+  --ls-wider: .125em;   /* measured: 1.5px on 12px uppercase CTA */
+
+  /* ---------------------------------------------------------------------
+     SPACING — 4px base step
+     --------------------------------------------------------------------- */
+
+  --sp-1: .25rem;    /* 4  */
+  --sp-2: .5rem;     /* 8  */
+  --sp-3: .75rem;    /* 12 */
+  --sp-4: 1rem;      /* 16 */
+  --sp-5: 1.25rem;   /* 20 */
+  --sp-6: 1.5rem;    /* 24 */
+  --sp-8: 2rem;      /* 32 */
+  --sp-10: 2.5rem;   /* 40 */
+  --sp-12: 3rem;     /* 48 */
+  --sp-16: 4rem;     /* 64 */
+  --sp-20: 5rem;     /* 80 */
+  --sp-24: 6rem;     /* 96 */
+
+  /* Vertical rhythm between full sections — tightens on small screens */
+  --section-gap: clamp(2.5rem, 1.5rem + 3vw, 4.5rem);
+
+  /* ---------------------------------------------------------------------
+     LAYOUT
+     --------------------------------------------------------------------- */
+
+  --page-max: 120rem;                       /* 1920px outer bound */
+  --content-narrow: 36rem;
+  --content-normal: 42rem;
+  --content-wide: 46rem;
+  --gutter: clamp(.75rem, .35rem + 1.2vw, 1.5rem);
+
+  --band-sm: 15rem;                         /* short promo band  */
+  --band-md: 25rem;                         /* standard banner   */
+  --band-lg: 35rem;                         /* tall hero banner  */
+
+  --drawer-w: 25rem;                        /* cart / menu drawer */
+  --bottom-nav-h: 4rem;                     /* mobile bottom bar  */
+
+  /* ---------------------------------------------------------------------
+     BORDERS, RADII, SHADOW
+     The reference is a squared-off design: most surfaces have no radius at
+     all. Only the on-image CTA is rounded (7px).
+     --------------------------------------------------------------------- */
+
+  --r-none: 0;
+  --r-xs: 2px;
+  --r-sm: 4px;
+  --r-cta: 7px;                             /* measured on banner CTAs */
+  --r-pill: 999px;
+
+  --bw: 1px;
+
+  --shadow-sm: 0 1px 3px rgb(var(--c-ink-rgb) / .08);
+  --shadow-pop: 0 4px 20px rgb(var(--c-ink-rgb) / .15);   /* drawers, popovers */
+  --shadow-lift: 0 10px 24px rgb(var(--c-ink-rgb) / .12); /* card hover */
+
+  /* ---------------------------------------------------------------------
+     MOTION
+     Durations and easings taken from the reference's own motion tokens, so
+     hover and reveal timing matches rather than merely resembling it.
+     --------------------------------------------------------------------- */
+
+  --dur-fast: .2s;      /* CTA background / transform */
+  --dur: .25s;          /* default hover */
+  --dur-slow: .3s;      /* surfaces, drawers */
+  --dur-reveal: .6s;    /* scroll entrance */
+
+  --ease-out: ease-out;
+  --ease-out-quad: cubic-bezier(.25, .46, .45, .94);
+  --ease-in-out: cubic-bezier(.45, .05, .55, .95);
+  /* Read off the reference's own --ease-out-cubic; it drives the product
+     card's quick-add pill and the label that unfurls out of it. */
+  --ease-out-cubic: cubic-bezier(.33, 1, .68, 1);
+  /* The reference's emphasised curve, used by the homepage rails. */
+  --ease-emphasised: cubic-bezier(.4, 0, .2, 1);
+
+  --hover-lift: 4px;
+  --hover-scale: 1.03;
+  --hover-zoom: 1.015;  /* the very restrained image zoom on card hover */
+
+  /* ---------------------------------------------------------------------
+     LAYERING
+     --------------------------------------------------------------------- */
+
+  --z-base: 1;
+  --z-sticky: 100;      /* sticky header */
+  --z-overlay: 190;     /* dim behind drawers */
+  --z-drawer: 200;      /* cart, mobile menu */
+  --z-modal: 300;
+  --z-toast: 400;
+}
+
+/* -------------------------------------------------------------------------
+   BREAKPOINTS (reference only — custom properties cannot be used inside a
+   media query, so these are documented here and written literally in the
+   stylesheets that need them.)
+
+     400px   very small phones
+     550px   large phones
+     750px   phone → tablet; grids go from 2 up
+     990px   desktop navigation appears, mobile drawer retires
+    1200px   wide desktop
+    1400px   maximum layout
+   ------------------------------------------------------------------------- */

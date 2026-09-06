@@ -1,0 +1,41 @@
+# =============================================================================
+# .gitignore
+# -----------------------------------------------------------------------------
+# This project has no dependencies, no build step and no generated output, so
+# there is very little to exclude. Everything here is either an operating
+# system artefact or an editor's private state — nothing that belongs to the
+# site itself.
+#
+# Note in particular what is NOT ignored: assets/img is committed. It is around
+# 11 MB of ordinary photographs, which git handles comfortably, and the site
+# does not work without them.
+# =============================================================================
+
+# --- Windows ---
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+desktop.ini
+$RECYCLE.BIN/
+
+# --- OneDrive ---
+# The project folder lives inside OneDrive, which leaves sync state behind.
+*.tmp
+~$*
+
+# --- macOS, in case the project is ever opened there ---
+.DS_Store
+._*
+
+# --- Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- Logs ---
+# The local dev server can be started with its output redirected to a file.
+*.log
+dev/*.log

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/admin", "destination": "/admin/index.html" },
+    { "source": "/admin/(.*)", "destination": "/admin/index.html" },
+    { "source": "/((?!assets/|data/|dev/|admin/|favicon\\.ico).*)", "destination": "/index.html" }
+  ]
+}

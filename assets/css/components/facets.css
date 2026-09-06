@@ -1,0 +1,413 @@
+/* =========================================================================
+   facets.css — filter and sort toolbar
+   -------------------------------------------------------------------------
+   Measured from the reference's collection pages. The surprising part is how
+   little chrome there is: the triggers are plain text, 14px at 60% ink, with
+   no border, no background and no pill. The only real surface is the popover
+   that drops out of one when it opens.
+
+   Measured (1440px):
+     bar          padding 0 40px 24px, flex, centred, triggers 20px apart
+     trigger      14px / 400 / rgb(3 3 2 / .6) / padding 11.2px 0 / 44px tall
+     count        14px / 400 / rgb(3 3 2 / .6), sitting before Sort
+     popover      absolute, top 40px, min-width 360px, white,
+                  radius 7px, shadow 0 4px 20px rgb(3 3 2 / .15), z-index 2
+     option       14px, full ink, padding 0 8px
+   Measured (375px):
+     the whole bar is display:none and is replaced by a "Filter" button on
+     the left with the sort control on the right.
+   ========================================================================= */
+
+.facets {
+  position: relative;
+  z-index: 3;   /* popovers must clear the grid below */
+  margin-bottom: var(--sp-2);
+}
+
+/* Line the toolbar up with the product grid, which sits 40px from the
+   viewport edge rather than on the page gutter. */
+@media (min-width: 750px) {
+  .facets { margin-inline: calc(40px - var(--gutter)); }
+}
+
+.facets__bar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding-bottom: 24px;
+}
+
+/* -------------------------------------------------------------------------
+   TRIGGERS
+   ------------------------------------------------------------------------- */
+
+.facets__groups {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.facet { position: relative; }
+
+.facet__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 44px;
+  padding: 11.2px 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-regular);
+  color: var(--c-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.facet__trigger:hover { color: var(--c-ink); }
+.facet.is-filtered .facet__trigger { color: var(--c-ink); }
+
+.facet__trigger:focus-visible {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 2px;
+}
+
+.facet__chevron {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.facet__trigger[aria-expanded="true"] .facet__chevron { transform: rotate(180deg); }
+
+/* Small tally of how many values are chosen inside a closed facet. */
+.facet__badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--r-pill);
+  background: var(--c-ink);
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.facet__current {
+  margin-left: 6px;
+  color: var(--c-ink);
+}
+
+/* -------------------------------------------------------------------------
+   POPOVER
+   ------------------------------------------------------------------------- */
+
+.facet__panel {
+  position: absolute;
+  top: 40px;
+  left: 0;
+  z-index: 2;
+  min-width: 360px;
+  border-radius: var(--r-cta);
+  background: var(--c-paper);
+  box-shadow: var(--shadow-pop);
+}
+
+/* Sort sits at the right edge, so its panel hangs the other way. */
+.facet__panel--right { left: auto; right: 0; }
+
+.facet__body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) 0;
+  padding: var(--sp-4);
+}
+
+.facet--sort .facet__body,
+.facet[data-facet="colour"] .facet__body,
+.facet[data-facet="fabric"] .facet__body,
+.facet[data-facet="stock"] .facet__body {
+  flex-direction: column;
+  flex-wrap: nowrap;
+}
+
+.facet__option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 6px 8px;
+  font-size: var(--fs-sm);
+  color: var(--c-ink);
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.facet__option:hover { background: var(--c-stone-tint); }
+
+.facet__option input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--c-ink);
+  cursor: pointer;
+  flex: none;
+}
+
+.facet__option-count {
+  color: var(--c-faint);
+  font-size: var(--fs-xs);
+}
+
+.facet__foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 var(--sp-4) var(--sp-3);
+}
+
+.facet__clear {
+  border: 0;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--c-body);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.facet__clear:hover { color: var(--c-ink); }
+
+/* -------------------------------------------------------------------------
+   PRICE
+   ------------------------------------------------------------------------- */
+
+.facet__price {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+}
+
+.facet__price-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--c-stone);
+  border-radius: var(--r-sm);
+}
+
+.facet__price-field:focus-within { border-color: var(--c-ink); }
+
+.facet__price-prefix {
+  font-size: var(--fs-xs);
+  color: var(--c-faint);
+}
+
+.facet__price-field input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--c-ink);
+}
+
+.facet__price-field input:focus { outline: none; }
+
+.facet__price-to {
+  font-size: var(--fs-sm);
+  color: var(--c-muted);
+}
+
+.facet__hint {
+  width: 100%;
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--c-muted);
+}
+
+/* -------------------------------------------------------------------------
+   COUNT
+   ------------------------------------------------------------------------- */
+
+.facets__count {
+  margin: 0 0 0 auto;
+  font-size: var(--fs-sm);
+  color: var(--c-muted);
+  white-space: nowrap;
+}
+
+/* -------------------------------------------------------------------------
+   ACTIVE FILTER CHIPS
+   ------------------------------------------------------------------------- */
+
+.facets__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  padding-bottom: var(--sp-5);
+}
+
+.chip--active {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  background: var(--c-ink);
+  border-color: var(--c-ink);
+  color: #fff;
+}
+
+.chip--active svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.facets__clear-all {
+  border: 0;
+  background: none;
+  padding: 0 var(--sp-2);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  color: var(--c-body);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.facets__clear-all:hover { color: var(--c-ink); }
+
+/* -------------------------------------------------------------------------
+   MOBILE
+   The inline triggers give way to a Filter button, and the same group of
+   facets becomes a drawer. No second copy of the markup: only the styling
+   of .facets__groups changes.
+   ------------------------------------------------------------------------- */
+
+.facets__toggle,
+.facets__groups-head {
+  display: none;
+}
+
+@media (max-width: 749px) {
+
+  .facets__toggle {
+    display: inline-flex;
+    align-items: center;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: inherit;
+    font-size: var(--fs-sm);
+    color: var(--c-ink);
+    cursor: pointer;
+  }
+
+  .facets__groups {
+    position: fixed;
+    inset: 0 0 0 auto;
+    z-index: var(--z-drawer);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    width: min(88vw, var(--drawer-w));
+    padding-bottom: var(--sp-6);
+    background: var(--c-paper);
+    box-shadow: var(--shadow-pop);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    transform: translateX(100%);
+    visibility: hidden;
+    transition:
+      transform var(--dur-slow) var(--ease-out-quad),
+      visibility var(--dur-slow);
+  }
+
+  .facets.is-drawer-open .facets__groups {
+    transform: translateX(0);
+    visibility: visible;
+  }
+
+  .facets__groups-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--sp-4);
+    border-bottom: 1px solid var(--c-line);
+    font-size: var(--fs-md);
+    color: var(--c-ink);
+  }
+
+  .facets__groups-close {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    background: none;
+    color: var(--c-ink);
+    cursor: pointer;
+  }
+
+  .facets__groups-close svg {
+    width: 20px; height: 20px;
+    fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round;
+  }
+
+  /* Inside the drawer each facet is a stacked block, not a popover. */
+  .facets__groups .facet { border-bottom: 1px solid var(--c-line-soft); }
+
+  .facets__groups .facet__trigger {
+    width: 100%;
+    justify-content: space-between;
+    padding: var(--sp-3) var(--sp-4);
+    height: auto;
+    color: var(--c-ink);
+  }
+
+  .facets__groups .facet__panel {
+    position: static;
+    min-width: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: none;
+  }
+
+  .facets__groups .facet__body { flex-direction: column; flex-wrap: nowrap; }
+
+  /* The sort control stays on the bar, showing its current value. */
+  .facet--sort .facet__trigger { color: var(--c-ink); }
+  .facet--sort .facet__panel { min-width: 240px; }
+}
+
+/* -------------------------------------------------------------------------
+   REDUCED MOTION
+   ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .facets__groups,
+  .facet__chevron,
+  .facet__trigger,
+  .facet__option {
+    transition: none;
+  }
+}

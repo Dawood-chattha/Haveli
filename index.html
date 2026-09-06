@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Asset paths below are relative; this resolves them from the site root so
+     a deep route such as /category/women/ready-to-wear still finds them.
+
+     It has to be a real tag, not one appended by script: the browser's
+     preload scanner starts fetching resources before any script runs, and
+     would request them against the current directory and 404.
+
+     The consequence is that the site must be served over http — run
+     dev/serve.ps1 rather than opening index.html from the file system. -->
+<base href="/">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#030302">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+
+<title>HAVELI — Real Fashion, Real Prices</title>
+<meta name="description" content="Ready to wear, unstitched, western and kids clothing. Real fashion at real prices.">
+
+<!-- Roboto is the family the reference storefront uses throughout. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+
+<!-- Foundation -->
+<link rel="stylesheet" href="assets/css/tokens.css">
+<link rel="stylesheet" href="assets/css/base.css">
+<link rel="stylesheet" href="assets/css/layout.css">
+
+<!-- Components -->
+<link rel="stylesheet" href="assets/css/components/header.css">
+<link rel="stylesheet" href="assets/css/components/menu-drawer.css">
+<link rel="stylesheet" href="assets/css/components/hero.css">
+<link rel="stylesheet" href="assets/css/components/collection-carousel.css">
+<link rel="stylesheet" href="assets/css/components/product-card.css">
+<link rel="stylesheet" href="assets/css/components/rail-section.css">
+<link rel="stylesheet" href="assets/css/components/facets.css">
+<link rel="stylesheet" href="assets/css/components/product-detail.css">
+<link rel="stylesheet" href="assets/css/components/page.css">
+<link rel="stylesheet" href="assets/css/components/editorial.css">
+<link rel="stylesheet" href="assets/css/components/footer.css">
+</head>
+
+<body class="page">
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<!-- =====================================================================
+     HEADER — persists across route changes, so it is outside #app.
+     Floating frosted bar: sticky wrapper of zero height, the bar itself
+     absolutely placed 10px from the top. Never gains a background and
+     never changes on scroll — matching the reference exactly.
+     ===================================================================== -->
+<header class="header">
+  <div class="header__bar">
+    <div class="header__columns">
+
+      <div class="header__column header__column--left">
+        <button class="hamburger" type="button"
+                data-panel-open="menu"
+                aria-expanded="false"
+                aria-controls="menu-drawer"
+                aria-label="Open menu">
+          <span></span><span></span><span></span>
+        </button>
+
+        <button class="header__action header__search--mobile" type="button"
+                data-panel-open="search" aria-label="Search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+        </button>
+      </div>
+
+      <div class="header__column header__column--center">
+        <a class="header__logo" href="/" aria-label="Haveli home">HAVELI</a>
+      </div>
+
+      <div class="header__column header__column--right">
+        <button class="header__action header__search--desktop" type="button"
+                data-panel-open="search" aria-label="Search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+        </button>
+
+        <button class="header__action" type="button"
+                data-panel-open="account" aria-label="Account">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="8" r="4"/></svg>
+        </button>
+
+        <button class="header__action" type="button"
+                data-panel-open="cart" aria-label="Cart">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12l1 12H5L6 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>
+          <span class="header__count" id="cart-count" aria-hidden="true">0</span>
+          <span class="visually-hidden" id="cart-count-label">Total items in cart: 0</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+</header>
+
+<!-- Shared dim behind every panel -->
+<div class="overlay" id="overlay"></div>
+
+<!-- =====================================================================
+     NAV DRAWER — the only navigation, on desktop as well as mobile
+     ===================================================================== -->
+<aside class="panel panel--left" id="menu-drawer" data-panel="menu"
+       aria-hidden="true" aria-label="Main menu">
+
+  <div class="panel__head">
+    <span class="panel__title">Menu</span>
+    <button class="panel__close" type="button" data-panel-close aria-label="Close menu">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+
+  <div class="nav-tabs" id="nav-tabs" role="tablist" aria-label="Departments">
+    <!-- tab buttons injected by header.js -->
+    <span class="nav-tabs__ink" id="nav-tabs-ink" aria-hidden="true"></span>
+  </div>
+
+  <div class="panel__body">
+    <div class="nav-view nav-view--root" id="nav-root"></div>
+    <div class="nav-view nav-view--sub" id="nav-sub"></div>
+  </div>
+
+  <div class="panel__foot">
+    <div class="nav-utils" id="nav-utils"></div>
+  </div>
+
+</aside>
+
+<!-- =====================================================================
+     ACCOUNT PANEL — interface only, no authentication
+     ===================================================================== -->
+<aside class="panel panel--right" id="account-panel" data-panel="account"
+       aria-hidden="true" aria-label="Account">
+
+  <div class="panel__head">
+    <span class="panel__title">Account</span>
+    <button class="panel__close" type="button" data-panel-close aria-label="Close account panel">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+
+  <form class="panel__form" onsubmit="return false">
+    <input class="field" type="email" placeholder="Email" autocomplete="email" data-panel-autofocus>
+    <input class="field" type="password" placeholder="Password" autocomplete="current-password">
+    <button class="btn btn--primary btn--block" type="submit">Sign in</button>
+  </form>
+
+  <div class="panel__links">
+    <a href="/account">Full account page</a>
+    <a href="/wishlist">Wishlist</a>
+  </div>
+
+  <p class="panel__note">Interface only — this form does not sign anyone in.</p>
+
+</aside>
+
+<!-- =====================================================================
+     CART PANEL — the cart page at /cart holds the full view
+     ===================================================================== -->
+<aside class="panel panel--right" id="cart-panel" data-panel="cart"
+       aria-hidden="true" aria-label="Cart">
+
+  <div class="panel__head">
+    <span class="panel__title">Cart</span>
+    <button class="panel__close" type="button" data-panel-close aria-label="Close cart">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+
+  <div class="panel__empty" id="cart-panel-body">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12l1 12H5L6 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>
+    <p>Your cart is empty</p>
+    <a class="btn btn--primary" href="/">Continue shopping</a>
+  </div>
+
+  <div class="panel__links">
+    <a href="/cart">View cart</a>
+  </div>
+
+</aside>
+
+<!-- =====================================================================
+     SEARCH MODAL — submitting navigates to /search?q=...
+     ===================================================================== -->
+<div class="search-modal" id="search-modal" data-panel="search"
+     aria-hidden="true" role="dialog" aria-label="Search">
+
+  <div class="search-modal__inner">
+    <form class="search-modal__form" id="search-form">
+      <button class="search-modal__submit" type="submit" aria-label="Search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+      </button>
+      <input class="search-modal__input" id="search-input" type="search"
+             placeholder="Search for products" data-panel-autofocus>
+      <button class="search-modal__dismiss" type="button" data-panel-close aria-label="Close search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </form>
+
+    <p class="search-modal__hint">Popular right now</p>
+    <div class="search-chips" id="search-chips">
+      <button class="search-chip" type="button">Kaftan</button>
+      <button class="search-chip" type="button">Essential Pret</button>
+      <button class="search-chip" type="button">Unstitched</button>
+      <button class="search-chip" type="button">Kurta Dupatta</button>
+      <button class="search-chip" type="button">Chikankari</button>
+      <button class="search-chip" type="button">Polo Shirts</button>
+    </div>
+
+    <div class="search-results" id="search-results" role="listbox" aria-label="Search suggestions" hidden></div>
+  </div>
+
+</div>
+
+<!-- =====================================================================
+     ROUTE OUTLET — every page renders in here
+     ===================================================================== -->
+<main class="page__main" id="main">
+  <div id="app"></div>
+</main>
+
+<!-- =====================================================================
+     FOOTER — outside #app so it persists across route changes
+     ===================================================================== -->
+<footer class="footer" id="site-footer"></footer>
+
+<!-- Core -->
+<script src="assets/js/main.js"></script>
+<script src="assets/js/store.js"></script>
+<script src="assets/js/router.js"></script>
+<script src="assets/js/ui.js"></script>
+
+<!-- Mock data -->
+<script src="data/navigation.js"></script>
+<script src="data/hero.js"></script>
+<script src="data/collections.js"></script>
+<script src="data/catalogue.js"></script>
+<script src="data/rails.js"></script>
+<script src="data/editorial.js"></script>
+<script src="data/footer.js"></script>
+
+<!-- Components -->
+<script src="assets/js/header.js"></script>
+<script src="assets/js/hero.js"></script>
+<script src="assets/js/collections.js"></script>
+<script src="assets/js/catalogue.js"></script>
+<script src="assets/js/product-card.js"></script>
+<script src="assets/js/rails.js"></script>
+<script src="assets/js/facets.js"></script>
+<script src="assets/js/footer.js"></script>
+
+<!-- Pages -->
+<script src="assets/js/pages/home.js"></script>
+<script src="assets/js/pages/category.js"></script>
+<script src="assets/js/pages/product.js"></script>
+<script src="assets/js/pages/search.js"></script>
+<script src="assets/js/pages/cart.js"></script>
+<script src="assets/js/pages/wishlist.js"></script>
+<script src="assets/js/pages/account.js"></script>
+<script src="assets/js/pages/static.js"></script>
+
+<!-- Boot (must come last) -->
+<script src="assets/js/routes.js"></script>
+</body>
+</html>

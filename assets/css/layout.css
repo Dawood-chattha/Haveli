@@ -1,0 +1,216 @@
+/* =========================================================================
+   layout.css — page shell, containers, section rhythm, reusable grids
+   Depends on tokens.css. Contains no component styling.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   1. PAGE SHELL
+   ------------------------------------------------------------------------- */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100svh;
+}
+
+.page__main { flex: 1 0 auto; }
+
+/* The mobile bottom bar overlaps the end of the document, so the page
+   reserves room for it below the tablet breakpoint. */
+@media (max-width: 749px) {
+  .page { padding-bottom: var(--bottom-nav-h); }
+}
+
+/* -------------------------------------------------------------------------
+   2. CONTAINERS
+   The reference runs close to full-bleed with small gutters rather than a
+   narrow centred column, so `.container` is wide by default and the narrower
+   measures are opt-in.
+   ------------------------------------------------------------------------- */
+
+.container {
+  width: 100%;
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+/* Full-bleed: no gutters at all (banners, edge-to-edge imagery). */
+.container--bleed { padding-inline: 0; }
+
+/* Comfortable reading measures for prose blocks. */
+.measure         { max-width: var(--content-normal); }
+.measure--narrow { max-width: var(--content-narrow); }
+.measure--wide   { max-width: var(--content-wide); }
+
+/* -------------------------------------------------------------------------
+   3. SECTION RHYTHM
+   One spacing rule for every section keeps vertical pace consistent as
+   sections are added over the coming phases.
+   ------------------------------------------------------------------------- */
+
+.section {
+  padding-block: var(--section-gap);
+}
+
+.section--tight { padding-block: calc(var(--section-gap) * .55); }
+.section--flush { padding-block: 0; }
+
+.section--alt { background: var(--c-paper-alt); }
+
+/* Dark ground: flip heading and body colours together so a section can be
+   inverted by adding one class. */
+.section--dark {
+  background: var(--c-ink);
+  color: rgb(255 255 255 / .78);
+}
+.section--dark h1,
+.section--dark h2,
+.section--dark h3,
+.section--dark h4,
+.section--dark .eyebrow { color: #fff; }
+
+/* Section heading block — title, tagline, and an optional trailing action. */
+.section__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-6);
+}
+
+.section__title { margin: 0; }
+
+.section__tagline {
+  margin-top: var(--sp-1);
+  color: var(--c-muted);
+  font-size: var(--fs-sm);
+}
+
+.section__action { flex: none; }
+
+@media (max-width: 749px) {
+  .section__head { margin-bottom: var(--sp-5); }
+}
+
+/* -------------------------------------------------------------------------
+   4. BANDS
+   Fixed-height photographic strips used by the hero and category banners.
+   ------------------------------------------------------------------------- */
+
+.band    { position: relative; min-height: var(--band-md); }
+.band--sm { min-height: var(--band-sm); }
+.band--lg { min-height: var(--band-lg); }
+
+/* -------------------------------------------------------------------------
+   5. GRIDS
+   `--cols` lets a grid be retuned per breakpoint without new class names.
+   ------------------------------------------------------------------------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr));
+  gap: var(--grid-gap, var(--sp-4));
+}
+
+.grid--2 { --cols: 2; }
+.grid--3 { --cols: 3; }
+.grid--4 { --cols: 4; }
+.grid--5 { --cols: 5; }
+
+/* Product grids: 2 up on phones, 3 at tablet, 4 on desktop. */
+.grid--products { --cols: 2; --grid-gap: var(--sp-3); }
+
+@media (min-width: 750px) {
+  .grid--products { --cols: 3; --grid-gap: var(--sp-4); }
+}
+@media (min-width: 990px) {
+  .grid--products { --cols: 4; }
+}
+
+/* Collapse the wider fixed grids on small screens. */
+@media (max-width: 989px) {
+  .grid--5 { --cols: 3; }
+  .grid--4 { --cols: 2; }
+}
+@media (max-width: 749px) {
+  .grid--5,
+  .grid--3 { --cols: 2; }
+}
+
+/* -------------------------------------------------------------------------
+   6. RAILS
+   Horizontally scrolling strips with snap points — the base mechanism behind
+   the product carousels and the category tab rails.
+   ------------------------------------------------------------------------- */
+
+.rail {
+  display: flex;
+  gap: var(--sp-4);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+.rail::-webkit-scrollbar { display: none; }
+
+.rail > * {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+
+/* Let a rail bleed to the screen edge while keeping the first item aligned
+   to the container gutter. */
+.rail--bleed {
+  margin-inline: calc(-1 * var(--gutter));
+  padding-inline: var(--gutter);
+}
+
+/* -------------------------------------------------------------------------
+   7. MEDIA RATIOS
+   Product and banner imagery is ratio-locked so grids never jump while
+   images load.
+   ------------------------------------------------------------------------- */
+
+.ratio { position: relative; overflow: hidden; }
+.ratio > img,
+.ratio > video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ratio--product  { aspect-ratio: 2 / 3; }  /* measured on the reference */
+.ratio--square   { aspect-ratio: 1 / 1; }
+.ratio--portrait { aspect-ratio: 2 / 3; }
+.ratio--wide     { aspect-ratio: 16 / 9; }
+.ratio--banner   { aspect-ratio: 21 / 9; }
+
+@media (max-width: 749px) {
+  .ratio--banner { aspect-ratio: 4 / 5; }
+}
+
+/* -------------------------------------------------------------------------
+   8. SMALL UTILITIES
+   Deliberately few — layout belongs in component stylesheets, not in a
+   utility soup.
+   ------------------------------------------------------------------------- */
+
+.stack   { display: flex; flex-direction: column; gap: var(--stack-gap, var(--sp-4)); }
+.cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cluster-gap, var(--sp-3)); }
+.center  { text-align: center; }
+
+.divider {
+  height: 1px;
+  border: 0;
+  background: var(--c-line);
+}
+
+.hide-desktop { display: none; }
+@media (max-width: 989px) {
+  .hide-mobile  { display: none !important; }
+  .hide-desktop { display: revert; }
+}

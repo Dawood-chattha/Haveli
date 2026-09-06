@@ -1,0 +1,122 @@
+/* =========================================================================
+   editorial.css — homepage feature band and proof strip
+   -------------------------------------------------------------------------
+   Measured from the reference for the feature band (1440px): a full-bleed
+   section 944px tall, split roughly in half, image on the left at 691 wide
+   and the text column starting at 723. Its type is unusually quiet for a
+   feature: the eyebrow and body are both 14px at 76% ink, and the headline
+   is only 20px at weight 300.
+
+   The proof strip is not measured — see data/editorial.js for why.
+   ========================================================================= */
+
+.feature {
+  display: grid;
+  background: var(--c-paper-alt);
+}
+
+@media (min-width: 750px) {
+  .feature {
+    grid-template-columns: 48% 1fr;
+    min-height: 944px;
+    align-items: stretch;
+  }
+}
+
+.feature__media {
+  position: relative;
+  overflow: hidden;
+  background: var(--c-stone-tint);
+}
+
+.feature__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+@media (max-width: 749px) {
+  .feature__media { aspect-ratio: 4 / 5; }
+}
+
+.feature__body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-10) var(--gutter);
+}
+
+@media (min-width: 750px) {
+  .feature__body { padding: var(--sp-16) var(--sp-12); }
+}
+
+.feature__eyebrow {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-regular);
+  color: var(--c-body);
+}
+
+.feature__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: var(--fw-light);
+  line-height: var(--lh-snug);
+  color: var(--c-ink);
+}
+
+.feature__text {
+  margin: 0;
+  max-width: 46ch;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-relaxed);
+  color: var(--c-body);
+}
+
+.feature__cta { margin-top: var(--sp-4); align-self: flex-start; }
+
+/* -------------------------------------------------------------------------
+   PROOF STRIP
+   ------------------------------------------------------------------------- */
+
+.proof {
+  padding: var(--sp-12) 0;
+  border-top: 1px solid var(--c-line-soft);
+}
+
+.proof__title {
+  margin: 0 0 var(--sp-8);
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-regular);
+  text-align: center;
+  color: var(--c-ink);
+}
+
+.proof__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--sp-8) var(--sp-4);
+}
+
+@media (min-width: 750px) {
+  .proof__grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+.proof__item { text-align: center; }
+
+.proof__value {
+  display: block;
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-light);
+  line-height: 1.1;
+  color: var(--c-ink);
+}
+
+.proof__label {
+  display: block;
+  margin-top: var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--c-muted);
+}

@@ -1,0 +1,411 @@
+/* =========================================================================
+   product-card.css — product grid and product card
+   -------------------------------------------------------------------------
+   Every number here was measured from the reference storefront's collection
+   pages rather than estimated. The notable findings:
+
+     - the grid has NO column gap. Cards sit edge to edge, and the 16px
+       channel you see between two products is the sum of one card's 4px
+       leading inset and its neighbour's 12px trailing one;
+     - the media is 2:3, not 3:4;
+     - the card does not lift, scale or shadow on hover. The only hover
+       behaviour is the second image appearing and the quick-add pill
+       fading in;
+     - there is no red sale colour anywhere. A reduced product shows its
+       previous price struck through at 40% opacity, in the same ink as
+       everything else.
+
+   Measured (1440px): 4 columns, 40px page inset, 16px row gap, card 337.5
+   wide, media 329.5 wide / 482 tall, 10px media-to-text gap.
+   Measured (375px):  2 columns, full bleed, 12px row gap.
+   ========================================================================= */
+
+.product-grid {
+  --pc-gap: 10px;          /* media -> text, measured */
+  --pc-inset-start: 4px;   /* image inset from the card's leading edge */
+  --pc-inset-end: 4px;     /* ...and from its trailing edge; see below */
+  --pc-badge-inset: 12px;  /* controls sit 8px inside the image */
+
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  column-gap: 0;
+  row-gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The reference runs its grid full bleed on small screens and inset by
+   exactly 40px from 750 up, which is wider than the standard page gutter.
+   Both rules pull against the container the page is already inside, so the
+   grid lands on the reference's own margins rather than the site's. */
+@media (max-width: 749px) {
+  .product-grid--bleed { margin-inline: calc(var(--gutter) * -1); }
+}
+
+@media (min-width: 750px) {
+  .product-grid {
+    grid-template-columns: repeat(4, 1fr);
+    row-gap: 16px;
+    /* Desktop cards carry an extra 8px on their trailing edge, so the
+       channel between two products opens from 8px to 16px. Below 750 the
+       reference drops it and the insets are even. */
+    --pc-inset-end: 12px;
+  }
+  .product-grid--bleed { margin-inline: calc(40px - var(--gutter)); }
+}
+
+/* -------------------------------------------------------------------------
+   CARD
+   ------------------------------------------------------------------------- */
+
+.product-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pc-gap);
+}
+
+/* -------------------------------------------------------------------------
+   MEDIA
+   Two views stacked. The second is the hover state — the reference advances
+   its slideshow to image two on pointer enter; a cross-fade is the closest
+   honest equivalent without rebuilding a slideshow component.
+   ------------------------------------------------------------------------- */
+
+/* The reference insets its imagery asymmetrically — 4px on the leading edge
+   and 12px on the trailing one — which is why the gutter between two cards
+   reads as 16px while the grid itself has no column gap. Reproduced rather
+   than tidied up, because tidying it would shift every card off the
+   reference's own alignment. */
+.product-card__media {
+  position: relative;
+  overflow: hidden;
+  padding-inline-start: var(--pc-inset-start);
+  padding-inline-end: var(--pc-inset-start);
+  margin-inline-end: calc(var(--pc-inset-end) - var(--pc-inset-start));
+}
+
+.product-card__frame {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  background: var(--c-paper-alt);
+}
+
+.product-card__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.product-card__img--alt {
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .product-card:hover .product-card__img--alt,
+  .product-card:focus-within .product-card__img--alt { opacity: 1; }
+}
+
+/* -------------------------------------------------------------------------
+   LINK OVERLAY
+   One stretched link covers the whole card so the entire card is clickable,
+   while the wishlist and quick-add controls sit above it.
+   ------------------------------------------------------------------------- */
+
+.product-card__link {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.product-card__link:focus-visible {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 2px;
+}
+
+/* -------------------------------------------------------------------------
+   BADGE
+   Frosted pill, 8px inside the image. Measured: 13px / 4px 7px / radius 7px
+   / capitalised / #fbfbfb over rgb(255 255 255 / .1) with a 4px blur.
+   The white-on-frost version can vanish over a pale image, so the darker
+   .bg-light variant the reference also ships is used as the default here.
+   ------------------------------------------------------------------------- */
+
+.product-card__badges {
+  position: absolute;
+  top: 8px;
+  left: var(--pc-badge-inset);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.product-card__badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 7px;
+  border-radius: 7px;
+  background: rgb(0 0 0 / .38);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.2;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.product-card__badge--sale {
+  background: rgb(255 255 255 / .82);
+  color: var(--c-ink);
+}
+
+/* Sold out is the reference's badge language reused, not a measured state —
+   nothing was out of stock on the pages that were inspected. */
+.product-card__badge--out {
+  background: rgb(255 255 255 / .82);
+  color: var(--c-ink);
+}
+
+/* The picture fades back; the title and price stay fully legible, because
+   the card is still a link worth reading. */
+.product-card.is-out-of-stock .product-card__frame { opacity: .55; }
+
+@media (max-width: 767px) {
+  .product-card__badge { font-size: 11px; padding: 4px 5px; }
+}
+
+/* -------------------------------------------------------------------------
+   WISHLIST
+   Not in the reference — the reference has no save control on its cards.
+   Added because the brief asks for one, and dressed in the same frosted
+   language as the badges so it does not read as a foreign element.
+   ------------------------------------------------------------------------- */
+
+.product-card__wish {
+  position: absolute;
+  top: 8px;
+  right: var(--pc-badge-inset);
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgb(0 0 0 / .32);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  cursor: pointer;
+  transition:
+    opacity var(--dur-fast) var(--ease-out-cubic),
+    background-color var(--dur-fast) var(--ease-out-cubic);
+}
+
+.product-card__wish svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  transition: fill var(--dur-fast) var(--ease-out-cubic);
+}
+
+.product-card__wish:hover { background: rgb(0 0 0 / .5); }
+.product-card__wish[aria-pressed="true"] svg { fill: currentColor; }
+
+.product-card__wish.is-bumped svg { animation: wishBump .3s var(--ease-out-cubic); }
+
+@keyframes wishBump {
+  40% { transform: scale(1.25); }
+  to  { transform: scale(1); }
+}
+
+/* -------------------------------------------------------------------------
+   QUICK ADD
+   Reproduces the reference's pill: hidden until the card is hovered, then
+   its label unfurls when the pill itself is hovered — the label's grid
+   column animates from 0fr to 1fr while the text de-blurs and slides in.
+   Desktop only, exactly as the reference has it.
+   ------------------------------------------------------------------------- */
+
+.product-card__quick {
+  position: absolute;
+  right: var(--pc-badge-inset);
+  bottom: 8px;
+  z-index: 2;
+  display: none;
+  align-items: center;
+  height: 36px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50px;
+  background: rgb(0 0 0 / .16);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  cursor: pointer;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    opacity var(--dur-fast) var(--ease-out-cubic),
+    scale var(--dur-fast) var(--ease-out-cubic),
+    translate var(--dur-fast) var(--ease-out-cubic);
+}
+
+.product-card__quick:active { scale: .99; translate: 0 1px; }
+
+.product-card__quick-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  flex: none;
+}
+
+.product-card__quick-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+/* The label lives in a collapsed grid column and is widened on hover. */
+.product-card__quick-label {
+  display: grid;
+  grid-template-columns: 0fr;
+  transition: grid-template-columns var(--dur-fast) var(--ease-out-cubic);
+}
+
+.product-card__quick-label > span { min-width: 0; }
+
+.product-card__quick-label > span > span {
+  display: inline-block;
+  padding-right: 12px;
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+  opacity: 0;
+  translate: .5ch 0;
+  filter: blur(2px);
+  transition:
+    opacity var(--dur-slow) var(--ease-out-quad),
+    translate var(--dur-slow) var(--ease-out-quad),
+    filter var(--dur-slow) var(--ease-out-quad);
+}
+
+.product-card__quick:is(:hover, :focus-visible) .product-card__quick-label {
+  grid-template-columns: 1fr;
+}
+
+.product-card__quick:is(:hover, :focus-visible) .product-card__quick-label > span > span {
+  opacity: 1;
+  translate: 0 0;
+  filter: blur(0);
+  transition-delay: var(--dur-fast);
+}
+
+.product-card__quick.is-added {
+  background: rgb(0 0 0 / .55);
+}
+
+@media (min-width: 750px) and (hover: hover) {
+  .product-card__quick { display: flex; }
+
+  .product-card:hover .product-card__quick,
+  .product-card:focus-within .product-card__quick { opacity: 1; }
+}
+
+/* -------------------------------------------------------------------------
+   TEXT
+   Title and price both 14px / 19.6px in the body ink. The price is the only
+   thing on the card set in medium.
+   ------------------------------------------------------------------------- */
+
+.product-card__info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* Text lines up with the image, not with the card box. */
+  padding-inline-start: var(--pc-inset-start);
+  margin-inline-end: calc(var(--pc-inset-end) - var(--pc-inset-start));
+}
+
+.product-card__title {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-regular);
+  line-height: 19.6px;
+  color: var(--c-body);
+  /* Two lines, then clipped — a long title must not shift the row. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.product-card__prices {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: var(--fs-sm);
+  line-height: 19.6px;
+  color: var(--c-body);
+}
+
+.product-card__price {
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+
+/* No sale colour in the reference: the old price is simply struck out and
+   faded, and the current price stays in the ordinary ink. */
+.product-card__compare {
+  opacity: .4;
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  white-space: nowrap;
+}
+
+/* -------------------------------------------------------------------------
+   LOAD MORE
+   Frontend paging for the longer department listings.
+   ------------------------------------------------------------------------- */
+
+.product-grid-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-8);
+}
+
+.product-grid-count {
+  font-size: var(--fs-xs);
+  color: var(--c-muted);
+}
+
+/* -------------------------------------------------------------------------
+   REDUCED MOTION
+   ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .product-card__img--alt,
+  .product-card__quick,
+  .product-card__quick-label,
+  .product-card__quick-label > span > span,
+  .product-card__wish,
+  .product-card__wish svg {
+    transition: none;
+  }
+  .product-card__wish.is-bumped svg { animation: none; }
+}

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- HAVELI monogram: an H drawn on the same 20-44 box, at the same stroke
+       weight, as the mark it replaces, so the tab icon keeps its density. -->
+  <rect width="64" height="64" rx="10" fill="#030302"/>
+  <path d="M22 20V44M42 20V44M22 32h20" fill="none" stroke="#ffffff" stroke-width="5" stroke-linejoin="miter" stroke-linecap="square"/>
+</svg>

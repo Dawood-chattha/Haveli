@@ -1,0 +1,648 @@
+/* =========================================================================
+   menu-drawer.css — navigation drawer, search modal, account & cart panels
+   -------------------------------------------------------------------------
+   The reference storefront has no inline navigation at any breakpoint: the
+   hamburger drawer is the only way through the catalogue on desktop as well
+   as on mobile. Measurements taken from it:
+
+     department tabs   16px, letter-spacing .5px, 125px wide, 35px tall,
+                       inactive white at 60%, active full white
+     utility tiles     13px, weight 500, letter-spacing .3px, 68px tall
+     close control     40px, white at 85%
+     panel width       25rem
+
+   Sub-categories arrive as a second panel that slides in from the right,
+   with a back control — a push navigation, not an accordion.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   SHARED OVERLAY
+   ------------------------------------------------------------------------- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  background: rgb(var(--c-ink-rgb) / .5);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--dur-slow) var(--ease-out-quad),
+    visibility 0s linear var(--dur-slow);
+}
+.overlay.is-open {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+/* -------------------------------------------------------------------------
+   PANEL BASE — shared by the nav drawer, cart and account panels
+   ------------------------------------------------------------------------- */
+
+.panel {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  z-index: var(--z-drawer);
+  width: min(var(--drawer-w), 88vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--c-ink);
+  color: rgb(255 255 255 / .78);
+  visibility: hidden;
+  transition:
+    transform var(--dur-slow) var(--ease-out-quad),
+    visibility 0s linear var(--dur-slow);
+}
+
+.panel--left  { left: 0;  transform: translateX(-100%); }
+.panel--right { right: 0; transform: translateX(100%); }
+
+.panel.is-open {
+  transform: translateX(0);
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-4) var(--sp-3);
+  flex: none;
+}
+
+.panel__title {
+  color: #fff;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-medium);
+  letter-spacing: .04em;
+}
+
+.panel__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  color: rgb(255 255 255 / .85);
+  border-radius: var(--r-sm);
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.panel__close:hover { color: #fff; transform: rotate(90deg); }
+.panel__close svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  fill: none;
+  stroke-linecap: round;
+}
+
+.panel__body {
+  flex: 1 1 auto;
+  position: relative;
+  overflow: hidden;          /* the sliding views live inside */
+}
+
+.panel__foot { flex: none; }
+
+/* -------------------------------------------------------------------------
+   DEPARTMENT TABS — Men / Women / Kids
+   ------------------------------------------------------------------------- */
+
+.nav-tabs {
+  position: relative;
+  display: flex;
+  flex: none;
+  padding-inline: var(--sp-4);
+  border-bottom: 1px solid rgb(255 255 255 / .12);
+}
+
+.nav-tabs__btn {
+  flex: 1 1 0;
+  height: 35px;
+  color: rgb(255 255 255 / .6);
+  font-size: 1rem;
+  letter-spacing: .5px;
+  transition: color var(--dur) var(--ease-out);
+}
+.nav-tabs__btn:hover { color: rgb(255 255 255 / .85); }
+.nav-tabs__btn[aria-selected="true"] { color: #fff; }
+
+/* The underline slides between tabs rather than cutting. JS sets --tab-x
+   and --tab-w from the active button geometry. */
+.nav-tabs__ink {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  height: 2px;
+  width: var(--tab-w, 0px);
+  background: #fff;
+  transform: translateX(var(--tab-x, 0px));
+  transition:
+    transform var(--dur-slow) var(--ease-out-quad),
+    width var(--dur-slow) var(--ease-out-quad);
+}
+
+/* -------------------------------------------------------------------------
+   SLIDING VIEWS
+   Two stacked layers: the category list, and the sub-category view that
+   pushes in over it from the right.
+   ------------------------------------------------------------------------- */
+
+.nav-view {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  transition:
+    transform var(--dur-slow) var(--ease-out-quad),
+    opacity .15s var(--ease-out);
+}
+
+/* Root list steps aside while a sub-view is showing. */
+.nav-view--root.is-pushed { transform: translateX(-28%); }
+
+/* Cross-fade when switching department, so the list does not jump. */
+.nav-view--root.is-swapping { opacity: 0; }
+
+.nav-view--sub {
+  transform: translateX(100%);
+  background: var(--c-ink);
+  visibility: hidden;
+}
+.nav-view--sub.is-open {
+  transform: translateX(0);
+  visibility: visible;
+}
+
+/* -------------------------------------------------------------------------
+   CATEGORY ROWS
+   ------------------------------------------------------------------------- */
+
+.nav-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--sp-2) 0 var(--sp-6);
+}
+
+.nav-list__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-3) var(--sp-4);
+  color: rgb(255 255 255 / .78);
+  font-size: var(--fs-md);
+  text-align: left;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    padding-left var(--dur-fast) var(--ease-out);
+}
+.nav-list__row:hover {
+  color: #fff;
+  background: rgb(255 255 255 / .05);
+  padding-left: calc(var(--sp-4) + 4px);
+}
+
+/* Chevron on rows that open a sub-view. */
+.nav-list__chevron {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: .55;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
+}
+.nav-list__row:hover .nav-list__chevron { opacity: 1; transform: translateX(3px); }
+
+/* Back control at the top of a sub-view. */
+.nav-back {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: var(--sp-4);
+  color: #fff;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  letter-spacing: .04em;
+  border-bottom: 1px solid rgb(255 255 255 / .12);
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.nav-back:hover { opacity: .75; }
+.nav-back svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Rows enter in sequence as a view opens. JS sets --i per row. */
+.nav-list__item {
+  opacity: 0;
+  transform: translateX(-8px);
+  animation: navRowIn .32s var(--ease-out-quad) forwards;
+  animation-delay: calc(var(--i, 0) * 22ms);
+}
+
+@keyframes navRowIn {
+  to { opacity: 1; transform: none; }
+}
+
+/* -------------------------------------------------------------------------
+   UTILITY TILES — Stores / Tracking / Careers
+   ------------------------------------------------------------------------- */
+
+.nav-utils {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid rgb(255 255 255 / .12);
+}
+
+.nav-utils__tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 68px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: var(--fw-medium);
+  letter-spacing: .3px;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.nav-utils__tile + .nav-utils__tile { border-left: 1px solid rgb(255 255 255 / .12); }
+.nav-utils__tile:hover { background: rgb(255 255 255 / .06); }
+.nav-utils__tile svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* -------------------------------------------------------------------------
+   SEARCH MODAL
+   ------------------------------------------------------------------------- */
+
+.search-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--z-modal);
+  background: var(--c-paper);
+  color: var(--c-body);
+  transform: translateY(-100%);
+  visibility: hidden;
+  transition:
+    transform var(--dur-slow) var(--ease-out-quad),
+    visibility 0s linear var(--dur-slow);
+}
+.search-modal.is-open {
+  transform: translateY(0);
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.search-modal__inner {
+  max-width: 46rem;
+  margin-inline: auto;
+  padding: var(--sp-8) var(--gutter) var(--sp-10);
+}
+
+.search-modal__form {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--c-ink);
+}
+
+.search-modal__input {
+  flex: 1 1 auto;
+  border: 0;
+  background: none;
+  outline: none;
+  color: var(--c-ink);
+  font-size: var(--fs-xl);
+}
+.search-modal__input::placeholder { color: var(--c-faint); }
+
+.search-modal__submit,
+.search-modal__dismiss {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  color: var(--c-ink);
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.search-modal__submit:hover,
+.search-modal__dismiss:hover { opacity: .6; }
+.search-modal__submit svg,
+.search-modal__dismiss svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.search-modal__hint {
+  margin-top: var(--sp-6);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-wider);
+  text-transform: uppercase;
+  color: var(--c-muted);
+}
+
+.search-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+
+.search-chip {
+  padding: 8px 14px;
+  border: 1px solid var(--c-stone);
+  border-radius: var(--r-pill);
+  color: var(--c-ink);
+  font-size: var(--fs-xs);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+.search-chip:hover { border-color: var(--c-ink); background: var(--c-stone-tint); }
+
+/* -------------------------------------------------------------------------
+   CART / ACCOUNT PANEL CONTENT
+   Light shells for now; the working cart and search land in their own phases.
+   ------------------------------------------------------------------------- */
+
+.panel__empty {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-8) var(--sp-6);
+  text-align: center;
+}
+.panel__empty svg {
+  width: 34px;
+  height: 34px;
+  stroke: rgb(255 255 255 / .5);
+  stroke-width: 1.25;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.panel__empty p { color: rgb(255 255 255 / .6); font-size: var(--fs-sm); }
+
+.panel__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+}
+.panel__form .field {
+  background: rgb(255 255 255 / .06);
+  border-color: rgb(255 255 255 / .18);
+  color: #fff;
+}
+.panel__form .field::placeholder { color: rgb(255 255 255 / .45); }
+.panel__form .field:focus { border-color: #fff; }
+
+.panel__form .btn--primary {
+  background: #fff;
+  border-color: #fff;
+  color: var(--c-ink);
+}
+.panel__form .btn--primary:hover {
+  background: rgb(255 255 255 / .85);
+  border-color: rgb(255 255 255 / .85);
+}
+
+.panel__note {
+  padding: 0 var(--sp-4) var(--sp-4);
+  color: rgb(255 255 255 / .5);
+  font-size: var(--fs-xs);
+}
+
+/* -------------------------------------------------------------------------
+   REDUCED MOTION
+   Panels still open and close — they just arrive without travel.
+   ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-list__item { opacity: 1; transform: none; animation: none; }
+  .nav-view--root.is-pushed { transform: none; }
+  .panel__close:hover { transform: none; }
+}
+
+/* -------------------------------------------------------------------------
+   SEARCH SUGGESTIONS
+   Rendered live as the term is typed. The "Popular right now" chips give
+   way to these the moment there are two characters to match on.
+   ------------------------------------------------------------------------- */
+
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  max-height: 60vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.search-results__label {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-3xs);
+  letter-spacing: var(--ls-wider);
+  text-transform: uppercase;
+  color: rgb(255 255 255 / .5);
+}
+
+.search-result {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2);
+  border-radius: var(--r-sm);
+  color: #fff;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.search-result:hover { background: rgb(255 255 255 / .08); }
+
+.search-result__thumb {
+  flex: none;
+  width: 40px;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  border-radius: var(--r-xs);
+  background: rgb(255 255 255 / .1);
+}
+.search-result__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.search-result__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.search-result__title {
+  font-size: var(--fs-sm);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-result__meta {
+  font-size: var(--fs-xs);
+  color: rgb(255 255 255 / .6);
+}
+
+.search-result--category {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.search-results__empty,
+.search-results__all {
+  font-size: var(--fs-sm);
+  color: rgb(255 255 255 / .8);
+}
+
+.search-results__all {
+  align-self: flex-start;
+  padding: var(--sp-2);
+  border: 0;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.search-results__all:hover { color: #fff; }
+
+/* -------------------------------------------------------------------------
+   MINI CART — the drawer behind the header's cart icon
+   ------------------------------------------------------------------------- */
+
+.mini-cart {
+  margin: 0;
+  padding: 0 var(--sp-4);
+  list-style: none;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+
+.mini-line {
+  display: grid;
+  grid-template-columns: 48px 1fr auto auto;
+  gap: var(--sp-3);
+  align-items: center;
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid rgb(255 255 255 / .12);
+}
+
+.mini-line__media {
+  width: 48px;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  border-radius: var(--r-xs);
+  background: rgb(255 255 255 / .1);
+}
+.mini-line__media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.mini-line__info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.mini-line__title {
+  font-size: var(--fs-xs);
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-line__meta { font-size: var(--fs-3xs); color: rgb(255 255 255 / .6); }
+
+.mini-line__qty {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 2px 6px;
+  border: 1px solid rgb(255 255 255 / .22);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  color: #fff;
+}
+
+.mini-line__qty button {
+  width: 18px;
+  border: 0;
+  background: none;
+  color: #fff;
+  font-family: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mini-line__remove {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  color: rgb(255 255 255 / .6);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.mini-line__remove:hover { color: #fff; }
+.mini-line__remove svg {
+  width: 14px; height: 14px;
+  fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round;
+}
+
+.mini-cart__foot {
+  flex: none;
+  padding: var(--sp-4);
+  border-top: 1px solid rgb(255 255 255 / .12);
+}
+
+.mini-cart__total {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-sm);
+  color: #fff;
+}

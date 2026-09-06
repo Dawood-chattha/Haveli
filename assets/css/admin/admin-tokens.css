@@ -1,0 +1,122 @@
+/* =========================================================================
+   admin-tokens.css — tokens that only the admin panel needs
+   -------------------------------------------------------------------------
+   Loaded after tokens.css and adds to it; it never redefines a storefront
+   token. Everything here is prefixed `--a-` so the two sets stay visibly
+   separate in the stylesheets that spend them.
+
+   The panel is served from its own HTML document, so nothing here can reach
+   the storefront even by accident.
+
+   WHY THE ADMIN NEEDS TOKENS OF ITS OWN
+
+   1. STATUS COLOUR. The storefront palette is deliberately almost
+      monochrome — it was measured, and it has no accent colour at all, not
+      even for a sale price. That restraint is right for a shop and wrong
+      for a management panel, where "paid", "cancelled" and "out of stock"
+      have to be told apart at a glance and cannot all be grey. These four
+      hues exist only here.
+
+   2. A GROUND TO SIT ON. The storefront is white. A dashboard reads better
+      as white cards on a soft ground, so the panel gets one, tinted from
+      the same warm stone neutral the storefront already uses for hairlines
+      and input fills rather than a neutral grey that would look foreign.
+
+   3. SOFTER CORNERS. The storefront is squared off: only its on-image CTA
+      is rounded, at 7px. Dashboard cards at 0px read as harsh, so cards use
+      10px. Controls keep the storefront's 7px, so buttons and inputs are
+      identical on both sides.
+
+   Everything else — ink, body and muted text, the type family and scale,
+   spacing, durations, easings, shadows — is inherited from tokens.css
+   unchanged. The two halves of the site are the same brand.
+   ========================================================================= */
+
+:root {
+
+  /* ---------------------------------------------------------------------
+     SURFACES
+     --------------------------------------------------------------------- */
+
+  --a-ground: #f4f3f0;                          /* behind the cards */
+  --a-surface: #ffffff;                         /* cards, tables, panels */
+  --a-surface-sunken: #faf9f7;                  /* table heads, inset rows */
+  --a-line: rgb(var(--c-ink-rgb) / .10);
+  --a-line-soft: rgb(var(--c-ink-rgb) / .05);
+
+  /* The sidebar is the storefront's ink, the same near-black the site
+     footer already uses, so the panel opens on a colour the brand owns. */
+  --a-sidebar-bg: #030302;
+  --a-sidebar-ink: rgb(255 255 255 / .92);
+  --a-sidebar-muted: rgb(255 255 255 / .52);
+  --a-sidebar-faint: rgb(255 255 255 / .34);
+  --a-sidebar-hover: rgb(255 255 255 / .07);
+  --a-sidebar-active: rgb(255 255 255 / .12);
+  --a-sidebar-line: rgb(255 255 255 / .10);
+
+  /* ---------------------------------------------------------------------
+     STATUS
+     Each role is a readable ink plus a tint to sit it on. Contrast of the
+     ink against its own tint is above 4.5:1 in every pair.
+     --------------------------------------------------------------------- */
+
+  --a-success: #0f6b45;
+  --a-success-tint: #e4f2ea;
+
+  --a-warning: #8a5200;
+  --a-warning-tint: #fbeedb;
+
+  --a-danger: #a32619;
+  --a-danger-tint: #fbe7e4;
+
+  --a-info: #23508f;
+  --a-info-tint: #e6eef9;
+
+  --a-neutral: rgb(var(--c-ink-rgb) / .62);
+  --a-neutral-tint: rgb(var(--c-ink-rgb) / .06);
+
+  /* ---------------------------------------------------------------------
+     SHAPE
+     --------------------------------------------------------------------- */
+
+  --a-r-card: 10px;                             /* surfaces */
+  --a-r-control: var(--r-cta);                  /* 7px — shared with the shop */
+  --a-r-pill: var(--r-pill);
+
+  --a-shadow-card: 0 1px 2px rgb(var(--c-ink-rgb) / .05),
+                   0 1px 3px rgb(var(--c-ink-rgb) / .04);
+  --a-shadow-pop: var(--shadow-pop);
+
+  /* ---------------------------------------------------------------------
+     LAYOUT
+     --------------------------------------------------------------------- */
+
+  --a-sidebar-w: 260px;
+  --a-sidebar-w-collapsed: 72px;
+  --a-topbar-h: 60px;
+
+  /* Breathing room around the content column. Narrower than the
+     storefront's, because a dashboard is denser than a shop. */
+  --a-gutter: clamp(16px, 1rem + 1vw, 28px);
+
+  /* ---------------------------------------------------------------------
+     TYPE
+     A dashboard reads at a smaller size than a shopfront. The family, the
+     weights and the scale all come from tokens.css; these are the two
+     sizes the panel leans on hardest.
+     --------------------------------------------------------------------- */
+
+  --a-fs-body: var(--fs-xs);                    /* 13px — tables, meta */
+  --a-fs-ui: var(--fs-sm);                      /* 14px — controls, nav */
+
+  /* ---------------------------------------------------------------------
+     LAYERING
+     Kept below the storefront's scale so the two never have to be
+     reconciled if a shared component is ever used in both.
+     --------------------------------------------------------------------- */
+
+  --a-z-sidebar: 60;
+  --a-z-scrim: 55;
+  --a-z-topbar: 50;
+  --a-z-dropdown: 70;
+}

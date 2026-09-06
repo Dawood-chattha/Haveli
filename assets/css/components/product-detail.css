@@ -1,0 +1,358 @@
+/* =========================================================================
+   product-detail.css — the product page
+   -------------------------------------------------------------------------
+   Measured from the reference (1440px):
+     grid        two equal columns, 40px page inset, media 675 wide
+     details     14px of padding on its leading edge
+     price       22px / 500 / lh 30.8 / ls .66px / full ink
+     add to cart #030302 on white type, radius 7px, padding 16px 24px,
+                 47.6px tall, full column width
+     swatches    25x25 on a 36px pitch
+     tabs        Description / Returns & Exchange / Care Instructions
+   ========================================================================= */
+
+.pdp {
+  display: grid;
+  gap: var(--sp-8);
+  margin-bottom: var(--sp-16);
+}
+
+@media (min-width: 990px) {
+  .pdp {
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    align-items: start;
+  }
+}
+
+/* Line the page up with the grid on listing pages: 40px, not the gutter. */
+@media (min-width: 750px) {
+  .pdp,
+  .pdp-related { margin-inline: calc(40px - var(--gutter)); }
+}
+
+/* -------------------------------------------------------------------------
+   GALLERY
+   ------------------------------------------------------------------------- */
+
+.pdp__media { position: relative; }
+
+.pdp__frame {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  background: var(--c-paper-alt);
+}
+
+.pdp__frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.pdp__thumbs {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+
+.pdp__thumb {
+  width: 72px;
+  aspect-ratio: 2 / 3;
+  padding: 0;
+  border: 1px solid transparent;
+  background: var(--c-paper-alt);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.pdp__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pdp__thumb[aria-current="true"] { border-color: var(--c-ink); }
+.pdp__thumb:hover { border-color: var(--c-stone); }
+
+/* -------------------------------------------------------------------------
+   DETAILS COLUMN
+   ------------------------------------------------------------------------- */
+
+.pdp__details { display: flex; flex-direction: column; }
+
+@media (min-width: 990px) {
+  .pdp__details { padding-left: 14px; }
+}
+
+.pdp__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-4);
+}
+
+.pdp__title {
+  margin: 0;
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-snug);
+  color: var(--c-ink);
+}
+
+.pdp__prices {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  white-space: nowrap;
+}
+
+.pdp__price {
+  font-size: 22px;
+  font-weight: var(--fw-medium);
+  line-height: 30.8px;
+  letter-spacing: .66px;
+  color: var(--c-ink);
+}
+
+.pdp__compare {
+  font-size: var(--fs-md);
+  opacity: var(--c-compare-opacity);
+  text-decoration: line-through;
+  text-decoration-thickness: var(--c-compare-thickness);
+}
+
+/* Small pills repeating the fabric and category, as the reference does. */
+.pdp__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+
+.pdp__pill {
+  padding: 4px 10px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-2xs);
+  color: var(--c-muted);
+}
+
+.pdp__stock {
+  margin: var(--sp-4) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--c-muted);
+}
+.pdp__stock.is-out { color: var(--c-ink); }
+
+/* -------------------------------------------------------------------------
+   OPTIONS
+   ------------------------------------------------------------------------- */
+
+.pdp__option { margin-top: var(--sp-6); }
+
+.pdp__option-label {
+  display: block;
+  margin-bottom: var(--sp-3);
+  font-size: var(--fs-xs);
+  color: var(--c-muted);
+}
+.pdp__option-value { color: var(--c-ink); }
+
+.pdp__swatches { display: flex; flex-wrap: wrap; gap: 11px; }
+
+.pdp__swatch {
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  border: 1px solid var(--c-line);
+  border-radius: 50%;
+  cursor: default;
+}
+
+.pdp__sizes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+
+.pdp__size {
+  min-width: 48px;
+  height: 44px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--c-stone);
+  border-radius: var(--r-sm);
+  background: none;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--c-ink);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.pdp__size:hover { border-color: var(--c-ink); }
+
+.pdp__size[aria-pressed="true"] {
+  background: var(--c-ink);
+  border-color: var(--c-ink);
+  color: #fff;
+}
+
+/* -------------------------------------------------------------------------
+   QUANTITY + ADD TO CART
+   ------------------------------------------------------------------------- */
+
+.pdp__buy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-6);
+}
+
+.pdp__qty {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+  height: 47.6px;
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--c-stone);
+  border-radius: var(--r-cta);
+}
+
+.pdp__qty button {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: var(--fs-md);
+  line-height: 1;
+  color: var(--c-ink);
+  cursor: pointer;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.pdp__qty button:hover { opacity: .6; }
+.pdp__qty button:disabled { opacity: .3; cursor: default; }
+
+.pdp__qty-value { min-width: 1.5rem; text-align: center; }
+
+.pdp__add {
+  flex: 1;
+  min-width: 14rem;
+  height: 47.6px;
+  padding: 16px 24px;
+  border: 0;
+  border-radius: var(--r-cta);
+  background: var(--c-ink);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-regular);
+  line-height: 1;
+  color: #fff;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.pdp__add:hover:not(:disabled) { background: rgb(var(--c-ink-rgb) / .84); }
+
+.pdp__add:disabled {
+  background: var(--c-stone);
+  color: var(--c-body);
+  cursor: default;
+}
+
+.pdp__save {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  height: 47.6px;
+  padding: 0 var(--sp-5);
+  border: 1px solid var(--c-stone);
+  border-radius: var(--r-cta);
+  background: none;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--c-ink);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.pdp__save:hover { border-color: var(--c-ink); }
+
+.pdp__save svg {
+  width: 17px; height: 17px;
+  fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round;
+}
+.pdp__save[aria-pressed="true"] svg { fill: currentColor; }
+
+.pdp__note {
+  margin: var(--sp-3) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--c-muted);
+  min-height: 1.2em;
+}
+
+/* -------------------------------------------------------------------------
+   TABS
+   ------------------------------------------------------------------------- */
+
+.pdp__tabs { margin-top: var(--sp-8); }
+
+.pdp__tablist {
+  display: flex;
+  gap: var(--sp-5);
+  border-bottom: 1px solid var(--c-line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.pdp__tablist::-webkit-scrollbar { display: none; }
+
+.pdp__tab {
+  position: relative;
+  flex-shrink: 0;
+  padding: var(--sp-3) 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--c-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.pdp__tab:hover { color: var(--c-ink); }
+
+.pdp__tab[aria-selected="true"] { color: var(--c-ink); }
+.pdp__tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 2px;
+  background: var(--c-ink);
+}
+
+.pdp__tabpanel {
+  padding-top: var(--sp-4);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-relaxed);
+  max-width: var(--content-normal);
+}
+
+.pdp__tabpanel ul {
+  margin: var(--sp-2) 0 0;
+  padding-left: var(--sp-5);
+}
+
+/* -------------------------------------------------------------------------
+   RELATED
+   ------------------------------------------------------------------------- */
+
+.pdp-related { margin-bottom: var(--sp-10); }
+
+.pdp-related__title {
+  margin: 0 0 var(--sp-5);
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-regular);
+  color: var(--c-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdp__size, .pdp__add, .pdp__save, .pdp__tab, .pdp__thumb { transition: none; }
+}

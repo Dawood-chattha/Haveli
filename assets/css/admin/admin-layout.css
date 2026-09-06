@@ -1,0 +1,404 @@
+/* =========================================================================
+   admin-layout.css — the panel shell and the surfaces inside it
+   -------------------------------------------------------------------------
+   Depends on tokens.css, base.css and admin-tokens.css. The sidebar and the
+   topbar have their own files; this one owns the frame they sit in, plus
+   the handful of surfaces every page is built from.
+
+   THE FRAME
+
+     >= 990px    ┌──────────┬────────────────────────┐
+                 │ sidebar  │ topbar                 │
+                 │          ├────────────────────────┤
+                 │          │ content                │
+                 └──────────┴────────────────────────┘
+
+     <  990px    the sidebar leaves the grid and becomes an off-canvas
+                 drawer over a scrim; the content column takes the full
+                 width.
+
+   NO HORIZONTAL OVERFLOW
+   The content column is a grid child, and a grid child's default minimum
+   width is its content, not zero — so one wide table would push the whole
+   page sideways. `min-width: 0` on .admin__main is what prevents that, and
+   it is the reason wide content can scroll inside its own box instead.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   1. PAGE GROUND
+   ------------------------------------------------------------------------- */
+
+.admin-body {
+  background: var(--a-ground);
+  color: var(--c-body);
+  font-size: var(--a-fs-ui);
+}
+
+/* -------------------------------------------------------------------------
+   2. FRAME
+   ------------------------------------------------------------------------- */
+
+/* The first track is `auto` rather than a fixed width, so the column takes
+   whatever width the sidebar gives it, and collapsing is an animation of the
+   sidebar's own `width` — see admin-sidebar.css.
+
+   The alternative is to declare both widths here and transition
+   `grid-template-columns` instead. That also works; `width` is preferred
+   because it has been interpolable far longer and in more engines, and
+   because it keeps the sidebar's size where the rest of the sidebar's
+   appearance is defined rather than splitting it across two files. */
+.admin {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 100vh;
+  min-height: 100svh;
+}
+
+/* The sign-in route hides the chrome entirely — see admin-shell.js. */
+.admin.is-auth {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.admin.is-auth .a-sidebar,
+.admin.is-auth .a-topbar,
+.admin.is-auth .admin__scrim {
+  display: none;
+}
+
+.admin__main {
+  display: flex;
+  flex-direction: column;
+  /* See the note at the top: without this, wide content widens the page. */
+  min-width: 0;
+}
+
+.admin__content {
+  flex: 1 0 auto;
+  min-width: 0;
+  padding: var(--a-gutter) var(--a-gutter) var(--sp-16);
+}
+
+/* -------------------------------------------------------------------------
+   3. SCRIM
+   Only ever visible while the drawer is open, below 990px.
+   ------------------------------------------------------------------------- */
+
+.admin__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--a-z-scrim);
+  background: rgb(var(--c-ink-rgb) / .45);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--dur-slow) var(--ease-out),
+    visibility var(--dur-slow) var(--ease-out);
+}
+
+.admin.is-drawer-open .admin__scrim {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* -------------------------------------------------------------------------
+   4. PAGE TRANSITION
+   The same cross-fade the storefront uses, so moving between admin pages
+   feels like moving between shop pages. Driven by the router, which adds
+   these classes to whichever element it was given as an outlet.
+   ------------------------------------------------------------------------- */
+
+#admin-app {
+  transition:
+    opacity .16s var(--ease-out-quad),
+    transform .16s var(--ease-out-quad);
+}
+
+#admin-app.is-leaving {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+#admin-app.is-entering {
+  animation: adminPageIn .28s var(--ease-out-quad);
+}
+
+@keyframes adminPageIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* -------------------------------------------------------------------------
+   5. ICONS
+   Shapes come from admin-ui.js; weight, size and colour are set here so a
+   single rule governs every icon in the panel.
+   ------------------------------------------------------------------------- */
+
+.a-icon {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+
+/* -------------------------------------------------------------------------
+   6. PAGE HEAD
+   ------------------------------------------------------------------------- */
+
+.a-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-6);
+}
+
+.a-page-head__title {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-medium);
+  line-height: 1.25;
+  letter-spacing: -.01em;
+  color: var(--c-ink);
+}
+
+.a-page-head__sub {
+  margin: 6px 0 0;
+  font-size: var(--a-fs-body);
+  color: var(--c-muted);
+}
+
+.a-page-head__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+/* -------------------------------------------------------------------------
+   7. CARD
+   ------------------------------------------------------------------------- */
+
+.a-card {
+  background: var(--a-surface);
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--a-r-card);
+  box-shadow: var(--a-shadow-card);
+  overflow: hidden;
+}
+
+.a-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: var(--bw) solid var(--a-line-soft);
+}
+
+.a-card__title {
+  margin: 0;
+  font-size: var(--a-fs-ui);
+  font-weight: var(--fw-medium);
+  color: var(--c-ink);
+}
+
+.a-card__body { padding: var(--sp-5); }
+
+/* -------------------------------------------------------------------------
+   8. STATUS PILL
+   The one place the panel uses colour to carry meaning. Colour is never the
+   only signal — the label always says the same thing in words.
+   ------------------------------------------------------------------------- */
+
+.a-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--a-r-pill);
+  font-size: var(--fs-3xs);
+  font-weight: var(--fw-medium);
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.a-pill--active,
+.a-pill--delivered      { color: var(--a-success); background: var(--a-success-tint); }
+
+.a-pill--pending,
+.a-pill--low            { color: var(--a-warning); background: var(--a-warning-tint); }
+
+.a-pill--out-of-stock,
+.a-pill--cancelled      { color: var(--a-danger);  background: var(--a-danger-tint); }
+
+.a-pill--processing,
+.a-pill--shipped        { color: var(--a-info);    background: var(--a-info-tint); }
+
+.a-pill--draft,
+.a-pill--neutral        { color: var(--a-neutral); background: var(--a-neutral-tint); }
+
+/* -------------------------------------------------------------------------
+   9. PLACEHOLDER
+   Shown where a section is still to be built. It is styled as a finished
+   thing rather than a broken one, so an unbuilt route is obviously unbuilt
+   and not obviously failing.
+   ------------------------------------------------------------------------- */
+
+.a-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  max-width: 34rem;
+  margin-inline: auto;
+  padding: var(--sp-12) var(--sp-6);
+  background: var(--a-surface);
+  border: var(--bw) dashed var(--a-line);
+  border-radius: var(--a-r-card);
+  text-align: center;
+}
+
+.a-placeholder__mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--a-neutral-tint);
+  color: var(--c-muted);
+}
+
+.a-placeholder__phase {
+  margin: 0;
+  font-size: var(--fs-3xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-wider);
+  text-transform: uppercase;
+  color: var(--c-faint);
+}
+
+.a-placeholder__title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-medium);
+  color: var(--c-ink);
+}
+
+.a-placeholder__blurb {
+  margin: 0;
+  max-width: 30rem;
+  font-size: var(--a-fs-body);
+  line-height: var(--lh-relaxed);
+  color: var(--c-muted);
+}
+
+.a-placeholder__list {
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  text-align: left;
+}
+
+.a-placeholder__list li {
+  position: relative;
+  padding-left: var(--sp-5);
+  font-size: var(--a-fs-body);
+  color: var(--c-body);
+}
+
+.a-placeholder__list li::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--c-faint);
+}
+
+.a-placeholder .btn { margin-top: var(--sp-2); }
+
+/* -------------------------------------------------------------------------
+   10. AUTH SCREEN
+   The sign-in route renders with no chrome around it.
+   ------------------------------------------------------------------------- */
+
+.a-auth {
+  display: grid;
+  place-items: center;
+  min-height: calc(100svh - (var(--a-gutter) * 2));
+  padding: var(--sp-6) 0;
+}
+
+.a-auth__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-4);
+  width: 100%;
+  max-width: 30rem;
+}
+
+.a-auth__mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--a-r-control);
+  background: var(--c-ink);
+  color: #fff;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  letter-spacing: .02em;
+}
+
+.a-auth__title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-wide);
+  color: var(--c-ink);
+}
+
+.a-auth__note {
+  margin: 0;
+  max-width: 26rem;
+  font-size: var(--fs-3xs);
+  line-height: var(--lh-relaxed);
+  text-align: center;
+  color: var(--c-faint);
+}
+
+/* -------------------------------------------------------------------------
+   11. RESPONSIVE
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 989px) {
+  /* The sidebar leaves the flow entirely at this width (it becomes a fixed
+     drawer), so the frame drops to the single column the content occupies. */
+  .admin { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* -------------------------------------------------------------------------
+   12. REDUCED MOTION
+   ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  #admin-app,
+  #admin-app.is-leaving,
+  #admin-app.is-entering {
+    opacity: 1;
+    transform: none;
+    animation: none;
+    transition: none;
+  }
+
+  .admin__scrim { transition: none; }
+}

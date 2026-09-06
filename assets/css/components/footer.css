@@ -1,0 +1,232 @@
+/* =========================================================================
+   footer.css — site footer
+   -------------------------------------------------------------------------
+   Measured from the reference: the footer content sits on the same 40px page
+   inset as the product grid and the homepage rails, and its links are 13px
+   white on a dark ground (its "colour scheme 5"). The dark ground here is
+   the site ink already used by the nav drawer, so the two agree.
+   ========================================================================= */
+
+.footer {
+  margin-top: auto;          /* pin to the bottom of a short page */
+  background: var(--c-ink);
+  color: rgb(255 255 255 / .72);
+}
+
+.footer__inner {
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding: var(--sp-12) var(--gutter) var(--sp-6);
+}
+
+@media (min-width: 750px) {
+  .footer__inner { padding-inline: 40px; }
+}
+
+/* -------------------------------------------------------------------------
+   TOP — brand block beside the link columns
+   ------------------------------------------------------------------------- */
+
+.footer__top {
+  display: grid;
+  gap: var(--sp-10);
+  padding-bottom: var(--sp-10);
+}
+
+@media (min-width: 990px) {
+  .footer__top { grid-template-columns: 22rem 1fr; gap: var(--sp-16); }
+}
+
+.footer__wordmark {
+  display: inline-block;
+  margin-bottom: var(--sp-4);
+  color: #fff;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-medium);
+  letter-spacing: .22em;
+}
+
+.footer__blurb-title {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-snug);
+  color: #fff;
+}
+
+.footer__blurb {
+  margin: 0 0 var(--sp-5);
+  max-width: 34ch;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-relaxed);
+}
+
+.footer__contact {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-xs);
+  line-height: 1.9;
+  color: rgb(255 255 255 / .9);
+}
+
+/* -------------------------------------------------------------------------
+   LINK COLUMNS
+   ------------------------------------------------------------------------- */
+
+.footer__groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--sp-8) var(--sp-6);
+}
+
+.footer__group-title {
+  margin: 0 0 var(--sp-4);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-wider);
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.footer__links {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.footer__links a {
+  font-size: var(--fs-xs);
+  line-height: 18.2px;
+  color: rgb(255 255 255 / .72);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.footer__links a:hover { color: #fff; }
+
+.footer__links a.is-active { color: #fff; }
+
+/* -------------------------------------------------------------------------
+   NEWSLETTER
+   ------------------------------------------------------------------------- */
+
+.footer__news {
+  display: grid;
+  gap: var(--sp-4);
+  padding: var(--sp-8) 0;
+  border-top: 1px solid rgb(255 255 255 / .14);
+  border-bottom: 1px solid rgb(255 255 255 / .14);
+}
+
+@media (min-width: 750px) {
+  .footer__news {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    column-gap: var(--sp-10);
+  }
+  .footer__news-note { grid-column: 1 / -1; }
+}
+
+.footer__news-title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-regular);
+  color: #fff;
+}
+
+.footer__news-sub {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-xs);
+}
+
+.footer__news-form {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.footer__news-input {
+  min-width: 15rem;
+  flex: 1;
+  background: rgb(255 255 255 / .08);
+  border-color: rgb(255 255 255 / .22);
+  color: #fff;
+}
+
+.footer__news-input::placeholder { color: rgb(255 255 255 / .5); }
+.footer__news-input:focus { border-color: rgb(255 255 255 / .6); }
+
+.footer__news .btn--primary {
+  background: #fff;
+  color: var(--c-ink);
+}
+.footer__news .btn--primary:hover { background: rgb(255 255 255 / .86); }
+
+.footer__news-note {
+  margin: 0;
+  font-size: var(--fs-xs);
+  min-height: 1.2em;
+}
+
+.footer__news-note.is-error { color: #ffb4b4; }
+.footer__news-note.is-done  { color: rgb(255 255 255 / .8); }
+
+/* -------------------------------------------------------------------------
+   BOTTOM BAR
+   ------------------------------------------------------------------------- */
+
+.footer__bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3) var(--sp-6);
+  padding-top: var(--sp-6);
+  font-size: var(--fs-2xs);
+}
+
+.footer__copyright { margin: 0; }
+
+.footer__legal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+}
+
+.footer__legal a {
+  color: rgb(255 255 255 / .72);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.footer__legal a:hover { color: #fff; }
+
+.footer__social {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  margin-left: auto;
+  color: rgb(255 255 255 / .6);
+}
+
+/* The route into the management panel. Kept quiet on purpose: it is for the
+   owner, and a shopper has no use for it, so it sits at the end of the last
+   row at the lowest contrast in the footer and only comes up on hover. */
+.footer__owner {
+  color: rgb(255 255 255 / .38);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.footer__owner:hover { color: rgb(255 255 255 / .8); }
+
+@media (max-width: 749px) {
+  .footer__social { margin-left: 0; }
+  /* On one column the row wraps, so this pushes to the far edge instead of
+     trailing straight after the social list. */
+  .footer__owner { margin-left: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .footer__links a,
+  .footer__legal a,
+  .footer__owner { transition: none; }
+}

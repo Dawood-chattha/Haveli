@@ -1,0 +1,246 @@
+/* =========================================================================
+   admin-topbar.css — the bar above the content column
+   -------------------------------------------------------------------------
+   Holds the breadcrumb trail, a search field and the notifications control,
+   plus the menu button that opens the drawer below 990px.
+
+   It is sticky rather than fixed: sticky keeps it in the grid, so it spans
+   exactly the content column and needs no offset when the sidebar collapses.
+   A fixed bar would have to be told the sidebar's width and kept in step
+   with it.
+
+   Deliberately quieter than the storefront header, which floats frosted
+   over photography. There is nothing to float over here, so this is a plain
+   white bar with a hairline under it — a tool, not a statement.
+   ========================================================================= */
+
+.a-topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--a-z-topbar);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: var(--a-topbar-h);
+  padding-inline: var(--a-gutter);
+  background: var(--a-surface);
+  border-bottom: var(--bw) solid var(--a-line);
+}
+
+/* -------------------------------------------------------------------------
+   MENU BUTTON — drawer widths only
+   ------------------------------------------------------------------------- */
+
+.a-topbar__menu {
+  display: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  margin-left: -6px;
+  border: 0;
+  border-radius: var(--a-r-control);
+  background: transparent;
+  color: var(--c-ink);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.a-topbar__menu:hover { background: var(--a-neutral-tint); }
+
+@media (max-width: 989px) {
+  .a-topbar__menu { display: grid; }
+}
+
+/* -------------------------------------------------------------------------
+   BREADCRUMBS
+   ------------------------------------------------------------------------- */
+
+.a-crumbs { min-width: 0; }
+
+.a-crumbs__list {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--a-fs-body);
+  color: var(--c-muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.a-crumbs__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.a-crumbs__item + .a-crumbs__item::before {
+  content: "/";
+  color: var(--c-faint);
+}
+
+.a-crumbs__item a {
+  color: var(--c-muted);
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.a-crumbs__item a:hover { color: var(--c-ink); }
+
+.a-crumbs__item [aria-current="page"] {
+  color: var(--c-ink);
+  font-weight: var(--fw-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The trail is the first thing worth dropping on a narrow screen — the
+   page's own heading says the same thing, right below. */
+@media (max-width: 649px) {
+  .a-crumbs { display: none; }
+}
+
+/* -------------------------------------------------------------------------
+   TOOLS
+   ------------------------------------------------------------------------- */
+
+.a-topbar__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-left: auto;
+  min-width: 0;
+}
+
+/* ---- search ---- */
+
+.a-topbar__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 240px;
+  max-width: 100%;
+  transition: width var(--dur-slow) var(--ease-emphasised);
+}
+
+.a-topbar__search:focus-within { width: 300px; }
+
+.a-topbar__search-icon {
+  position: absolute;
+  left: 10px;
+  display: grid;
+  place-items: center;
+  color: var(--c-faint);
+  pointer-events: none;
+}
+
+.a-topbar__search-icon .a-icon { width: 16px; height: 16px; }
+
+.a-topbar__search-input {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px 0 34px;
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--a-r-control);
+  background: var(--a-surface-sunken);
+  font: inherit;
+  font-size: var(--a-fs-body);
+  color: var(--c-ink);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.a-topbar__search-input::placeholder { color: var(--c-faint); }
+
+.a-topbar__search-input:focus {
+  outline: none;
+  background: var(--a-surface);
+  border-color: var(--c-ink);
+}
+
+/* Below the tablet step the field would crowd out the trail, and the page
+   has its own search anyway. */
+@media (max-width: 749px) {
+  .a-topbar__search { display: none; }
+}
+
+/* ---- icon buttons ---- */
+
+.a-topbar__menu-wrap { position: relative; }
+
+.a-topbar__icon-btn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--a-r-control);
+  background: transparent;
+  color: var(--c-body);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.a-topbar__icon-btn:hover {
+  background: var(--a-neutral-tint);
+  color: var(--c-ink);
+}
+
+.a-topbar__icon-btn[aria-expanded="true"] {
+  background: var(--a-neutral-tint);
+  color: var(--c-ink);
+}
+
+/* -------------------------------------------------------------------------
+   DROPDOWN
+   ------------------------------------------------------------------------- */
+
+.a-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: var(--a-z-dropdown);
+  width: min(20rem, calc(100vw - var(--sp-8)));
+  background: var(--a-surface);
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--a-r-card);
+  box-shadow: var(--a-shadow-pop);
+  overflow: hidden;
+  animation: adminDropIn var(--dur-fast) var(--ease-out-cubic);
+}
+
+@keyframes adminDropIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.a-dropdown__head {
+  padding: 12px var(--sp-4);
+  border-bottom: var(--bw) solid var(--a-line-soft);
+  font-size: var(--fs-3xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-wider);
+  text-transform: uppercase;
+  color: var(--c-faint);
+}
+
+.a-dropdown__empty {
+  margin: 0;
+  padding: var(--sp-5) var(--sp-4);
+  font-size: var(--a-fs-body);
+  line-height: var(--lh-relaxed);
+  color: var(--c-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .a-dropdown { animation: none; }
+  .a-topbar__search { transition: none; }
+}

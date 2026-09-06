@@ -1,0 +1,376 @@
+/* =========================================================================
+   rail-section.css — the department rails on the homepage
+   -------------------------------------------------------------------------
+   Three of these stack under the collection carousel: Women, Men, Scents.
+   Each is a tinted band carrying a centred heading, a row of tabs and a
+   four-column grid of three collection tiles plus an "explore" tile.
+
+   Measured from the reference's `trending-products` sections. Worth knowing:
+
+     - the band's tint is a real photograph three layers deep: the image at
+       scale(1.1), then a flat 85% white sheet that also blurs 20px, then a
+       pair of faint white radial glows;
+     - the grid gap is 7px, and the tiles are 3:5 — taller than the 2:3 of a
+       product card, and deliberately a different component;
+     - tiles carry no price. They are collections, not products;
+     - only the tabs react to hover. The tiles and the explore card declare
+       transitions but the reference never gives them a hover rule, so
+       neither does this.
+
+   The greys here (#1a1a1a for the heading and tabs, #666 for the subtitle)
+   are the reference's own values for this section and are a shade off the
+   site ink, so they stay literal rather than borrowing a token that would
+   quietly change them.
+   ========================================================================= */
+
+.rail-section {
+  display: block;
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  padding: 30px 0 20px;
+}
+
+/* -------------------------------------------------------------------------
+   BACKGROUND — three stacked layers, none of them interactive
+   ------------------------------------------------------------------------- */
+
+.rail-section__bg,
+.rail-section__veil,
+.rail-section__glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.rail-section__bg {
+  z-index: 0;
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  /* A standing 10% zoom, not a parallax — the reference never moves it. */
+  transform: scale(1.1);
+}
+
+.rail-section__veil {
+  z-index: 1;
+  background: linear-gradient(135deg, rgb(255 255 255 / .85) 0%, rgb(255 255 255 / .85) 100%);
+  backdrop-filter: blur(20px);
+}
+
+.rail-section__glow {
+  z-index: 2;
+  background:
+    radial-gradient(circle at 20% 50%, rgb(255 255 255 / .05) 0%, transparent 50%),
+    radial-gradient(circle at 80% 50%, rgb(255 255 255 / .05) 0%, transparent 50%);
+}
+
+/* Centred with no gutter of its own. Measured across four widths: at 1800
+   the margins resolve to 195px, at 1440 to 15px, and at 1200 and below to
+   zero — so the band runs edge to edge on anything under 1400. */
+.rail-section__inner {
+  position: relative;
+  z-index: 3;
+  max-width: 1400px;
+  margin-inline: auto;
+  padding: 0 2px;
+}
+
+/* -------------------------------------------------------------------------
+   HEADING
+   ------------------------------------------------------------------------- */
+
+.rail-head { text-align: center; }
+
+.rail-head__title {
+  margin: 0 0 10px;
+  font-size: 32px;
+  font-weight: var(--fw-regular);
+  line-height: 35.2px;
+  letter-spacing: .5px;
+  color: #1a1a1a;
+  text-shadow: 0 2px 8px rgb(26 26 26 / .1);
+}
+
+.rail-head__sub {
+  margin: 0;
+  font-size: 16px;
+  font-weight: var(--fw-regular);
+  line-height: 22.4px;
+  letter-spacing: .5px;
+  color: #666;
+}
+
+@media (max-width: 750px) {
+  .rail-head__title { font-size: 28px; }
+  .rail-head__sub   { font-size: 14px; }
+}
+
+/* -------------------------------------------------------------------------
+   TABS
+   The underline is the active tab's own ::after sitting one pixel low, so
+   it covers the row's hairline rather than stacking on top of it.
+   ------------------------------------------------------------------------- */
+
+.rail-tabs {
+  position: relative;
+  margin: 4px 0 20px;
+  border-bottom: 1px solid rgb(26 26 26 / .25);
+}
+
+.rail-tabs__list {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  padding: 0 20px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  touch-action: pan-x;
+}
+
+.rail-tabs__list::-webkit-scrollbar { display: none; }
+
+@media (max-width: 749px) {
+  .rail-tabs__list { justify-content: space-evenly; }
+}
+
+.rail-tab {
+  position: relative;
+  flex-shrink: 0;
+  padding: 12px 0;
+  background: none;
+  border: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: var(--fw-regular);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #666;
+  cursor: pointer;
+  transition: color .4s, text-shadow .4s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (max-width: 767px) {
+  .rail-tab { font-size: 12px; }
+}
+
+.rail-tab:hover { color: #1a1a1a; text-shadow: 0 0 12px rgb(26 26 26 / .25); }
+
+.rail-tab:focus-visible {
+  outline: 2px solid #1a1a1a;
+  outline-offset: 2px;
+}
+
+.rail-tab[aria-selected="true"] {
+  font-weight: var(--fw-semibold, 600);
+  color: #1a1a1a;
+}
+
+.rail-tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  width: 100%;
+  height: 2px;
+  background: #1a1a1a;
+}
+
+/* -------------------------------------------------------------------------
+   PANEL GRID
+   ------------------------------------------------------------------------- */
+
+.rail-panel { display: none; }
+
+.rail-panel.is-active {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
+}
+
+@media (max-width: 767px) {
+  .rail-panel.is-active { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* -------------------------------------------------------------------------
+   COLLECTION TILE
+   ------------------------------------------------------------------------- */
+
+.rail-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: rgb(255 255 255 / .7);
+  transition:
+    transform .4s var(--ease-emphasised),
+    box-shadow .4s var(--ease-emphasised),
+    background .4s;
+}
+
+.rail-tile__media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 5;
+  min-height: 200px;
+  background: rgb(245 245 245 / .5);
+}
+
+.rail-tile__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform .6s var(--ease-emphasised);
+}
+
+.rail-tile__badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: calc(100% - 20px);
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgb(0 0 0 / .38);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  font-size: 10px;
+  font-weight: var(--fw-medium);
+  line-height: 1;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rail-tile__info {
+  flex-grow: 1;
+  padding: 8px 5px;
+}
+
+.rail-tile__name {
+  margin: 0;
+  font-size: 12px;
+  font-weight: var(--fw-light);
+  line-height: 1.5;
+  color: var(--c-ink);
+}
+
+/* The whole tile is one link; the anchor covers it. */
+.rail-tile__link {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+}
+
+.rail-tile__link:focus-visible {
+  outline: 2px solid #1a1a1a;
+  outline-offset: -2px;
+}
+
+/* -------------------------------------------------------------------------
+   EXPLORE TILE — the fourth column
+   ------------------------------------------------------------------------- */
+
+.rail-explore {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / .376);
+  background: transparent;
+  box-shadow: 0 8px 24px rgb(26 26 26 / .082);
+  text-decoration: none;
+  transition:
+    transform .5s var(--ease-emphasised),
+    border-color .5s,
+    box-shadow .5s;
+}
+
+.rail-explore__bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.rail-explore__overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: rgb(26 26 26 / 0);
+  backdrop-filter: blur(10px);
+  transition: background .5s;
+}
+
+.rail-explore__content {
+  position: relative;
+  z-index: 2;
+  padding: 20px;
+  text-align: center;
+  border-radius: 7px;
+  background: rgb(255 255 255 / .1);
+  backdrop-filter: blur(6px);
+}
+
+.rail-explore__text {
+  /* A block, so the Explore pill sits underneath rather than beside it —
+     the reference uses a <p> here and these are spans inside an anchor. */
+  display: block;
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: var(--fw-regular);
+  letter-spacing: 1px;
+  color: #fff;
+}
+
+.rail-explore__btn {
+  display: inline-block;
+  padding: 8px 10px;
+  border: 1px solid rgb(255 255 255 / .376);
+  border-radius: 8px;
+  background: rgb(247 247 247 / .9);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgb(247 247 247 / .125);
+  font-size: 12px;
+  font-weight: var(--fw-regular);
+  letter-spacing: 1.5px;
+  color: var(--c-ink);
+  transition: .4s;
+}
+
+.rail-explore:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -4px;
+}
+
+/* -------------------------------------------------------------------------
+   REDUCED MOTION
+   ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .rail-tab,
+  .rail-tile,
+  .rail-tile__media img,
+  .rail-explore,
+  .rail-explore__overlay,
+  .rail-explore__btn,
+  .rail-tabs__list {
+    transition: none;
+    scroll-behavior: auto;
+  }
+}

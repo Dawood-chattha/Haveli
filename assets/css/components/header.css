@@ -1,0 +1,204 @@
+/* =========================================================================
+   header.css — floating frosted header bar
+   -------------------------------------------------------------------------
+   Reproduces the reference storefront's header exactly as measured:
+
+     wrapper   position: sticky, top: 0, height: 0  (takes no layout space)
+     bar       position: absolute, 10px from the top, 46px tall
+     surface   fully transparent + backdrop-filter: blur(10px) saturate(1)
+     ink       white at every scroll position — the bar never gains a
+               background, never hides, never changes on scroll
+
+   Because the wrapper has no height, page content starts at the very top of
+   the document and the bar floats over it.
+   ========================================================================= */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  height: 0;                 /* contributes nothing to layout */
+}
+
+.header__bar {
+  position: absolute;
+  top: 10px;
+  left: var(--header-inset);
+  right: var(--header-inset);
+  height: 46px;
+
+  /* Transparent glass. Deliberately no background colour and no scroll
+     state — this is how the reference behaves at every scroll position. */
+  background: transparent;
+  -webkit-backdrop-filter: blur(10px) saturate(1);
+  backdrop-filter: blur(10px) saturate(1);
+
+  color: #fff;
+
+  /* The bar spans the full width but is mostly empty. Let clicks through the
+     empty stretches so the hero underneath stays reachable; the controls
+     themselves opt back in. */
+  pointer-events: none;
+}
+
+:root { --header-inset: 7px; }
+
+@media (min-width: 750px) {
+  :root { --header-inset: 12px; }
+}
+
+.header__columns {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  height: 100%;
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding-inline: var(--sp-2);
+}
+
+/* Left and right columns share the leftover space equally so the logo sits
+   optically centred regardless of how many controls each side holds. */
+.header__column {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.header__column--left  { flex: 1 1 0; justify-content: flex-start; }
+.header__column--right { flex: 1 1 0; justify-content: flex-end; }
+.header__column--center { flex: 0 0 auto; }
+
+/* -------------------------------------------------------------------------
+   LOGO — a wordmark, since the reference's own logo file and its GT Standard
+   typeface are both licensed assets.
+   ------------------------------------------------------------------------- */
+
+.header__logo {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  height: 46px;
+  color: #fff;
+  font-size: 1.125rem;
+  font-weight: var(--fw-bold);
+  letter-spacing: .22em;
+  text-indent: .22em;          /* balance the trailing letter-space */
+  line-height: 1;
+  white-space: nowrap;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.header__logo:hover { opacity: .75; }
+
+@media (max-width: 749px) {
+  .header__logo { font-size: 1rem; letter-spacing: .18em; text-indent: .18em; }
+}
+
+/* -------------------------------------------------------------------------
+   ICON CONTROLS — 44px hit targets, as measured.
+   ------------------------------------------------------------------------- */
+
+.header__action {
+  pointer-events: auto;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  color: #fff;
+  border-radius: var(--r-sm);
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.header__action:hover { opacity: .7; }
+.header__action:active { transform: scale(.92); }
+
+.header__action svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Cart count. Hidden while the cart is empty. */
+.header__count {
+  position: absolute;
+  top: 6px;
+  right: 5px;
+  min-width: 16px;
+  height: 16px;
+  padding-inline: 4px;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: var(--c-ink);
+  border-radius: var(--r-pill);
+  font-size: 10px;
+  font-weight: var(--fw-bold);
+  line-height: 1;
+  transform: scale(0);
+  transition: transform var(--dur) var(--ease-out-quad);
+}
+.header__count.is-visible { transform: scale(1); }
+
+/* Fired by JS whenever the count changes. */
+.header__count.is-bumped { animation: countBump .35s var(--ease-out-quad); }
+
+@keyframes countBump {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+
+/* -------------------------------------------------------------------------
+   HAMBURGER — three bars that morph into a cross while the drawer is open.
+   ------------------------------------------------------------------------- */
+
+.hamburger {
+  pointer-events: auto;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 44px;
+  height: 44px;
+  color: #fff;
+  border-radius: var(--r-sm);
+}
+
+.hamburger span {
+  display: block;
+  width: 18px;
+  height: 1.5px;
+  background: currentColor;
+  border-radius: 2px;
+  transition:
+    transform var(--dur) var(--ease-out-quad),
+    opacity calc(var(--dur) / 2) var(--ease-out);
+}
+
+.hamburger[aria-expanded="true"] span:nth-child(1) { transform: translateY(5.5px) rotate(45deg); }
+.hamburger[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
+.hamburger[aria-expanded="true"] span:nth-child(3) { transform: translateY(-5.5px) rotate(-45deg); }
+
+.hamburger:hover { opacity: .7; }
+
+/* -------------------------------------------------------------------------
+   RESPONSIVE
+   On phones the search control moves from the right cluster to the left,
+   beside the hamburger — matching the reference's mobile arrangement.
+   ------------------------------------------------------------------------- */
+
+.header__search--mobile  { display: none; }
+
+@media (max-width: 749px) {
+  .header__search--mobile  { display: inline-flex; }
+  .header__search--desktop { display: none; }
+  .header__columns { padding-inline: 0; }
+}

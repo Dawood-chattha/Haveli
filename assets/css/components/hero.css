@@ -1,0 +1,302 @@
+/* =========================================================================
+   hero.css — full-bleed hero carousel
+   -------------------------------------------------------------------------
+   Measured from the reference storefront:
+
+                          desktop (1280)      mobile (375)
+     hero height          640px               560px
+     slide image          object-fit cover, object-position 50% 50%
+     content block        left 48px,          left 24px,
+                          40px from bottom,   28px from bottom,
+                          max-width 580px     max-width 480px
+     content gap          12px                8px
+     eyebrow              10px / 700 / letter-spacing 2.5px / white 70%
+     headline             42px / 700 / -0.84px / line-height 1.12
+                          22px on mobile
+     body                 15px / 400 / line-height 24px / white 78%
+                          13px on mobile
+     CTA                  12px / 700 / 1.5px / uppercase, 44px tall
+                          34px tall on mobile
+     proof line           12px / 400 / .3px / white 55%
+     progress bar         4px tall, inset 20px, 20px from the bottom
+
+   The track is a native scroll-snap carousel, exactly as the reference
+   builds it. The progress bar is measured from it too. The nav arrows at
+   the foot of this file are NOT in the reference — see the note there.
+   ========================================================================= */
+
+.hero {
+  position: relative;
+  background: var(--c-paper);
+  /* The header floats over the top of this section. */
+}
+
+/* -------------------------------------------------------------------------
+   TRACK
+   ------------------------------------------------------------------------- */
+
+.hero__track {
+  display: flex;
+  height: 640px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.hero__track::-webkit-scrollbar { display: none; }
+
+.hero__slide {
+  position: relative;
+  flex: 0 0 100%;
+  height: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+/* -------------------------------------------------------------------------
+   MEDIA
+   ------------------------------------------------------------------------- */
+
+.hero__media {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.hero__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 50%;
+}
+
+/* The slide's type is white and sits bottom-left over the photograph. While
+   the artwork was generated locally the scrim was painted into the file
+   itself; with real photography it has to live here instead, or a pale frame
+   swallows the headline. Weighted to the lower left, where the text is, so
+   the rest of the picture stays open. */
+.hero__media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to top, rgb(0 0 0 / .68) 0%, rgb(0 0 0 / .28) 38%, rgb(0 0 0 / 0) 68%),
+    linear-gradient(to right, rgb(0 0 0 / .48) 0%, rgb(0 0 0 / 0) 55%);
+}
+
+/* -------------------------------------------------------------------------
+   CONTENT
+   ------------------------------------------------------------------------- */
+
+.hero__content {
+  position: absolute;
+  left: 48px;
+  right: 48px;
+  bottom: 40px;
+  max-width: 580px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  text-align: left;
+  color: #fff;
+}
+
+.hero__eyebrow {
+  font-size: 10px;
+  font-weight: var(--fw-bold);
+  line-height: 14px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / .7);
+}
+
+.hero__headline {
+  margin: 0;
+  font-size: 42px;
+  font-weight: var(--fw-bold);
+  line-height: 1.12;
+  letter-spacing: -.84px;
+  color: #fff;
+}
+
+.hero__body {
+  margin: 0;
+  font-size: 15px;
+  line-height: 24px;
+  color: rgb(255 255 255 / .78);
+}
+
+/* The frosted CTA defined in base.css as .btn--on-image. The measured 44px
+   height comes from a 16.8px line box inside the 13px padding, not from the
+   1.0 line-height the shared button uses. */
+.hero__cta {
+  margin-top: 4px;
+  line-height: 16.8px;
+}
+
+.hero__proof {
+  font-size: 12px;
+  line-height: 16.8px;
+  letter-spacing: .3px;
+  color: rgb(255 255 255 / .55);
+}
+
+/* -------------------------------------------------------------------------
+   PROGRESS BAR
+   A hairline that fills in proportion to how far the track has scrolled.
+   ------------------------------------------------------------------------- */
+
+.hero__progress {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 20px;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: rgb(255 255 255 / .25);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.hero__progress-fill {
+  display: block;
+  height: 100%;
+  width: var(--progress-w, 14.2857%);
+  border-radius: inherit;
+  background: #fff;
+  transform: translateX(var(--progress-x, 0));
+  transition:
+    transform var(--dur-slow) var(--ease-out-quad),
+    width var(--dur-slow) var(--ease-out-quad);
+}
+
+/* -------------------------------------------------------------------------
+   ENTRANCE
+   The active slide's content rises in, one line after another.
+
+   NOTE: the reference's own entrance timing could not be measured, so this
+   is a restrained default rather than a reproduction.
+   ------------------------------------------------------------------------- */
+
+.hero__content > * {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.hero__slide.is-active .hero__content > * {
+  animation: heroLineIn .55s var(--ease-out-quad) forwards;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+@keyframes heroLineIn {
+  to { opacity: 1; transform: none; }
+}
+
+/* -------------------------------------------------------------------------
+   RESPONSIVE
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 989px) {
+  .hero__content { left: 32px; right: 32px; }
+}
+
+@media (max-width: 749px) {
+  .hero__track { height: 560px; }
+
+  .hero__content {
+    left: 24px;
+    right: 24px;
+    bottom: 28px;
+    max-width: 480px;
+    gap: 8px;
+  }
+
+  .hero__headline { font-size: 22px; }
+  .hero__body { font-size: 13px; line-height: 20px; }
+
+  .hero__cta {
+    padding: 8px 22px;   /* 34px tall, as measured on the reference */
+    margin-top: 2px;
+  }
+}
+
+/* No further height step below 400px: the reference keeps the hero at 560px
+   all the way down, and shortening it here crops the composition. */
+
+/* -------------------------------------------------------------------------
+   REDUCED MOTION
+   ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .hero__track { scroll-behavior: auto; }
+  .hero__content > * { opacity: 1; transform: none; animation: none; }
+}
+
+/* -------------------------------------------------------------------------
+   NAV ARROWS
+   Not in the reference, which relies on swiping alone. Added because a
+   scroll-snap track with no controls is close to unusable with a mouse, and
+   nothing on screen otherwise hints that there are seven slides. Hidden
+   below 750px, where swiping is the natural gesture anyway.
+   ------------------------------------------------------------------------- */
+
+.hero__nav {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  display: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-top: -22px;
+  border: 1px solid rgb(255 255 255 / .35);
+  border-radius: 50%;
+  background: rgb(0 0 0 / .28);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--dur) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.hero__nav--prev { left: 20px; }
+.hero__nav--next { right: 20px; }
+
+.hero__nav svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hero__nav:hover { background: rgb(0 0 0 / .5); }
+
+.hero__nav:focus-visible {
+  opacity: 1;
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+@media (min-width: 750px) {
+  .hero__nav { display: grid; }
+
+  /* Kept out of the way until the hero is hovered, so the imagery reads
+     first — the same restraint the reference shows by having none at all. */
+  .hero:hover .hero__nav,
+  .hero:focus-within .hero__nav { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero__nav { transition: none; }
+  @media (min-width: 750px) { .hero__nav { opacity: 1; } }
+}

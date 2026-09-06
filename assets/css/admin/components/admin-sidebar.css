@@ -1,0 +1,404 @@
+/* =========================================================================
+   admin-sidebar.css — the admin navigation column
+   -------------------------------------------------------------------------
+   Three states, one stylesheet:
+
+     expanded    260px, icon + label + optional count
+     collapsed   72px, icon only; the label is hidden but stays in the
+                 accessibility tree, and the link keeps its title tooltip
+     drawer      below 990px it leaves the grid and slides in over a scrim
+
+   The dark ground is the storefront's own ink, so the panel opens on a
+   colour the brand already owns rather than a dashboard grey.
+
+   Collapsing hides labels with width and opacity rather than
+   `display: none`, because a display change cannot be animated and the
+   column would snap. It also keeps the labels readable to a screen reader,
+   which should not be affected by a purely visual preference.
+   ========================================================================= */
+
+/* The column width lives here rather than on the grid. `.admin` declares its
+   first track as `auto`, so this width is what the track becomes, and
+   collapsing is then an ordinary width transition. */
+.a-sidebar {
+  position: relative;
+  z-index: var(--a-z-sidebar);
+  display: flex;
+  flex-direction: column;
+  width: var(--a-sidebar-w);
+  min-height: 100vh;
+  min-height: 100svh;
+  background: var(--a-sidebar-bg);
+  color: var(--a-sidebar-ink);
+  overflow: hidden;
+  transition: width var(--dur-slow) var(--ease-emphasised);
+}
+
+/* -------------------------------------------------------------------------
+   HEAD — wordmark and the collapse control
+   ------------------------------------------------------------------------- */
+
+.a-sidebar__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: var(--a-topbar-h);
+  padding-inline: 16px;
+  border-bottom: var(--bw) solid var(--a-sidebar-line);
+}
+
+.a-sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.a-sidebar__mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: var(--a-r-control);
+  background: #fff;
+  color: var(--c-ink);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
+}
+
+.a-sidebar__wordmark {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
+  letter-spacing: .14em;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.a-sidebar__sub {
+  font-size: var(--fs-3xs);
+  font-weight: var(--fw-regular);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--a-sidebar-faint);
+}
+
+.a-sidebar__toggle {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  margin-left: auto;
+  border: 0;
+  border-radius: var(--a-r-control);
+  background: transparent;
+  color: var(--a-sidebar-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.a-sidebar__toggle:hover {
+  background: var(--a-sidebar-hover);
+  color: var(--a-sidebar-ink);
+}
+
+/* The arrow points the way the column will move. */
+.is-collapsed .a-sidebar__toggle .a-icon { transform: rotate(180deg); }
+.a-sidebar__toggle .a-icon { transition: transform var(--dur-slow) var(--ease-emphasised); }
+
+/* -------------------------------------------------------------------------
+   NAV
+   ------------------------------------------------------------------------- */
+
+.a-sidebar__nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 10px;
+  scrollbar-width: thin;
+}
+
+.a-nav {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+
+.a-nav__link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--a-r-control);
+  color: var(--a-sidebar-muted);
+  font-size: var(--a-fs-ui);
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.a-nav__link:hover {
+  background: var(--a-sidebar-hover);
+  color: var(--a-sidebar-ink);
+}
+
+.a-nav__link.is-active {
+  background: var(--a-sidebar-active);
+  color: #fff;
+  font-weight: var(--fw-medium);
+}
+
+/* A bar on the leading edge, so the active item is not signalled by a
+   subtle background tint alone. */
+.a-nav__link.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 3px;
+  height: 20px;
+  border-radius: 0 2px 2px 0;
+  background: #fff;
+}
+
+.a-nav__item { position: relative; }
+
+.a-nav__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+}
+
+.a-nav__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.a-nav__badge {
+  flex: none;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: var(--a-r-pill);
+  background: rgb(255 255 255 / .16);
+  color: #fff;
+  font-size: var(--fs-3xs);
+  font-weight: var(--fw-medium);
+  text-align: center;
+}
+
+/* -------------------------------------------------------------------------
+   FOOT — back to the shop, and who is signed in
+   ------------------------------------------------------------------------- */
+
+.a-sidebar__foot {
+  flex: none;
+  padding: 10px;
+  border-top: var(--bw) solid var(--a-sidebar-line);
+}
+
+.a-sidebar__store {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--a-r-control);
+  color: var(--a-sidebar-muted);
+  font-size: var(--a-fs-ui);
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.a-sidebar__store:hover {
+  background: var(--a-sidebar-hover);
+  color: var(--a-sidebar-ink);
+}
+
+.a-sidebar__user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: var(--a-r-control);
+  background: rgb(255 255 255 / .05);
+}
+
+.a-sidebar__avatar {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 50%;
+  background: rgb(255 255 255 / .14);
+  color: #fff;
+  font-size: var(--fs-3xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: .04em;
+}
+
+.a-sidebar__identity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.a-sidebar__name {
+  font-size: var(--fs-xs);
+  color: var(--a-sidebar-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.a-sidebar__role {
+  font-size: var(--fs-3xs);
+  color: var(--a-sidebar-faint);
+}
+
+.a-sidebar__logout {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  margin-left: auto;
+  border: 0;
+  border-radius: var(--a-r-control);
+  background: transparent;
+  color: var(--a-sidebar-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.a-sidebar__logout:hover {
+  background: var(--a-sidebar-hover);
+  color: #fff;
+}
+
+/* -------------------------------------------------------------------------
+   FOCUS
+   The panel inherits base.css's focus ring, which is drawn in the ink — and
+   the ink is the sidebar's own background here, so it would be invisible.
+   ------------------------------------------------------------------------- */
+
+.a-sidebar a:focus-visible,
+.a-sidebar button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* -------------------------------------------------------------------------
+   COLLAPSED (>= 990px only)
+   ------------------------------------------------------------------------- */
+
+@media (min-width: 990px) {
+
+  .is-collapsed .a-sidebar { width: var(--a-sidebar-w-collapsed); }
+
+  .is-collapsed .a-sidebar__head { padding-inline: 12px; }
+
+  .is-collapsed .a-nav__link,
+  .is-collapsed .a-sidebar__store {
+    justify-content: center;
+    padding-inline: 10px;
+  }
+
+  .is-collapsed .a-sidebar__user {
+    justify-content: center;
+    padding-inline: 8px;
+  }
+
+  /* Collapsed to nothing rather than removed, so the change can animate and
+     the text stays available to assistive technology. */
+  .is-collapsed .a-nav__label,
+  .is-collapsed .a-sidebar__wordmark,
+  .is-collapsed .a-sidebar__identity,
+  .is-collapsed .a-sidebar__logout,
+  .is-collapsed .a-nav__badge {
+    width: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .a-nav__label,
+  .a-sidebar__wordmark,
+  .a-sidebar__identity {
+    transition:
+      width var(--dur-slow) var(--ease-emphasised),
+      opacity var(--dur-fast) var(--ease-out);
+  }
+
+  /* The count still has to show that something needs attention, so it
+     becomes a dot on the icon rather than disappearing. */
+  .is-collapsed .a-nav__item:has(.a-nav__badge:not([hidden]))::after {
+    content: "";
+    position: absolute;
+    top: 8px;
+    right: 14px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #fff;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   DRAWER (< 990px)
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 989px) {
+
+  .a-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(84vw, var(--a-sidebar-w));
+    transform: translateX(-100%);
+    box-shadow: none;
+    transition:
+      transform var(--dur-slow) var(--ease-emphasised),
+      box-shadow var(--dur-slow) var(--ease-out);
+  }
+
+  .is-drawer-open .a-sidebar {
+    transform: translateX(0);
+    box-shadow: 0 0 40px rgb(var(--c-ink-rgb) / .35);
+  }
+
+  /* Closes the drawer at this width rather than collapsing the column. */
+  .a-sidebar__toggle .a-icon { transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .a-sidebar,
+  .a-nav__label,
+  .a-sidebar__wordmark,
+  .a-sidebar__identity,
+  .a-sidebar__toggle .a-icon {
+    transition: none;
+  }
+}

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- The admin panel is a second shell over the same project. It is its own
+     HTML document, which is what keeps the two halves apart: the storefront
+     never loads admin code, and the admin panel never loads the shop's.
+
+     Asset paths are resolved from the site root for the same reason the
+     storefront does it — a deep route such as /admin/products/xyz/edit would
+     otherwise look for its CSS beside itself and 404. It must be a real tag,
+     because the browser starts fetching before any script runs.
+
+     The consequence is that this must be served over http. Run
+     start-site.bat (or dev/serve.ps1) rather than opening the file. -->
+<base href="/">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#030302">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+
+<title>Admin — HAVELI</title>
+<meta name="description" content="Store management panel.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+
+<!-- Shared with the storefront: the design tokens, and the reset, buttons,
+     fields and focus styles built on them. The panel is the same brand, so
+     it should not restate any of this. -->
+<link rel="stylesheet" href="assets/css/tokens.css">
+<link rel="stylesheet" href="assets/css/base.css">
+
+<!-- Admin only -->
+<link rel="stylesheet" href="assets/css/admin/admin-tokens.css">
+<link rel="stylesheet" href="assets/css/admin/admin-layout.css">
+<link rel="stylesheet" href="assets/css/admin/components/admin-sidebar.css">
+<link rel="stylesheet" href="assets/css/admin/components/admin-topbar.css">
+</head>
+
+<body class="admin-body">
+
+<a class="skip-link" href="#admin-app">Skip to content</a>
+
+<div class="admin" id="admin">
+
+  <!-- Dims the page behind the drawer below 990px. -->
+  <div class="admin__scrim" id="admin-scrim"></div>
+
+  <!-- Sidebar and topbar are filled by admin-shell.js and then only
+       updated, so navigating never rebuilds the menu. -->
+  <aside class="a-sidebar" id="admin-sidebar" aria-label="Admin navigation"></aside>
+
+  <div class="admin__main">
+    <header class="a-topbar" id="admin-topbar"></header>
+
+    <!-- ROUTE OUTLET — every admin page renders in here -->
+    <main class="admin__content" id="admin-app"></main>
+  </div>
+
+</div>
+
+<!-- Core, shared with the storefront and loaded unchanged. The router keeps
+     its route table in module scope, so loading it in this document gives it
+     a fresh table: the shop's routes are not present here, and this panel's
+     routes are not present there. -->
+<script src="assets/js/main.js"></script>
+<script src="assets/js/router.js"></script>
+<script src="assets/js/ui.js"></script>
+
+<!-- Catalogue. The panel manages the same products the shop sells, so it
+     reads the same source rather than inventing a second one. -->
+<script src="data/navigation.js"></script>
+<script src="data/catalogue.js"></script>
+<script src="assets/js/catalogue.js"></script>
+
+<!-- Admin data: the menu, and the data access layer every page goes
+     through. A backend is connected in admin-repo.js and nowhere else. -->
+<script src="data/admin/admin-nav.js"></script>
+<script src="data/admin/admin-repo.js"></script>
+
+<!-- Admin components -->
+<script src="assets/js/admin/admin-ui.js"></script>
+<script src="assets/js/admin/admin-shell.js"></script>
+
+<!-- Admin pages -->
+<script src="assets/js/admin/pages/placeholders.js"></script>
+
+<!-- Boot (must come last) -->
+<script src="assets/js/admin/admin-routes.js"></script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+# =============================================================================
+# .gitattributes
+# -----------------------------------------------------------------------------
+# The project is developed on Windows, where editors write CRLF line endings.
+# Without this file git stores whatever it is given, and a file touched by a
+# different editor then shows up as changed on every line even though nothing
+# about it actually changed.
+#
+# `text=auto eol=lf` normalises to LF inside the repository while leaving the
+# working copy alone, so diffs only ever show real edits.
+# =============================================================================
+
+* text=auto eol=lf
+
+# Files that must keep CRLF to run correctly on Windows.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary — never normalise, never diff as text.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.avif binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary

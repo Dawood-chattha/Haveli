@@ -1,0 +1,347 @@
+/* =========================================================================
+   base.css — reset, element defaults, typography, shared primitives
+   Depends on tokens.css. Loads before any component stylesheet.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   1. RESET
+   ------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+  /* Sticky header offset so in-page anchors don't land under it. */
+  scroll-padding-top: 6rem;
+}
+
+body,
+h1, h2, h3, h4, h5, h6,
+p, figure, blockquote, dl, dd,
+ul, ol { margin: 0; }
+
+ul[role="list"],
+ol[role="list"] { list-style: none; padding: 0; }
+
+img,
+picture,
+video,
+canvas,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+img { height: auto; }
+
+input,
+button,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+a { color: inherit; text-decoration: none; }
+
+table { border-collapse: collapse; }
+
+/* -------------------------------------------------------------------------
+   2. DOCUMENT
+   ------------------------------------------------------------------------- */
+
+body {
+  margin: 0;
+  background: var(--c-paper);
+  color: var(--c-body);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Nothing in the layout should ever cause sideways scroll. */
+  overflow-x: hidden;
+}
+
+/* Set by JS while a drawer or modal owns the screen. */
+body.is-locked {
+  overflow: hidden;
+  touch-action: none;
+}
+
+/* -------------------------------------------------------------------------
+   3. TYPOGRAPHY
+   Headings are the ink at full strength; body copy is the softened 76%.
+   ------------------------------------------------------------------------- */
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--c-ink);
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--ls-normal);
+  text-wrap: balance;
+}
+
+h1 { font-size: var(--fs-4xl); line-height: var(--lh-tight); letter-spacing: var(--ls-tight); }
+h2 { font-size: var(--fs-2xl); line-height: var(--lh-tight); letter-spacing: var(--ls-tight); }
+h3 { font-size: var(--fs-xl); }
+h4 { font-size: var(--fs-lg); }
+h5 { font-size: var(--fs-md); }
+h6 { font-size: var(--fs-sm); }
+
+p { text-wrap: pretty; }
+
+small { font-size: var(--fs-xs); }
+
+strong, b { font-weight: var(--fw-bold); }
+
+/* The small uppercase kicker that sits above every banner headline. */
+.eyebrow {
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-wider);
+  text-transform: uppercase;
+  color: var(--c-muted);
+}
+
+.lead {
+  font-size: var(--fs-md);
+  line-height: var(--lh-relaxed);
+  color: var(--c-body);
+}
+
+/* -------------------------------------------------------------------------
+   4. FOCUS & ACCESSIBILITY
+   ------------------------------------------------------------------------- */
+
+:focus-visible {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 2px;
+}
+
+/* Pointer users don't get the ring; keyboard users always do. */
+:focus:not(:focus-visible) { outline: none; }
+
+.visually-hidden:not(:focus):not(:active) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.skip-link {
+  position: absolute;
+  top: var(--sp-2);
+  left: var(--sp-2);
+  z-index: var(--z-toast);
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--c-ink);
+  color: #fff;
+  font-size: var(--fs-2xs);
+  letter-spacing: var(--ls-wide);
+  text-transform: uppercase;
+  transform: translateY(-200%);
+  transition: transform var(--dur) var(--ease-out);
+}
+.skip-link:focus { transform: translateY(0); }
+
+/* -------------------------------------------------------------------------
+   5. BUTTONS
+   Three roles: solid ink, outlined stone, and the frosted variant that sits
+   on top of photography.
+   ------------------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: 13px var(--sp-8);
+  border: var(--bw) solid transparent;
+  border-radius: var(--r-cta);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-wider);
+  text-transform: uppercase;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.btn:active { transform: translateY(1px); }
+
+.btn--primary {
+  background: var(--btn-primary-bg);
+  border-color: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+}
+.btn--primary:hover {
+  background: var(--btn-primary-bg-hover);
+  border-color: var(--btn-primary-bg-hover);
+}
+
+.btn--secondary {
+  background: var(--btn-secondary-bg);
+  border-color: var(--btn-secondary-border);
+  color: var(--btn-secondary-fg);
+}
+.btn--secondary:hover { border-color: var(--btn-secondary-border-hover); }
+
+/* Frosted panel over imagery — the banner CTA. */
+.btn--on-image {
+  background: var(--c-on-image-fill);
+  border-color: transparent;
+  color: var(--c-on-image);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.btn--on-image:hover {
+  background: var(--c-on-image-fill-hover);
+  box-shadow: 0 6px 18px rgb(var(--c-ink-rgb) / .18);
+}
+
+.btn--sm { padding: 9px var(--sp-5); font-size: var(--fs-3xs); }
+.btn--block { width: 100%; }
+
+.btn[disabled],
+.btn[aria-disabled="true"] {
+  opacity: .45;
+  pointer-events: none;
+}
+
+/* Quiet text link with an underline that grows from the left. */
+.link-underline {
+  position: relative;
+  color: var(--c-ink);
+  font-weight: var(--fw-medium);
+}
+.link-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  width: 100%;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--dur) var(--ease-out-quad);
+}
+.link-underline:hover::after { transform: scaleX(1); }
+
+/* -------------------------------------------------------------------------
+   6. FORM CONTROLS
+   ------------------------------------------------------------------------- */
+
+.field {
+  width: 100%;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--c-stone-tint);
+  border: var(--bw) solid var(--c-line);
+  border-radius: var(--r-none);
+  color: var(--c-ink);
+  font-size: var(--fs-sm);
+  transition: border-color var(--dur) var(--ease-out);
+}
+.field::placeholder { color: var(--c-faint); }
+.field:focus { border-color: var(--c-ink); outline: none; }
+
+/* -------------------------------------------------------------------------
+   7. ANIMATION SYSTEM
+   Two mechanisms, both driven from main.js:
+
+     .reveal  + .is-in   one-shot entrance as an element scrolls into view.
+                         Stagger with style="--d:.08s".
+     [data-anim] + .in-view  toggles as the element enters and leaves, for
+                         anything that should not run while off-screen.
+
+   Per-section timings get tuned as sections are built; these are the
+   defaults everything starts from.
+   ------------------------------------------------------------------------- */
+
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity var(--dur-reveal) var(--ease-out-quad) var(--d, 0s),
+    transform var(--dur-reveal) var(--ease-out-quad) var(--d, 0s);
+  will-change: opacity, transform;
+}
+.reveal.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* Directional variants for elements that should arrive from the side. */
+.reveal--left  { transform: translateX(-24px); }
+.reveal--right { transform: translateX(24px); }
+.reveal--scale { transform: scale(.97); }
+.reveal--fade  { transform: none; }
+
+.reveal--left.is-in,
+.reveal--right.is-in,
+.reveal--scale.is-in { transform: none; }
+
+/* Shared hover primitives, so every card lifts and zooms by the same amount. */
+.hover-lift {
+  transition:
+    transform var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+.hover-lift:hover {
+  transform: translateY(calc(-1 * var(--hover-lift)));
+  box-shadow: var(--shadow-lift);
+}
+
+.hover-zoom { overflow: hidden; }
+.hover-zoom img {
+  transition: transform var(--dur-slow) var(--ease-out-quad);
+}
+.hover-zoom:hover img { transform: scale(var(--hover-zoom)); }
+
+/* -------------------------------------------------------------------------
+   8. REDUCED MOTION
+   Every animation defined anywhere in the project must be neutralised here.
+   ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+
+  .hover-lift:hover { transform: none; box-shadow: none; }
+  .hover-zoom:hover img { transform: none; }
+}
