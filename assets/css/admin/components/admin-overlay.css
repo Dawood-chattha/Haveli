@@ -1,0 +1,203 @@
+/* =========================================================================
+   admin-overlay.css — the confirmation dialog and the toasts
+   -------------------------------------------------------------------------
+   Two things that sit above the page and are gone again quickly, so both
+   are written to be legible the moment they appear rather than to make an
+   entrance.
+
+   The dialog enters from a scrim and rises a few pixels; the toast slides
+   in from its own edge. Both use transform and opacity only, and both stop
+   entirely under prefers-reduced-motion — for the toast that matters twice
+   over, because it moves without being asked.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   MODAL
+   ------------------------------------------------------------------------- */
+
+.a-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: var(--sp-4);
+}
+
+.a-modal__scrim {
+  position: absolute;
+  inset: 0;
+  background: rgb(var(--c-ink-rgb) / .45);
+  animation: aScrimIn var(--dur-fast) var(--ease-out);
+}
+
+.a-modal__box {
+  position: relative;
+  width: 100%;
+  max-width: 26rem;
+  padding: var(--sp-6);
+  background: var(--a-surface);
+  border-radius: var(--a-r-card);
+  box-shadow: 0 18px 48px rgb(var(--c-ink-rgb) / .28);
+  animation: aModalIn var(--dur-slow) var(--ease-out-cubic);
+}
+
+.a-modal__title {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-medium);
+  color: var(--c-ink);
+}
+
+.a-modal__body {
+  margin: 0 0 var(--sp-5);
+  font-size: var(--a-fs-ui);
+  line-height: var(--lh-relaxed);
+  color: var(--c-body);
+}
+
+.a-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+
+@keyframes aScrimIn { from { opacity: 0; } to { opacity: 1; } }
+
+@keyframes aModalIn {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (max-width: 480px) {
+  .a-modal { place-items: end center; }
+  .a-modal__actions { flex-direction: column-reverse; }
+  .a-modal__actions .a-btn { width: 100%; min-height: 44px; }
+}
+
+/* -------------------------------------------------------------------------
+   TOASTS
+   ------------------------------------------------------------------------- */
+
+.a-toasts {
+  position: fixed;
+  right: var(--sp-4);
+  bottom: var(--sp-4);
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  /* The stack must not swallow clicks meant for the page behind it; only
+     the toasts themselves take a pointer. */
+  pointer-events: none;
+}
+
+.a-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(24rem, calc(100vw - var(--sp-8)));
+  padding: 11px 12px;
+  border-radius: var(--a-r-control);
+  background: var(--c-ink);
+  color: #fff;
+  font-size: var(--a-fs-body);
+  line-height: 1.45;
+  box-shadow: 0 8px 26px rgb(var(--c-ink-rgb) / .3);
+  pointer-events: auto;
+  animation: aToastIn var(--dur-slow) var(--ease-out-cubic);
+}
+
+.a-toast.is-leaving { animation: aToastOut var(--dur-fast) var(--ease-out) forwards; }
+
+.a-toast__icon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.a-toast__icon svg {
+  width: 16px; height: 16px;
+  fill: none; stroke: currentColor; stroke-width: 1.7;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+
+.a-toast--success .a-toast__icon { color: #7ee2b0; }
+.a-toast--error .a-toast__icon { color: #ff9d92; }
+.a-toast--info .a-toast__icon { color: rgb(255 255 255 / .7); }
+
+.a-toast__text { flex: 1 1 auto; min-width: 0; }
+
+.a-toast__action {
+  flex: none;
+  min-height: 30px;
+  padding: 0 10px;
+  border: var(--bw) solid rgb(255 255 255 / .3);
+  border-radius: var(--r-sm);
+  background: transparent;
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: #fff;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.a-toast__action:hover { background: rgb(255 255 255 / .14); }
+
+.a-toast__close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: rgb(255 255 255 / .6);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.a-toast__close:hover { color: #fff; }
+
+.a-toast__close svg {
+  width: 12px; height: 12px;
+  fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round;
+}
+
+.a-toast :focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+@keyframes aToastIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes aToastOut {
+  to { opacity: 0; transform: translateY(6px); }
+}
+
+@media (max-width: 559px) {
+  .a-toasts { left: var(--sp-4); right: var(--sp-4); }
+  .a-toast { max-width: none; }
+}
+
+/* -------------------------------------------------------------------------
+   REDUCED MOTION
+   ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .a-modal__scrim,
+  .a-modal__box,
+  .a-toast { animation: none; }
+
+  .a-toast.is-leaving { animation: none; opacity: 0; }
+
+  .a-toast__action,
+  .a-toast__close { transition: none; }
+}

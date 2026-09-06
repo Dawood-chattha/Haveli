@@ -1,0 +1,380 @@
+/* =========================================================================
+   admin-products.css — the furniture around a list: toolbar, chips, pager
+   -------------------------------------------------------------------------
+   Written for the product list, but nothing here names products: orders,
+   customers and inventory are the same shape of screen and will reuse it.
+
+   Two rules shape most of what follows.
+
+   Nothing may be clipped. Filter chips wrap onto as many rows as they need
+   rather than being squeezed into one and cut off, and a table too wide for
+   its card scrolls inside the card rather than widening the page.
+
+   Nothing may jump. The results area holds its previous rows at reduced
+   opacity while the next page arrives, so the pager below it does not move
+   under the pointer that is about to click it.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   TOOLBAR
+   ------------------------------------------------------------------------- */
+
+.a-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: var(--bw) solid var(--a-line-soft);
+}
+
+.a-toolbar__selects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-left: auto;
+}
+
+.a-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 16rem;
+  min-width: 0;
+  max-width: 24rem;
+}
+
+.a-search__icon {
+  position: absolute;
+  left: 11px;
+  display: grid;
+  place-items: center;
+  color: var(--c-faint);
+  pointer-events: none;
+}
+
+.a-search__icon .a-icon { width: 17px; height: 17px; }
+
+.a-search__input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px 0 36px;
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--a-r-control);
+  background: var(--a-surface-sunken);
+  font: inherit;
+  font-size: var(--a-fs-body);
+  color: var(--c-ink);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.a-search__input::placeholder { color: var(--c-faint); }
+
+.a-search__input:focus {
+  outline: none;
+  background: var(--a-surface);
+  border-color: var(--c-ink);
+  box-shadow: 0 0 0 3px rgb(var(--c-ink-rgb) / .12);
+}
+
+/* -------------------------------------------------------------------------
+   ACTIVE FILTER CHIPS
+   ------------------------------------------------------------------------- */
+
+.a-chips {
+  display: flex;
+  flex-wrap: wrap;        /* as many rows as it takes; never one clipped row */
+  gap: 7px;
+  padding: var(--sp-3) var(--sp-5);
+  border-bottom: var(--bw) solid var(--a-line-soft);
+}
+
+.a-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 30px;
+  padding: 0 9px 0 11px;
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--a-r-pill);
+  background: var(--a-surface);
+  font: inherit;
+  font-size: var(--fs-xs);
+  color: var(--c-body);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.a-chip:hover { border-color: var(--c-ink); color: var(--c-ink); }
+
+/* The label shrinks and ellipses rather than wrapping to a second line,
+   and the full value is still in the field it came from. */
+.a-chip__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.a-chip__x { display: grid; place-items: center; flex: none; color: var(--c-faint); }
+
+.a-chip__x svg {
+  width: 11px; height: 11px;
+  fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round;
+}
+
+.a-chip--clear {
+  border-style: dashed;
+  color: var(--c-muted);
+}
+
+/* -------------------------------------------------------------------------
+   RESULT BAR
+   ------------------------------------------------------------------------- */
+
+.a-resultbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2) var(--sp-4);
+  padding: var(--sp-3) var(--sp-5);
+  border-bottom: var(--bw) solid var(--a-line-soft);
+}
+
+.a-resultbar__count {
+  margin: 0;
+  font-size: var(--a-fs-body);
+  color: var(--c-muted);
+}
+
+.a-resultbar__note {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--a-warning);
+}
+
+/* -------------------------------------------------------------------------
+   LOADING
+   ------------------------------------------------------------------------- */
+
+/* Held, not replaced: the rows stay put while the next page arrives. */
+.a-card__body--flush.is-refreshing {
+  opacity: .5;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.a-skeleton { padding: var(--sp-2) 0; }
+
+.a-skeleton__row {
+  height: 56px;
+  margin: 0 var(--sp-5);
+  border-bottom: var(--bw) solid var(--a-line-soft);
+  background:
+    linear-gradient(90deg,
+      var(--a-surface-sunken) 0%,
+      rgb(var(--c-ink-rgb) / .05) 50%,
+      var(--a-surface-sunken) 100%);
+  background-size: 200% 100%;
+  animation: aSkeleton 1.4s var(--ease-in-out) infinite;
+}
+
+@keyframes aSkeleton {
+  to { background-position: -200% 0; }
+}
+
+/* -------------------------------------------------------------------------
+   PRODUCT TABLE EXTRAS
+   ------------------------------------------------------------------------- */
+
+.a-table--products { min-width: 46rem; }
+
+.a-cell--media { width: 60px; padding-right: 0; }
+
+/* `max-width: none` is doing real work here. base.css sets max-width:100% on
+   every image, which is right everywhere else — but inside a table cell the
+   auto layout resolves that percentage against a width it is still
+   negotiating, and the 40px thumbnail was rendering 16px wide. Pinning the
+   width from both ends takes it out of that negotiation. */
+.a-thumb {
+  display: block;
+  width: 40px;
+  min-width: 40px;
+  max-width: none;
+  height: 52px;
+  object-fit: cover;
+  border-radius: var(--r-sm);
+  background: var(--a-surface-sunken);
+}
+
+.a-thumb--empty { border: var(--bw) dashed var(--a-line); }
+
+.a-cell--name a {
+  color: var(--c-ink);
+  text-decoration: none;
+  font-weight: var(--fw-regular);
+}
+
+.a-cell--name a:hover { text-decoration: underline; }
+
+.a-cell__was {
+  display: block;
+  font-size: var(--fs-3xs);
+  color: var(--c-faint);
+  text-decoration: line-through;
+  text-decoration-thickness: var(--c-compare-thickness);
+}
+
+.a-cell--actions { width: 1%; white-space: nowrap; }
+
+.a-rowactions { display: flex; gap: 3px; justify-content: flex-end; }
+
+.a-iconbtn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--a-r-control);
+  background: transparent;
+  color: var(--c-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.a-iconbtn:hover { background: var(--a-neutral-tint); color: var(--c-ink); }
+
+.a-iconbtn--danger:hover { background: var(--a-danger-tint); color: var(--a-danger); }
+
+.a-iconbtn .a-icon { width: 17px; height: 17px; }
+
+.a-iconbtn:focus-visible {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 1px;
+}
+
+/* -------------------------------------------------------------------------
+   EMPTY AND NO-MATCH STATES
+   A blank panel tells the reader nothing; both of these say what happened
+   and offer the next step.
+   ------------------------------------------------------------------------- */
+
+.a-blank {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-16) var(--sp-6);
+  text-align: center;
+}
+
+.a-blank__title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-medium);
+  color: var(--c-ink);
+}
+
+.a-blank__body {
+  margin: 0;
+  max-width: 26rem;
+  font-size: var(--a-fs-body);
+  line-height: var(--lh-relaxed);
+  color: var(--c-muted);
+}
+
+.a-blank .a-btn { margin-top: var(--sp-3); }
+
+.a-blank--loading .a-blank__title { color: var(--c-faint); font-weight: var(--fw-regular); }
+
+/* -------------------------------------------------------------------------
+   PAGER
+   ------------------------------------------------------------------------- */
+
+.a-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-5);
+  border-top: var(--bw) solid var(--a-line-soft);
+}
+
+.a-pager__numbers { display: flex; gap: 3px; }
+
+.a-pager__no,
+.a-pager__step {
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0 11px;
+  border: var(--bw) solid transparent;
+  border-radius: var(--a-r-control);
+  background: transparent;
+  font: inherit;
+  font-size: var(--a-fs-body);
+  color: var(--c-body);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.a-pager__step { border-color: var(--a-line); background: var(--a-surface); }
+
+.a-pager__no:hover:not([aria-current]),
+.a-pager__step:hover:not(:disabled) { border-color: var(--c-ink); color: var(--c-ink); }
+
+.a-pager__no[aria-current="page"] {
+  background: var(--c-ink);
+  border-color: var(--c-ink);
+  color: #fff;
+  font-weight: var(--fw-medium);
+}
+
+.a-pager__step:disabled { opacity: .45; cursor: not-allowed; }
+
+.a-pager__no:focus-visible,
+.a-pager__step:focus-visible {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 2px;
+}
+
+/* -------------------------------------------------------------------------
+   RESPONSIVE
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 749px) {
+  .a-toolbar { padding-inline: var(--sp-4); }
+  .a-toolbar__selects { margin-left: 0; width: 100%; }
+  .a-toolbar__selects .a-select { flex: 1 1 8rem; }
+  .a-search { max-width: none; flex-basis: 100%; }
+
+  .a-chips,
+  .a-resultbar,
+  .a-pager { padding-inline: var(--sp-4); }
+
+  .a-pager__numbers { display: none; }   /* Previous / Next is enough */
+  .a-pager { justify-content: space-between; }
+}
+
+/* -------------------------------------------------------------------------
+   REDUCED MOTION
+   ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .a-skeleton__row { animation: none; }
+
+  .a-search__input,
+  .a-chip,
+  .a-iconbtn,
+  .a-pager__no,
+  .a-pager__step,
+  .a-card__body--flush.is-refreshing { transition: none; }
+}

@@ -1,16 +1,34 @@
 # =============================================================================
-# serve.ps1 — minimal static file server for local previewing
+# serve.ps1 -- minimal static file server for local previewing
 #
 # Neither Node nor Python is installed on this machine, so this uses the .NET
 # HttpListener that ships with Windows. No dependencies, nothing to install.
 #
 #   Run:   powershell -ExecutionPolicy Bypass -File dev\serve.ps1
 #   Open:  http://localhost:8123/
-#   Stop:  Ctrl+C
+#   Stop:  Ctrl+C, or close this window
+#
+# -----------------------------------------------------------------------------
+# WHY EACH REQUEST IS HANDLED OFF THE ACCEPT LOOP
+#
+# The obvious shape for this script is a loop that calls GetContext(), serves
+# the file, and loops again. That serves exactly one request at a time, and it
+# was enough while a page pulled a handful of files.
+#
+# The admin panel loads around twenty-five stylesheets and scripts, and a
+# browser asks for them over several connections at once. One request that
+# stalls -- a client that navigates away mid-download, a socket the browser
+# abandons -- then blocks every other request behind it. The process stays
+# alive and the port stays open, so nothing looks wrong; the site simply stops
+# answering. That happened three times while building the panel.
+#
+# So the loop now does nothing but accept. Each request is handed to a runspace
+# pool and served there, and a stalled one can only ever hold up itself.
 # =============================================================================
 
 param(
-    [int]$Port = 8123
+    [int]$Port = 8123,
+    [int]$Workers = 8
 )
 
 $root = Split-Path -Parent $PSScriptRoot
@@ -31,7 +49,89 @@ $mime = @{
     '.ico'  = 'image/x-icon'
     '.woff' = 'font/woff'
     '.woff2' = 'font/woff2'
+    '.txt'  = 'text/plain; charset=utf-8'
+    '.md'   = 'text/plain; charset=utf-8'
 }
+
+# -----------------------------------------------------------------------------
+# The handler. Runs in a worker runspace, so everything it needs is passed in;
+# it can see nothing from the script's own scope.
+# -----------------------------------------------------------------------------
+
+$handler = {
+    param($context, $root, $mime)
+
+    try {
+        $rel = [System.Uri]::UnescapeDataString($context.Request.Url.AbsolutePath.TrimStart('/'))
+        if ([string]::IsNullOrWhiteSpace($rel)) { $rel = 'index.html' }
+
+        $path = Join-Path $root $rel
+
+        # Directory request -> its index.html
+        if (Test-Path $path -PathType Container) {
+            $path = Join-Path $path 'index.html'
+        }
+
+        # Keep every request inside the project folder.
+        $full = [System.IO.Path]::GetFullPath($path)
+        $rootFull = [System.IO.Path]::GetFullPath($root)
+
+        if (-not $full.StartsWith($rootFull, [StringComparison]::OrdinalIgnoreCase)) {
+            $context.Response.StatusCode = 403
+        }
+        else {
+            # SPA fallback: a path with no file extension is a client-side route
+            # (/category/women, /cart, ...), so hand back the shell and let the
+            # router work out what to render. Without this, refreshing or
+            # opening a deep link directly would 404.
+            #
+            # There are two shells, so there are two fallbacks. Anything under
+            # /admin belongs to the admin panel and must be handed
+            # admin/index.html; the storefront shell would load the shop's route
+            # table, which has never heard of /admin/products.
+            if (-not (Test-Path $full -PathType Leaf)) {
+                if ([string]::IsNullOrEmpty([System.IO.Path]::GetExtension($full))) {
+                    if ($rel -eq 'admin' -or $rel -like 'admin/*') {
+                        $full = Join-Path $root 'admin\index.html'
+                    } else {
+                        $full = Join-Path $root 'index.html'
+                    }
+                }
+            }
+
+            if (Test-Path $full -PathType Leaf) {
+                $bytes = [System.IO.File]::ReadAllBytes($full)
+                $ext = [System.IO.Path]::GetExtension($full).ToLower()
+
+                $type = $mime[$ext]
+                if (-not $type) { $type = 'application/octet-stream' }
+
+                $context.Response.ContentType = $type
+                $context.Response.AddHeader('Cache-Control', 'no-cache, no-store')
+                $context.Response.ContentLength64 = $bytes.Length
+                $context.Response.OutputStream.Write($bytes, 0, $bytes.Length)
+            }
+            else {
+                $context.Response.StatusCode = 404
+                $msg = [System.Text.Encoding]::UTF8.GetBytes("404 - $rel")
+                $context.Response.ContentType = 'text/plain; charset=utf-8'
+                $context.Response.ContentLength64 = $msg.Length
+                $context.Response.OutputStream.Write($msg, 0, $msg.Length)
+            }
+        }
+    }
+    catch {
+        # Almost always the client hanging up mid-response. One request must
+        # never be able to take the server down with it.
+    }
+    finally {
+        try { $context.Response.Close() } catch { }
+    }
+}
+
+# -----------------------------------------------------------------------------
+# Start
+# -----------------------------------------------------------------------------
 
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add($prefix)
@@ -43,99 +143,50 @@ try {
     exit 1
 }
 
+$pool = [runspacefactory]::CreateRunspacePool(1, $Workers)
+$pool.Open()
+
 Write-Host "Serving $root" -ForegroundColor Green
 Write-Host "  -> $prefix" -ForegroundColor Green
-Write-Host "  Ctrl+C to stop" -ForegroundColor DarkGray
+Write-Host "  $Workers workers. Ctrl+C to stop." -ForegroundColor DarkGray
 
-while ($listener.IsListening) {
-    try {
-        $context = $listener.GetContext()
-    } catch {
-        break
-    }
+# Handles still running. Cleared as they finish, so the list cannot grow
+# without bound over a long session.
+$running = New-Object System.Collections.ArrayList
 
-    # One request must never be able to take the server down with it.
-    #
-    # A browser routinely abandons requests - it navigates away mid-download,
-    # or opens a speculative connection and drops it. Writing to that closed
-    # socket throws. Without this guard the exception escaped the loop, the
-    # listener stopped answering, and the site appeared to hang while the
-    # process was still running. Everything below therefore runs inside
-    # try/finally, and the response is closed no matter what happened.
-    #
-    # Keep-alive is switched off for the same reason: a reused connection is
-    # one more thing that can be left half-open by a client that has gone.
-    # This is a single-user development server, so there is nothing to gain
-    # from reusing connections anyway.
-    $context.Response.KeepAlive = $false
+try {
+    while ($listener.IsListening) {
 
-    try {
+        try {
+            $context = $listener.GetContext()
+        } catch {
+            break
+        }
 
-    $rel = [System.Uri]::UnescapeDataString($context.Request.Url.AbsolutePath.TrimStart('/'))
-    if ([string]::IsNullOrWhiteSpace($rel)) { $rel = 'index.html' }
+        $worker = [powershell]::Create()
+        $worker.RunspacePool = $pool
+        [void]$worker.AddScript($handler).AddArgument($context).AddArgument($root).AddArgument($mime)
 
-    $path = Join-Path $root $rel
+        [void]$running.Add(@{
+            Worker = $worker
+            Handle = $worker.BeginInvoke()
+        })
 
-    # Directory request -> its index.html
-    if ((Test-Path $path -PathType Container)) {
-        $path = Join-Path $path 'index.html'
-    }
-
-    # Keep every request inside the project folder.
-    $full = [System.IO.Path]::GetFullPath($path)
-    if (-not $full.StartsWith([System.IO.Path]::GetFullPath($root), [StringComparison]::OrdinalIgnoreCase)) {
-        $context.Response.StatusCode = 403
-        $full = $null
-    }
-
-    if ($null -ne $full) {
-
-    # SPA fallback: a path with no file extension is a client-side route
-    # (/category/women, /cart, ...), so hand back index.html and let the
-    # router work out what to render. Without this, refreshing or opening
-    # a deep link directly would 404.
-    #
-    # There are two shells, so there are two fallbacks. Anything under
-    # /admin belongs to the admin panel and must be handed admin/index.html;
-    # sending it the storefront shell would load the shop's route table,
-    # which has never heard of /admin/products and would render the shop's
-    # 404 page instead of the panel.
-    if (-not (Test-Path $full -PathType Leaf)) {
-        if ([string]::IsNullOrEmpty([System.IO.Path]::GetExtension($full))) {
-            if ($rel -eq 'admin' -or $rel -like 'admin/*') {
-                $full = Join-Path $root 'admin\index.html'
-            } else {
-                $full = Join-Path $root 'index.html'
+        # Reap whatever has finished since the last request.
+        for ($i = $running.Count - 1; $i -ge 0; $i--) {
+            if ($running[$i].Handle.IsCompleted) {
+                try { [void]$running[$i].Worker.EndInvoke($running[$i].Handle) } catch { }
+                $running[$i].Worker.Dispose()
+                $running.RemoveAt($i)
             }
         }
     }
-
-    if (Test-Path $full -PathType Leaf) {
-        $bytes = [System.IO.File]::ReadAllBytes($full)
-        $ext = [System.IO.Path]::GetExtension($full).ToLower()
-        $type = $mime[$ext]
-        if (-not $type) { $type = 'application/octet-stream' }
-
-        $context.Response.ContentType = $type
-        $context.Response.AddHeader('Cache-Control', 'no-cache, no-store')
-        $context.Response.ContentLength64 = $bytes.Length
-        $context.Response.OutputStream.Write($bytes, 0, $bytes.Length)
-    } else {
-        $context.Response.StatusCode = 404
-        $msg = [System.Text.Encoding]::UTF8.GetBytes("404 - $rel")
-        $context.Response.ContentType = 'text/plain; charset=utf-8'
-        $context.Response.OutputStream.Write($msg, 0, $msg.Length)
-    }
-
-    }   # end: path was inside the project folder
-
-    } catch {
-        # Almost always the client hanging up mid-response. Worth a line so
-        # a real fault is still visible, but never worth stopping for.
-        Write-Host "  request failed: $($_.Exception.Message)" -ForegroundColor DarkYellow
-    } finally {
-        try { $context.Response.Close() } catch { }
-    }
 }
-
-$listener.Stop()
+finally {
+    foreach ($item in $running) {
+        try { $item.Worker.Dispose() } catch { }
+    }
+    $pool.Close()
+    $pool.Dispose()
+    $listener.Stop()
+}

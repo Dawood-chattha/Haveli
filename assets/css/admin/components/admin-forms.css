@@ -1,0 +1,512 @@
+/* =========================================================================
+   admin-forms.css — buttons, inputs and the product form's layout
+   -------------------------------------------------------------------------
+   The panel's own controls. They keep the storefront's 7px control radius
+   and its ink, so a button here and a button in the shop are recognisably
+   the same button, but they are sized for a dense screen rather than a
+   shopfront.
+
+   Every interactive control is at least 40px tall and most are 44px, which
+   clears the WCAG target-size minimum for the web comfortably. Focus is
+   always visible: a ring is replaced, never removed.
+
+   The checkbox chips and the switch keep real inputs in the accessibility
+   tree and only replace how they look, so every keyboard behaviour a
+   checkbox has still works.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   BUTTONS
+   ------------------------------------------------------------------------- */
+
+.a-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 var(--sp-4);
+  border: var(--bw) solid transparent;
+  border-radius: var(--a-r-control);
+  background: transparent;
+  font: inherit;
+  font-size: var(--a-fs-body);
+  font-weight: var(--fw-medium);
+  color: var(--c-body);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.a-btn:active:not(:disabled) { transform: translateY(1px); }
+
+.a-btn:focus-visible {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 2px;
+}
+
+.a-btn .a-icon { width: 17px; height: 17px; }
+
+.a-btn--primary {
+  background: var(--c-ink);
+  border-color: var(--c-ink);
+  color: #fff;
+}
+.a-btn--primary:hover:not(:disabled) { background: var(--btn-primary-bg-hover); }
+
+.a-btn--ghost {
+  border-color: var(--a-line);
+  background: var(--a-surface);
+  color: var(--c-body);
+}
+.a-btn--ghost:hover:not(:disabled) { border-color: var(--c-ink); color: var(--c-ink); }
+
+.a-btn--danger {
+  background: var(--a-danger);
+  border-color: var(--a-danger);
+  color: #fff;
+}
+.a-btn--danger:hover:not(:disabled) { filter: brightness(1.12); }
+
+.a-btn--danger-ghost {
+  border-color: rgb(163 38 25 / .3);
+  color: var(--a-danger);
+}
+.a-btn--danger-ghost:hover:not(:disabled) {
+  background: var(--a-danger-tint);
+  border-color: var(--a-danger);
+}
+
+.a-btn--default {
+  background: var(--c-ink);
+  border-color: var(--c-ink);
+  color: #fff;
+}
+
+.a-btn:disabled { cursor: not-allowed; opacity: .6; }
+
+.a-btn__spinner {
+  display: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgb(255 255 255 / .35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: aBtnSpin .7s linear infinite;
+}
+
+.a-btn.is-busy .a-btn__spinner { display: block; }
+
+@keyframes aBtnSpin { to { transform: rotate(360deg); } }
+
+/* -------------------------------------------------------------------------
+   FIELDS
+   ------------------------------------------------------------------------- */
+
+.a-field { margin-bottom: var(--sp-5); border: 0; padding: 0; }
+.a-field:last-child { margin-bottom: 0; }
+
+.a-field__label {
+  display: block;
+  margin-bottom: 5px;
+  padding: 0;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--c-ink);
+}
+
+/* Helper text sits above the control, where it can be read before the
+   field is filled in rather than explaining a mistake afterwards. */
+.a-field__help {
+  margin: 0 0 6px;
+  font-size: var(--fs-3xs);
+  line-height: 1.5;
+  color: var(--c-muted);
+}
+
+.a-field__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  margin: 6px 0 0;
+  font-size: var(--fs-xs);
+  line-height: 1.45;
+  color: var(--a-danger);
+}
+
+/* The message is preceded by a mark, so an error is never colour alone. */
+.a-field__error::before {
+  content: "!";
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--a-danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: var(--fw-bold);
+}
+
+.a-input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--a-r-control);
+  background: var(--a-surface);
+  font: inherit;
+  font-size: var(--a-fs-ui);
+  color: var(--c-ink);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.a-input:focus {
+  outline: none;
+  border-color: var(--c-ink);
+  box-shadow: 0 0 0 3px rgb(var(--c-ink-rgb) / .12);
+}
+
+.a-input--area { resize: vertical; min-height: 96px; line-height: var(--lh-relaxed); }
+
+.is-invalid .a-input,
+.is-invalid .a-select__input { border-color: var(--a-danger); }
+
+.is-invalid .a-input:focus { box-shadow: 0 0 0 3px rgb(163 38 25 / .16); }
+
+/* A currency marker attached to the field rather than typed into it. */
+.a-input__group { display: flex; align-items: stretch; }
+
+.a-input__prefix {
+  display: grid;
+  place-items: center;
+  padding: 0 11px;
+  border: var(--bw) solid var(--a-line);
+  border-right: 0;
+  border-radius: var(--a-r-control) 0 0 var(--a-r-control);
+  background: var(--a-surface-sunken);
+  font-size: var(--fs-xs);
+  color: var(--c-muted);
+}
+
+.a-input__group .a-input { border-radius: 0 var(--a-r-control) var(--a-r-control) 0; }
+
+/* -------------------------------------------------------------------------
+   SELECT
+   ------------------------------------------------------------------------- */
+
+.a-select { position: relative; display: inline-flex; }
+.a-select--block { display: flex; }
+
+.a-select__input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 34px 0 12px;
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--a-r-control);
+  background: var(--a-surface);
+  font: inherit;
+  font-size: var(--a-fs-body);
+  color: var(--c-ink);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.a-select__input:focus {
+  outline: none;
+  border-color: var(--c-ink);
+  box-shadow: 0 0 0 3px rgb(var(--c-ink-rgb) / .12);
+}
+
+.a-select__arrow {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  margin-top: -9px;
+  color: var(--c-faint);
+  pointer-events: none;
+}
+
+.a-select__arrow .a-icon {
+  width: 18px;
+  height: 18px;
+  transform: rotate(90deg);
+}
+
+/* -------------------------------------------------------------------------
+   CHIP CHECKBOXES
+   ------------------------------------------------------------------------- */
+
+.a-field--set { min-width: 0; }
+
+.a-chipset {
+  display: flex;
+  flex-wrap: wrap;      /* never clipped into one row */
+  gap: 7px;
+}
+
+.a-chipbox { display: inline-flex; }
+
+.a-chipbox input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.a-chipbox__face {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 13px;
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--a-r-pill);
+  background: var(--a-surface);
+  font-size: var(--a-fs-body);
+  color: var(--c-body);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.a-chipbox__face:hover { border-color: var(--c-ink); }
+
+.a-chipbox input:checked + .a-chipbox__face {
+  background: var(--c-ink);
+  border-color: var(--c-ink);
+  color: #fff;
+}
+
+.a-chipbox input:focus-visible + .a-chipbox__face {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 2px;
+}
+
+/* -------------------------------------------------------------------------
+   SWITCH
+   ------------------------------------------------------------------------- */
+
+.a-switch {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.a-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.a-switch__track {
+  position: relative;
+  width: 40px;
+  height: 23px;
+  flex: none;
+  margin-top: 1px;
+  border-radius: var(--a-r-pill);
+  background: rgb(var(--c-ink-rgb) / .18);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.a-switch__knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-fast) var(--ease-out-cubic);
+}
+
+.a-switch input:checked + .a-switch__track { background: var(--c-ink); }
+.a-switch input:checked + .a-switch__track .a-switch__knob { transform: translateX(17px); }
+
+.a-switch input:focus-visible + .a-switch__track {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 2px;
+}
+
+.a-switch__text { display: flex; flex-direction: column; gap: 2px; }
+.a-switch__label { font-size: var(--a-fs-ui); color: var(--c-ink); }
+.a-switch__help { font-size: var(--fs-3xs); color: var(--c-muted); }
+
+/* -------------------------------------------------------------------------
+   IMAGES
+   ------------------------------------------------------------------------- */
+
+.a-images {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+
+.a-images__empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: var(--sp-6);
+  border: var(--bw) dashed var(--a-line);
+  border-radius: var(--a-r-control);
+  text-align: center;
+  font-size: var(--a-fs-body);
+  color: var(--c-faint);
+}
+
+.a-images__item {
+  position: relative;
+  margin: 0;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--a-r-control);
+  overflow: hidden;
+  background: var(--a-surface-sunken);
+}
+
+.a-images__item img { width: 100%; height: 100%; object-fit: cover; }
+
+.a-images__remove {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(0 0 0 / .6);
+  color: #fff;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.a-images__remove:hover { background: var(--a-danger); }
+
+.a-images__remove svg {
+  width: 13px; height: 13px;
+  fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round;
+}
+
+.a-filepick { display: inline-flex; }
+
+.a-filepick input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.a-filepick__face {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 var(--sp-4);
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--a-r-control);
+  background: var(--a-surface);
+  font-size: var(--a-fs-body);
+  color: var(--c-body);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.a-filepick__face:hover { border-color: var(--c-ink); }
+
+.a-filepick input:focus-visible + .a-filepick__face {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 2px;
+}
+
+.a-filepick__face .a-icon { width: 17px; height: 17px; }
+
+/* -------------------------------------------------------------------------
+   FORM LAYOUT
+   ------------------------------------------------------------------------- */
+
+.a-form__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+}
+
+.a-form__row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+}
+
+.a-form__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-5);
+  padding: var(--sp-4);
+  background: var(--a-surface);
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--a-r-card);
+}
+
+.a-form__bar-right { display: flex; gap: var(--sp-2); margin-left: auto; }
+
+.a-form__note {
+  margin: var(--sp-3) 0 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-relaxed);
+  color: var(--c-faint);
+}
+
+@media (min-width: 900px) {
+  .a-form__grid { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+  .a-form__main { grid-row: span 2; }
+}
+
+@media (max-width: 559px) {
+  .a-form__row { grid-template-columns: minmax(0, 1fr); }
+  .a-form__bar-right { width: 100%; }
+  .a-form__bar-right .a-btn { flex: 1 1 auto; }
+}
+
+/* -------------------------------------------------------------------------
+   REDUCED MOTION
+   ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .a-btn,
+  .a-input,
+  .a-select__input,
+  .a-chipbox__face,
+  .a-switch__track,
+  .a-switch__knob,
+  .a-filepick__face,
+  .a-images__remove { transition: none; }
+
+  .a-btn:active:not(:disabled) { transform: none; }
+  .a-btn.is-busy .a-btn__spinner { display: none; }
+}

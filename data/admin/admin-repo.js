@@ -90,12 +90,32 @@ window.ZB = window.ZB || {};
       colour: product.colour,
       sizes: product.sizes,
       inStock: product.inStock,
-      /* Derived from the id so it never changes between renders, the same
+      /* Derived from the id so they never change between renders, the same
          way the catalogue derives everything else. */
       sku: skuFor(product),
+      stock: stockFor(product),
       status: product.inStock ? 'active' : 'out-of-stock',
+      description: product.description || '',
+      featured: false,
       storefrontPath: product.path
     };
+  }
+
+  /**
+   * A stock quantity for a product the catalogue only knows as in or out of
+   * stock. Out of stock is zero; everything else gets a stable number from
+   * its own id, with a slice of the range low enough that the inventory
+   * page has genuine "running out" rows to warn about.
+   */
+  function stockFor(product) {
+    if (!product.inStock) return 0;
+
+    var n = 0;
+    var id = String(product.id);
+    for (var i = 0; i < id.length; i++) n = (n * 31 + id.charCodeAt(i)) >>> 0;
+
+    /* One in six sits under ten; the rest spread up to about ninety. */
+    return (n % 6 === 0) ? 1 + (n % 9) : 10 + (n % 80);
   }
 
   /** 'HAV-M-POLO-0031' — readable, stable, and unique per product. */
@@ -110,7 +130,96 @@ window.ZB = window.ZB || {};
      Products
      ----------------------------------------------------------------------- */
 
+  /* -----------------------------------------------------------------------
+     EDITS LIVE IN MEMORY
+
+     There is nothing to save to. Rather than refuse to edit at all — which
+     would leave the product form untestable — a write is applied to an
+     overlay on top of the generated catalogue and kept for as long as the
+     tab is open. A reload loses it, and the UI says so where it matters.
+
+     The overlay is also the seam: when a backend arrives, these three
+     objects go, and create/update/remove become calls that return the
+     server's answer. Nothing else changes, because no page reaches past
+     these methods.
+     ----------------------------------------------------------------------- */
+
+  var edited = {};     /* id -> the fields that were changed */
+  var removed = {};    /* id -> true */
+  var added = [];      /* rows created in this session, newest first */
+  var nextId = 1;
+
+  /** The catalogue as the admin currently sees it. */
+  function currentRows() {
+    var rows = added.concat(ZB.catalogue.all().map(toRow));
+
+    return rows
+      .filter(function (row) { return !removed[row.id]; })
+      .map(function (row) {
+        if (!edited[row.id]) return row;
+
+        /* A shallow merge is enough: the form writes whole fields. */
+        var merged = {};
+        Object.keys(row).forEach(function (key) { merged[key] = row[key]; });
+        Object.keys(edited[row.id]).forEach(function (key) {
+          merged[key] = edited[row.id][key];
+        });
+        return merged;
+      });
+  }
+
+  /* `newest` is deliberately absent: it means "leave the natural order
+     alone". currentRows() puts anything created in this session in front of
+     the catalogue, so that order already is newest-first. Sorting by id
+     instead looked right and was not — ids are not chronological, so a
+     product created a moment ago landed in the middle of the first page
+     under a heading that promised otherwise. */
+  var SORTS = {
+    'name-asc':  function (a, b) { return a.title.localeCompare(b.title); },
+    'name-desc': function (a, b) { return b.title.localeCompare(a.title); },
+    'price-asc': function (a, b) { return a.price - b.price; },
+    'price-desc': function (a, b) { return b.price - a.price; },
+    'stock-asc': function (a, b) { return (a.stock || 0) - (b.stock || 0); }
+  };
+
   Repo.products = {
+
+    sorts: [
+      { id: 'newest', label: 'Newest first' },
+      { id: 'name-asc', label: 'Name A–Z' },
+      { id: 'name-desc', label: 'Name Z–A' },
+      { id: 'price-asc', label: 'Price, low to high' },
+      { id: 'price-desc', label: 'Price, high to low' },
+      { id: 'stock-asc', label: 'Stock, low to high' }
+    ],
+
+    /** The values the filter controls offer, taken from the data itself. */
+    facets: function () {
+      var rows = currentRows();
+      var depts = {};
+      var categories = {};
+
+      rows.forEach(function (row) {
+        depts[row.dept] = row.deptLabel;
+        categories[row.category] = row.categoryLabel;
+      });
+
+      var toList = function (map) {
+        return Object.keys(map).sort(function (a, b) {
+          return map[a].localeCompare(map[b]);
+        }).map(function (id) { return { id: id, label: map[id] }; });
+      };
+
+      return Repo.defer({
+        departments: toList(depts),
+        categories: toList(categories),
+        statuses: [
+          { id: 'active', label: 'Active' },
+          { id: 'draft', label: 'Draft' },
+          { id: 'out-of-stock', label: 'Out of stock' }
+        ]
+      });
+    },
 
     /**
      * A page of products.
@@ -119,13 +228,13 @@ window.ZB = window.ZB || {};
      * resolves: { items, total, page, pages, perPage }
      *
      * Paging is done here rather than in the page so that swapping in a
-     * Firestore query — which pages on the server — does not change what
-     * the caller receives.
+     * server query — which pages on the server — does not change what the
+     * caller receives.
      */
     list: function (options) {
       options = options || {};
 
-      var rows = ZB.catalogue.all().map(toRow);
+      var rows = currentRows();
 
       if (options.search) {
         var needle = String(options.search).toLowerCase();
@@ -148,6 +257,11 @@ window.ZB = window.ZB || {};
         rows = rows.filter(function (row) { return row.status === options.status; });
       }
 
+      /* Sorting before paging, or page two would be sorted on its own.
+         An unknown sort, and 'newest', both leave the natural order. */
+      var compare = SORTS[options.sort];
+      if (compare) rows = rows.slice().sort(compare);
+
       var total = rows.length;
       var perPage = options.perPage || 20;
       var pages = Math.max(1, Math.ceil(total / perPage));
@@ -165,13 +279,103 @@ window.ZB = window.ZB || {};
 
     /** One product, or null. Never throws for a bad id. */
     get: function (id) {
-      var product = ZB.catalogue.byId(id);
-      return Repo.defer(product ? toRow(product) : null);
+      var hit = currentRows().filter(function (row) { return row.id === id; })[0];
+      return Repo.defer(hit || null);
     },
 
     /** Total count, without dragging a page of rows along with it. */
     count: function () {
-      return Repo.defer(ZB.catalogue.all().length);
+      return Repo.defer(currentRows().length);
+    },
+
+    /* -- writes. See the note above: these live in memory only. -- */
+
+    create: function (data) {
+      var id = 'new-' + (nextId++);
+
+      var row = {
+        id: id,
+        title: data.title,
+        image: (data.images && data.images[0]) || null,
+        dept: data.dept,
+        deptLabel: data.deptLabel || data.dept,
+        category: data.category,
+        categoryLabel: data.categoryLabel || data.category,
+        price: data.price,
+        compareAt: data.compareAt || null,
+        colour: data.colour || null,
+        sizes: data.sizes || [],
+        stock: data.stock || 0,
+        inStock: (data.stock || 0) > 0,
+        sku: data.sku || ('HAV-NEW-' + id.toUpperCase()),
+        status: data.status || 'draft',
+        featured: !!data.featured,
+        description: data.description || '',
+        storefrontPath: null
+      };
+
+      added.unshift(row);
+      return Repo.defer(row);
+    },
+
+    update: function (id, data) {
+      var exists = currentRows().some(function (row) { return row.id === id; });
+      if (!exists) {
+        return Promise.reject({ message: 'That product no longer exists.' });
+      }
+
+      /* A row created this session is edited in place; a generated one gets
+         an overlay entry, because the catalogue itself is not writable. */
+      var own = added.filter(function (row) { return row.id === id; })[0];
+
+      if (own) {
+        Object.keys(data).forEach(function (key) { own[key] = data[key]; });
+      } else {
+        edited[id] = edited[id] || {};
+        Object.keys(data).forEach(function (key) { edited[id][key] = data[key]; });
+      }
+
+      return Repo.products.get(id);
+    },
+
+    /**
+     * Removing a generated product only hides it, which is what makes
+     * restore() possible. A row created in this session has nowhere to be
+     * hidden from, so it is handed back for restore() to put again.
+     */
+    remove: function (id) {
+      var own = added.filter(function (row) { return row.id === id; })[0];
+
+      if (own) {
+        added = added.filter(function (row) { return row.id !== id; });
+      } else {
+        removed[id] = true;
+      }
+
+      var undo = { id: id, row: own || null, edits: edited[id] || null };
+      delete edited[id];
+
+      return Repo.defer(undo);
+    },
+
+    /** Put back what remove() took, from the token it returned. */
+    restore: function (undo) {
+      if (!undo) return Repo.defer(false);
+
+      if (undo.row) added.unshift(undo.row);
+      else delete removed[undo.id];
+
+      if (undo.edits) edited[undo.id] = undo.edits;
+      return Repo.defer(true);
+    },
+
+    /**
+     * Whether anything has been changed in this session.
+     * The list uses it to say plainly that the changes are not saved.
+     */
+    hasUnsavedEdits: function () {
+      return added.length > 0 || Object.keys(edited).length > 0 ||
+             Object.keys(removed).length > 0;
     }
   };
 

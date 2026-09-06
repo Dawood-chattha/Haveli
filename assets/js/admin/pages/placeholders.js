@@ -59,65 +59,8 @@ window.ZB.adminPages = window.ZB.adminPages || {};
 
   /* The dashboard is a built section now, and lives in pages/dashboard.js. */
 
-  ZB.adminPages.products = stub({
-    title: 'Products',
-    sub: 'Everything listed in the store.',
-    phase: '5',
-    icon: 'box',
-    blurb: 'A searchable, sortable table of every product, with the controls ' +
-           'to add, edit and remove them.',
-    bullets: [
-      'Image, name, category, price, stock and status',
-      'Search, filter, sort and paging',
-      'Add, edit, view and delete'
-    ]
-  });
-
-  ZB.adminPages.productNew = stub({
-    title: 'New product',
-    sub: 'Add a product to the store.',
-    phase: '5',
-    icon: 'box',
-    crumbs: [{ label: 'Products', path: '/admin/products' }, { label: 'New' }],
-    blurb: 'The product form, covering everything a listing needs before it ' +
-           'can go live.',
-    bullets: [
-      'Name, description, price and sale price',
-      'Category, images, sizes and colours',
-      'Stock, SKU, status and featured flag'
-    ]
-  });
-
-  ZB.adminPages.productEdit = {
-    title: 'Edit product',
-    crumbs: function (params) {
-      return [
-        { label: 'Products', path: '/admin/products' },
-        { label: 'Edit ' + params.id }
-      ];
-    },
-    render: function (params) {
-      return '' +
-        ui.pageHead({
-          title: 'Edit product',
-          /* The id comes from the URL, so it is escaped like any other
-             value that did not originate in this source file. */
-          sub: 'Editing ' + ui.esc(params.id) + '.'
-        }) +
-        ui.placeholder({
-          title: 'Edit product',
-          phase: '5',
-          icon: 'box',
-          blurb: 'The same form as adding a product, loaded with what this ' +
-                 'one already holds.',
-          bullets: [
-            'Loads the product through the data layer',
-            'Shows a loading state while it arrives',
-            'Handles an id that matches nothing'
-          ]
-        });
-    }
-  };
+  /* Products, and the add/edit form, are built sections now. They live in
+     pages/products.js and pages/product-form.js. */
 
   ZB.adminPages.categories = stub({
     title: 'Categories',
