@@ -57,21 +57,7 @@ window.ZB.adminPages = window.ZB.adminPages || {};
      Sections
      ----------------------------------------------------------------------- */
 
-  ZB.adminPages.dashboard = stub({
-    title: 'Dashboard',
-    sub: 'An overview of the store at a glance.',
-    phase: '4',
-    icon: 'grid',
-    crumbs: [],
-    blurb: 'The dashboard collects the numbers worth checking daily, and the ' +
-           'shortcuts worth reaching for.',
-    bullets: [
-      'Total sales, orders, products and customers',
-      'Pending orders and low stock warnings',
-      'Recent orders and best-performing products',
-      'A sales overview chart and quick actions'
-    ]
-  });
+  /* The dashboard is a built section now, and lives in pages/dashboard.js. */
 
   ZB.adminPages.products = stub({
     title: 'Products',

@@ -38,6 +38,8 @@
 <link rel="stylesheet" href="assets/css/admin/components/admin-sidebar.css">
 <link rel="stylesheet" href="assets/css/admin/components/admin-topbar.css">
 <link rel="stylesheet" href="assets/css/admin/components/admin-auth.css">
+<link rel="stylesheet" href="assets/css/admin/components/admin-chart.css">
+<link rel="stylesheet" href="assets/css/admin/components/admin-dashboard.css">
 </head>
 
 <body class="admin-body">
@@ -76,21 +78,26 @@
 <script src="data/catalogue.js"></script>
 <script src="assets/js/catalogue.js"></script>
 
-<!-- Admin data: the menu, and the data access layer every page goes
-     through. A backend is connected in admin-repo.js and nowhere else. -->
+<!-- Admin data: the menu, the mock orders and customers, and the data
+     access layer every page goes through. A backend is connected in
+     admin-repo.js and nowhere else. -->
 <script src="data/admin/admin-nav.js"></script>
+<script src="data/admin/admin-seed.js"></script>
+<script src="assets/js/admin/admin-mock.js"></script>
 <script src="data/admin/admin-repo.js"></script>
 
 <!-- Admin components. admin-auth.js is the single place a real
      authentication service is connected; nothing else talks to one. -->
 <script src="assets/js/admin/admin-ui.js"></script>
 <script src="assets/js/admin/admin-auth.js"></script>
+<script src="assets/js/admin/admin-chart.js"></script>
 <script src="assets/js/admin/admin-shell.js"></script>
 
 <!-- Admin pages. placeholders.js defines the sections not yet built; a real
      page module loaded after it replaces the matching entry. -->
 <script src="assets/js/admin/pages/placeholders.js"></script>
 <script src="assets/js/admin/pages/login.js"></script>
+<script src="assets/js/admin/pages/dashboard.js"></script>
 
 <!-- Boot (must come last) -->
 <script src="assets/js/admin/admin-routes.js"></script>

@@ -176,25 +176,283 @@ window.ZB = window.ZB || {};
   };
 
   /* -----------------------------------------------------------------------
-     Metrics
+     Orders
      ----------------------------------------------------------------------- */
+
+  Repo.orders = {
+
+    /** options: { search, status, payment, page, perPage } */
+    list: function (options) {
+      options = options || {};
+      var rows = ZB.adminMock.orders();
+
+      if (options.search) {
+        var needle = String(options.search).toLowerCase();
+        rows = rows.filter(function (order) {
+          return order.ref.toLowerCase().indexOf(needle) > -1 ||
+                 order.customerName.toLowerCase().indexOf(needle) > -1 ||
+                 order.customerEmail.toLowerCase().indexOf(needle) > -1;
+        });
+      }
+
+      if (options.status) {
+        rows = rows.filter(function (o) { return o.status === options.status; });
+      }
+
+      if (options.payment) {
+        rows = rows.filter(function (o) { return o.payment === options.payment; });
+      }
+
+      var total = rows.length;
+      var perPage = options.perPage || 20;
+      var pages = Math.max(1, Math.ceil(total / perPage));
+      var page = Math.min(Math.max(1, options.page || 1), pages);
+      var start = (page - 1) * perPage;
+
+      return Repo.defer({
+        items: rows.slice(start, start + perPage),
+        total: total, page: page, pages: pages, perPage: perPage
+      });
+    },
+
+    get: function (id) {
+      var hit = ZB.adminMock.orders().filter(function (o) { return o.id === id; })[0];
+      return Repo.defer(hit || null);
+    },
+
+    /** The newest few, for the dashboard. Already sorted newest first. */
+    recent: function (limit) {
+      return Repo.defer(ZB.adminMock.orders().slice(0, limit || 6));
+    }
+  };
+
+  /* -----------------------------------------------------------------------
+     Customers
+     ----------------------------------------------------------------------- */
+
+  Repo.customers = {
+
+    /** options: { search, status, page, perPage } */
+    list: function (options) {
+      options = options || {};
+      var rows = ZB.adminMock.customers();
+
+      if (options.search) {
+        var needle = String(options.search).toLowerCase();
+        rows = rows.filter(function (person) {
+          return person.name.toLowerCase().indexOf(needle) > -1 ||
+                 person.email.toLowerCase().indexOf(needle) > -1 ||
+                 person.city.toLowerCase().indexOf(needle) > -1;
+        });
+      }
+
+      if (options.status) {
+        rows = rows.filter(function (c) { return c.status === options.status; });
+      }
+
+      var total = rows.length;
+      var perPage = options.perPage || 20;
+      var pages = Math.max(1, Math.ceil(total / perPage));
+      var page = Math.min(Math.max(1, options.page || 1), pages);
+      var start = (page - 1) * perPage;
+
+      return Repo.defer({
+        items: rows.slice(start, start + perPage),
+        total: total, page: page, pages: pages, perPage: perPage
+      });
+    },
+
+    get: function (id) {
+      return Repo.defer(ZB.adminMock.customer(id));
+    }
+  };
+
+  /* -----------------------------------------------------------------------
+     Metrics
+
+     Every figure below is counted from the same order list the orders page
+     shows, so a total on the dashboard and a row on another screen can
+     never disagree. Cancelled orders are never revenue.
+     ----------------------------------------------------------------------- */
+
+  /** Orders inside the last `days` days, newest first. */
+  function ordersWithin(days) {
+    return ZB.adminMock.orders().filter(function (o) { return o.daysAgo < days; });
+  }
+
+  function revenueOf(list) {
+    return list.reduce(function (sum, o) {
+      return ZB.adminMock.isRevenue(o) ? sum + o.total : sum;
+    }, 0);
+  }
+
+  /**
+   * Percentage change from the previous equal-length period.
+   * Returns null when there is nothing to compare against, so the tile can
+   * omit the delta rather than print a meaningless 0% or an infinity.
+   */
+  function changePct(current, previous) {
+    if (!previous) return null;
+    return ((current - previous) / previous) * 100;
+  }
 
   Repo.metrics = {
 
     /**
-     * The small counters on the sidebar.
-     *
-     * Only the ones that can be answered honestly today are returned.
-     * `orders` is absent until orders exist as data in their own phase —
-     * an absent badge draws nothing, which is better than a number that
-     * stands for nothing.
+     * The headline numbers, each with its change against the period before.
+     * `days` is the window the dashboard is currently showing.
      */
+    summary: function (days) {
+      days = days || 30;
+
+      var all = ZB.adminMock.orders();
+      var current = ordersWithin(days);
+      var previous = all.filter(function (o) {
+        return o.daysAgo >= days && o.daysAgo < days * 2;
+      });
+
+      var currentRevenue = revenueOf(current);
+      var previousRevenue = revenueOf(previous);
+
+      var people = ZB.adminMock.customers();
+      var newPeople = people.filter(function (p) { return p.joinedDaysAgo < days; }).length;
+      var previousPeople = people.filter(function (p) {
+        return p.joinedDaysAgo >= days && p.joinedDaysAgo < days * 2;
+      }).length;
+
+      var products = ZB.catalogue.all();
+
+      return Repo.defer({
+        days: days,
+
+        sales: {
+          value: currentRevenue,
+          change: changePct(currentRevenue, previousRevenue)
+        },
+        orders: {
+          value: current.length,
+          change: changePct(current.length, previous.length)
+        },
+        products: {
+          value: products.length,
+          /* The catalogue is fixed in this build, so there is no honest
+             change to report against it. */
+          change: null
+        },
+        customers: {
+          value: people.length,
+          change: changePct(newPeople, previousPeople)
+        },
+
+        pendingOrders: all.filter(function (o) {
+          return o.status === 'pending' || o.status === 'processing';
+        }).length,
+
+        lowStock: products.filter(function (p) { return !p.inStock; }).length
+      });
+    },
+
+    /**
+     * Daily revenue, oldest first — the sales overview line.
+     * Every day in the window appears, including the quiet ones, so the
+     * line's shape is the real shape and not a compressed one.
+     */
+    salesSeries: function (days) {
+      days = days || 30;
+
+      var buckets = [];
+      var byDay = {};
+      var today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      for (var d = days - 1; d >= 0; d--) {
+        var date = new Date(today.getTime());
+        date.setDate(date.getDate() - d);
+        var bucket = { date: date, daysAgo: d, value: 0, orders: 0 };
+        byDay[d] = bucket;
+        buckets.push(bucket);
+      }
+
+      ordersWithin(days).forEach(function (order) {
+        var bucket = byDay[order.daysAgo];
+        if (!bucket) return;
+        bucket.orders += 1;
+        if (ZB.adminMock.isRevenue(order)) bucket.value += order.total;
+      });
+
+      return Repo.defer(buckets);
+    },
+
+    /** Best sellers by revenue within the window. */
+    topProducts: function (days, limit) {
+      var totals = {};
+
+      ordersWithin(days || 30).forEach(function (order) {
+        if (!ZB.adminMock.isRevenue(order)) return;
+        order.items.forEach(function (line) {
+          var row = totals[line.id] || (totals[line.id] = {
+            id: line.id, title: line.title, image: line.image,
+            units: 0, revenue: 0
+          });
+          row.units += line.qty;
+          row.revenue += line.price * line.qty;
+        });
+      });
+
+      var rows = Object.keys(totals).map(function (id) { return totals[id]; });
+      rows.sort(function (a, b) { return b.revenue - a.revenue; });
+
+      return Repo.defer(rows.slice(0, limit || 5));
+    },
+
+    /**
+     * The activity strip.
+     *
+     * Built from records that exist rather than from invented sentences,
+     * so every line refers to something another screen can show.
+     */
+    activity: function (limit) {
+      var out = [];
+      var recent = ZB.adminMock.orders().slice(0, 12);
+
+      recent.forEach(function (order) {
+        if (order.status === 'shipped') {
+          out.push({
+            kind: 'shipped', icon: 'box', daysAgo: order.daysAgo,
+            text: 'Order ' + order.ref + ' was marked shipped'
+          });
+        } else {
+          out.push({
+            kind: 'order', icon: 'receipt', daysAgo: order.daysAgo,
+            text: 'New order ' + order.ref + ' from ' + order.customerName
+          });
+        }
+      });
+
+      ZB.catalogue.all().filter(function (p) { return !p.inStock; })
+        .slice(0, 2)
+        .forEach(function (product) {
+          out.push({
+            kind: 'stock', icon: 'archive', daysAgo: 0,
+            text: product.title + ' is out of stock'
+          });
+        });
+
+      out.sort(function (a, b) { return a.daysAgo - b.daysAgo; });
+      return Repo.defer(out.slice(0, limit || 6));
+    },
+
+    /** The small counters beside the sidebar items. */
     navBadges: function () {
       var outOfStock = ZB.catalogue.all().filter(function (p) {
         return !p.inStock;
       }).length;
 
-      return Repo.defer({ inventory: outOfStock });
+      var waiting = ZB.adminMock.orders().filter(function (o) {
+        return o.status === 'pending' || o.status === 'processing';
+      }).length;
+
+      return Repo.defer({ inventory: outOfStock, orders: waiting });
     }
   };
 

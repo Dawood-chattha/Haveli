@@ -1,0 +1,493 @@
+/* =========================================================================
+   admin-dashboard.css — the dashboard's own layout and pieces
+   -------------------------------------------------------------------------
+   A twelve-column grid that collapses in two steps. The pieces inside it —
+   stat tiles, alert tiles, tables, ranked lists, the activity feed — are
+   written here because the dashboard is where they first appear; anything
+   a later phase reuses can move to its own file then.
+
+   The figures are quiet and the data is loud. Labels are small and grey,
+   values are large and ink, and the only saturated colour on the page is
+   the pair of attention tiles — which always carry a word as well as a
+   colour, so the state survives being read by someone who cannot separate
+   the hues.
+   ========================================================================= */
+
+.a-dash {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--sp-4);
+}
+
+/* Refreshing holds the previous render instead of tearing it down: nothing
+   moves, and whatever the reader was looking at is still there. */
+.a-dash.is-refreshing {
+  opacity: .55;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.a-dash > * { grid-column: span 12; }
+
+/* -------------------------------------------------------------------------
+   PERIOD CONTROL
+   One row, above everything it scopes.
+   ------------------------------------------------------------------------- */
+
+.a-range {
+  display: inline-flex;
+  padding: 3px;
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--a-r-control);
+  background: var(--a-surface);
+}
+
+.a-range__option {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  font: inherit;
+  font-size: var(--a-fs-body);
+  color: var(--c-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.a-range__option:hover { color: var(--c-ink); }
+
+.a-range__option[aria-pressed="true"] {
+  background: var(--c-ink);
+  color: #fff;
+  font-weight: var(--fw-medium);
+}
+
+/* -------------------------------------------------------------------------
+   STAT TILES
+   ------------------------------------------------------------------------- */
+
+.a-dash__stats,
+.a-dash__alerts {
+  display: grid;
+  gap: var(--sp-4);
+}
+
+.a-dash__stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.a-dash__alerts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.a-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 132px;
+  padding: var(--sp-4) var(--sp-5);
+  background: var(--a-surface);
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--a-r-card);
+  box-shadow: var(--a-shadow-card);
+}
+
+.a-stat__label {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--c-muted);
+}
+
+.a-stat__value {
+  margin: 0;
+  font-size: 28px;
+  font-weight: var(--fw-medium);
+  line-height: 1.15;
+  letter-spacing: -.01em;
+  color: var(--c-ink);
+  /* Proportional figures on purpose: tabular digits make a value like
+     "121" look loose at this size. Equal widths are for columns. */
+}
+
+.a-stat__delta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 2px 0 0;
+  font-size: var(--fs-xs);
+}
+
+.a-stat__delta svg { width: 13px; height: 13px; fill: currentColor; }
+
+/* Direction is carried by the arrow and by the words "Up"/"Down" in the
+   accessible text, so colour is never the only signal. */
+.a-stat__delta.is-up { color: var(--a-success); }
+.a-stat__delta.is-down { color: var(--a-danger); }
+.a-stat__delta--none { color: var(--c-faint); }
+
+.a-stat__delta-vs { color: var(--c-faint); }
+
+.a-stat__spark { margin-top: auto; padding-top: var(--sp-2); }
+
+/* First load only — there is nothing to hold on to yet. */
+.a-stat--loading {
+  background: var(--a-surface-sunken);
+  border-style: dashed;
+  box-shadow: none;
+  animation: aDashPulse 1.4s var(--ease-in-out) infinite;
+}
+
+@keyframes aDashPulse {
+  50% { opacity: .55; }
+}
+
+/* -------------------------------------------------------------------------
+   ATTENTION TILES
+   ------------------------------------------------------------------------- */
+
+.a-alert {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border: var(--bw) solid transparent;
+  border-radius: var(--a-r-card);
+  text-decoration: none;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.a-alert:hover { transform: translateY(-1px); }
+
+.a-alert--warning {
+  background: var(--a-warning-tint);
+  border-color: rgb(138 82 0 / .18);
+  color: var(--a-warning);
+}
+
+.a-alert--danger {
+  background: var(--a-danger-tint);
+  border-color: rgb(163 38 25 / .18);
+  color: var(--a-danger);
+}
+
+.a-alert__icon { display: grid; place-items: center; flex: none; }
+
+.a-alert__body { display: flex; flex-direction: column; min-width: 0; }
+
+.a-alert__value {
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-medium);
+  line-height: 1.1;
+}
+
+.a-alert__label {
+  font-size: var(--fs-xs);
+  color: var(--c-body);
+}
+
+.a-alert__go { margin-left: auto; opacity: .5; }
+.a-alert__go .a-icon { width: 18px; height: 18px; }
+
+/* -------------------------------------------------------------------------
+   CARD EXTRAS
+   ------------------------------------------------------------------------- */
+
+.a-card__sub {
+  margin: 3px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--c-muted);
+}
+
+.a-card__link,
+.a-card__toggle {
+  flex: none;
+  padding: 6px 10px;
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--a-r-control);
+  background: var(--a-surface);
+  font: inherit;
+  font-size: var(--fs-xs);
+  color: var(--c-body);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.a-card__link:hover,
+.a-card__toggle:hover { border-color: var(--c-ink); color: var(--c-ink); }
+
+/* Tables and lists run to the card's edges.
+
+   The card clips its own overflow to keep its rounded corners, so anything
+   wider than the card would be cut off rather than reachable — a status
+   column silently missing its last few pixels. Scrolling inside the body is
+   what makes wide content reachable without ever widening the page. */
+.a-card__body--flush {
+  padding: 0;
+  overflow-x: auto;
+}
+
+.a-empty {
+  margin: 0;
+  padding: var(--sp-8) var(--sp-5);
+  text-align: center;
+  font-size: var(--a-fs-body);
+  color: var(--c-muted);
+}
+
+/* -------------------------------------------------------------------------
+   TABLES
+   ------------------------------------------------------------------------- */
+
+.a-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--a-fs-body);
+}
+
+.a-table th,
+.a-table td {
+  padding: 11px var(--sp-5);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.a-table thead th {
+  padding-block: 9px;
+  background: var(--a-surface-sunken);
+  border-bottom: var(--bw) solid var(--a-line);
+  font-size: var(--fs-3xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--c-faint);
+  white-space: nowrap;
+}
+
+.a-table tbody tr + tr th,
+.a-table tbody tr + tr td { border-top: var(--bw) solid var(--a-line-soft); }
+
+.a-table tbody tr { transition: background-color var(--dur-fast) var(--ease-out); }
+.a-table tbody tr:hover { background: var(--a-surface-sunken); }
+
+.a-table tbody th { font-weight: var(--fw-regular); }
+.a-table tbody th a { color: var(--c-ink); text-decoration: none; }
+.a-table tbody th a:hover { text-decoration: underline; }
+
+/* Columns of numbers line up, which is where equal-width digits belong. */
+.a-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.a-cell__strong { display: block; color: var(--c-ink); }
+.a-cell__meta { display: block; font-size: var(--fs-3xs); color: var(--c-faint); }
+
+.a-table--compact th,
+.a-table--compact td { padding: 7px var(--sp-4); }
+
+/* -------------------------------------------------------------------------
+   RANKED LIST
+   ------------------------------------------------------------------------- */
+
+.a-rank { margin: 0; padding: 0; list-style: none; }
+
+.a-rank__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 10px var(--sp-5);
+}
+
+.a-rank__item + .a-rank__item { border-top: var(--bw) solid var(--a-line-soft); }
+
+.a-rank__no {
+  flex: none;
+  width: 18px;
+  font-size: var(--fs-xs);
+  color: var(--c-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.a-rank__img {
+  flex: none;
+  width: 40px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: var(--r-sm);
+  background: var(--a-surface-sunken);
+}
+
+.a-rank__body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; }
+
+.a-rank__title {
+  font-size: var(--a-fs-body);
+  color: var(--c-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.a-rank__meta { font-size: var(--fs-3xs); color: var(--c-faint); }
+
+/* A share-of-best bar. It reads as a ranking at a glance without becoming
+   a second chart competing with the one above it. */
+.a-rank__bar {
+  display: block;
+  height: 3px;
+  border-radius: var(--r-pill);
+  background: var(--a-neutral-tint);
+  overflow: hidden;
+}
+
+.a-rank__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: rgb(var(--c-ink-rgb) / .45);
+}
+
+.a-rank__value {
+  flex: none;
+  font-size: var(--a-fs-body);
+  font-variant-numeric: tabular-nums;
+  color: var(--c-ink);
+}
+
+/* -------------------------------------------------------------------------
+   QUICK ACTIONS
+   ------------------------------------------------------------------------- */
+
+.a-quick {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-2);
+}
+
+.a-quick__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 44px;
+  padding: 10px 12px;
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--a-r-control);
+  font-size: var(--a-fs-body);
+  color: var(--c-body);
+  text-decoration: none;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.a-quick__item:hover {
+  border-color: var(--c-ink);
+  background: var(--a-surface-sunken);
+  color: var(--c-ink);
+}
+
+.a-quick__icon { display: grid; place-items: center; color: var(--c-muted); }
+.a-quick__icon .a-icon { width: 18px; height: 18px; }
+
+/* -------------------------------------------------------------------------
+   ACTIVITY FEED
+   ------------------------------------------------------------------------- */
+
+.a-feed { margin: 0; padding: 0; list-style: none; }
+
+.a-feed__item {
+  display: flex;
+  gap: var(--sp-3);
+  padding: 11px var(--sp-5);
+}
+
+.a-feed__item + .a-feed__item { border-top: var(--bw) solid var(--a-line-soft); }
+
+.a-feed__icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--a-neutral-tint);
+  color: var(--c-muted);
+}
+
+.a-feed__icon .a-icon { width: 16px; height: 16px; }
+
+.a-feed__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.a-feed__text { font-size: var(--a-fs-body); color: var(--c-body); }
+.a-feed__time { font-size: var(--fs-3xs); color: var(--c-faint); }
+
+/* -------------------------------------------------------------------------
+   GRID PLACEMENT
+   ------------------------------------------------------------------------- */
+
+/* Width goes where the content needs it. The chart and the orders table are
+   the two wide things: a four-column table squeezed into a third of the row
+   has to scroll to be read, which is worse than giving it the room. The
+   activity feed and the ranked list are single columns of short lines and
+   sit comfortably in a third.
+
+   The DOM is ordered chart, activity, orders, top, actions so that plain
+   auto-placement produces these rows — no explicit column starts to keep in
+   step with the markup. */
+@media (min-width: 1100px) {
+  .a-dash__chart { grid-column: span 8; }
+  .a-dash__activity { grid-column: span 4; }
+
+  .a-dash__orders { grid-column: span 8; }
+  .a-dash__top { grid-column: span 4; }
+
+  .a-dash__actions { grid-column: span 12; }
+  .a-dash__actions .a-quick { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (min-width: 760px) and (max-width: 1099px) {
+  .a-dash__top { grid-column: span 6; }
+  .a-dash__activity { grid-column: span 6; }
+}
+
+/* -------------------------------------------------------------------------
+   RESPONSIVE
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 1099px) {
+  .a-dash__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 559px) {
+  .a-dash__stats,
+  .a-dash__alerts,
+  .a-quick { grid-template-columns: minmax(0, 1fr); }
+
+  .a-stat { min-height: 0; }
+
+  /* Below this width a four-column table cannot shrink further without the
+     columns colliding, so it keeps a usable width and scrolls inside its
+     own card. The card body already scrolls at every size. */
+  .a-table { min-width: 30rem; }
+
+  .a-table th,
+  .a-table td { padding-inline: var(--sp-4); }
+}
+
+/* -------------------------------------------------------------------------
+   REDUCED MOTION
+   ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .a-stat--loading { animation: none; }
+
+  .a-dash.is-refreshing,
+  .a-alert,
+  .a-quick__item,
+  .a-card__link,
+  .a-card__toggle,
+  .a-range__option,
+  .a-table tbody tr { transition: none; }
+
+  .a-alert:hover { transform: none; }
+}

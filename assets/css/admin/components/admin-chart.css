@@ -1,0 +1,169 @@
+/* =========================================================================
+   admin-chart.css — the marks the charts are drawn with
+   -------------------------------------------------------------------------
+   Geometry lives in admin-chart.js; everything about how a mark looks lives
+   here, so weight and colour are stated once and every chart inherits them.
+
+   The specs below are fixed and deliberate:
+
+     line          2px, round join and cap
+     area          the series colour at 10% — a wash, never a saturated block
+     markers       8px across (r=4) with a 2px ring in the surface colour,
+                   so a dot stays legible sitting on its own line
+     grid / axes   hairline, solid, one step off the surface. Never dashed:
+                   dashing reads as "projection" or "threshold" when it is
+                   only a grid.
+     text          ordinary ink tokens, never the series colour. The
+                   coloured mark beside a label carries identity; a label
+                   painted in the data colour just becomes hard to read.
+
+   The chart is one series in the brand ink, so there is no categorical
+   palette here and nothing for a colourblind-separation check to compare —
+   those checks are about telling adjacent hues apart. Ink on white is about
+   19:1, far above the 4.5:1 floor.
+   ========================================================================= */
+
+.a-chart {
+  position: relative;
+  width: 100%;
+}
+
+.a-chart__svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.a-chart__svg:focus-visible {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 4px;
+  border-radius: var(--r-sm);
+}
+
+/* ---- structure ---- */
+
+.a-chart__grid {
+  stroke: var(--a-line);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.a-chart__tick {
+  fill: var(--c-faint);
+  font-size: 11px;
+  /* Ticks are a column of numbers that should line up, which is the one
+     place equal-width digits are right. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- the series ---- */
+
+.a-chart__area {
+  fill: rgb(var(--c-ink-rgb) / .10);
+  stroke: none;
+}
+
+.a-chart__line {
+  fill: none;
+  stroke: var(--c-ink);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.a-chart__end,
+.a-chart__cursor {
+  fill: var(--c-ink);
+  /* The ring is the surface colour, not a border: it separates the mark
+     from the line it sits on without adding ink that is not data. */
+  stroke: var(--a-surface);
+  stroke-width: 2;
+}
+
+.a-chart__endlabel {
+  fill: var(--c-ink);
+  font-size: 12px;
+  font-weight: var(--fw-medium);
+}
+
+/* ---- read-out ---- */
+
+.a-chart__crosshair {
+  stroke: rgb(var(--c-ink-rgb) / .30);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+  pointer-events: none;
+}
+
+/* Invisible hit bands, one per point, the full height of the plot. A
+   pointer never has to land on the line itself. */
+.a-chart__band {
+  fill: transparent;
+  cursor: crosshair;
+}
+
+.a-chart__tip {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 10px;
+  border-radius: var(--a-r-control);
+  background: var(--c-ink);
+  color: #fff;
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--a-shadow-pop);
+}
+
+.a-chart__tip-date {
+  font-size: var(--fs-3xs);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / .6);
+}
+
+.a-chart__tip-value { font-weight: var(--fw-medium); }
+
+.a-chart__tip-meta {
+  font-size: var(--fs-3xs);
+  color: rgb(255 255 255 / .7);
+}
+
+/* -------------------------------------------------------------------------
+   TABLE VIEW
+   Every chart has one. A tooltip may enhance a chart but must never be the
+   only way to reach a value.
+   ------------------------------------------------------------------------- */
+
+.a-chart__table {
+  max-height: 268px;
+  overflow-y: auto;
+  border: var(--bw) solid var(--a-line-soft);
+  border-radius: var(--a-r-control);
+}
+
+/* -------------------------------------------------------------------------
+   SPARKLINE
+   The trend inside a stat tile: the run in the de-emphasis grey, the most
+   recent point in the ink, so the eye lands on where the number is now.
+   ------------------------------------------------------------------------- */
+
+.a-spark { display: block; overflow: visible; }
+
+.a-spark__line {
+  fill: none;
+  stroke: rgb(var(--c-ink-rgb) / .28);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.a-spark__end {
+  fill: var(--c-ink);
+  stroke: var(--a-surface);
+  stroke-width: 1.5;
+}
