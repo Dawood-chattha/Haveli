@@ -37,6 +37,17 @@ svg {
 
 img { height: auto; }
 
+/* The `hidden` attribute only hides an element because the browser's own
+   stylesheet says `display: none`, and that rule loses to any author rule
+   that sets `display` — which is every flex or grid component here. Without
+   this reset, `el.hidden = true` silently does nothing to them.
+
+   It had already gone wrong: the search modal's results list is a flex
+   column that header.js hides with the attribute, so an empty results box
+   stayed on screen. Anything a component marks hidden is meant to be gone,
+   so the rule is deliberately unconditional. */
+[hidden] { display: none !important; }
+
 input,
 button,
 textarea,
