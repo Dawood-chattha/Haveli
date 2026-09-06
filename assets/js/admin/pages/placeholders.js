@@ -242,47 +242,7 @@ window.ZB.adminPages = window.ZB.adminPages || {};
     ]
   });
 
-  /* -----------------------------------------------------------------------
-     Sign in
-
-     Rendered without the surrounding chrome — the shell hides the sidebar
-     and topbar on this route, because showing the panel behind the screen
-     that guards it makes no sense.
-     ----------------------------------------------------------------------- */
-
-  ZB.adminPages.login = {
-    title: 'Sign in',
-    crumbs: [],
-
-    render: function () {
-      return '' +
-        '<div class="a-auth">' +
-          '<div class="a-auth__card">' +
-            '<span class="a-auth__mark" aria-hidden="true">H</span>' +
-            '<h1 class="a-auth__title">HAVELI Admin</h1>' +
-            ui.placeholder({
-              title: 'Sign in',
-              phase: '3',
-              icon: 'logout',
-              blurb: 'The owner sign-in screen is the next thing to be built.',
-              bullets: [
-                'Email and password fields with validation',
-                'Show and hide password, remember me',
-                'Loading, error and disabled states',
-                'Structured so a real auth service can be connected later'
-              ]
-            }) +
-            '<a class="btn btn--secondary" href="' + ui.href('/admin') + '">' +
-              'Continue to the panel' +
-            '</a>' +
-            '<p class="a-auth__note">' +
-              'Nothing here signs anyone in. There is no authentication in ' +
-              'this build, and the panel is not protected.' +
-            '</p>' +
-          '</div>' +
-        '</div>';
-    }
-  };
+  /* Sign in is a built section now, and lives in pages/login.js. */
 
   /* -----------------------------------------------------------------------
      Not found

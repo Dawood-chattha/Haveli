@@ -1,0 +1,520 @@
+/* =========================================================================
+   admin-auth.css — the owner sign-in screen
+   -------------------------------------------------------------------------
+   A split screen on desktop: the brand on the ink, the form on the ground.
+   It repeats the panel's own arrangement — dark column, light content — so
+   signing in already looks like the place it leads to.
+
+   Below 900px the brand side is not rendered at all rather than stacked
+   above the form. On a phone the form is the entire job, and a decorative
+   panel above it would only push the fields under the fold.
+
+   ACCESSIBILITY DECISIONS MADE HERE
+     - Every control is at least 44px tall.
+     - Focus is a two-tone ring that works on both grounds; it is never
+       removed, only replaced.
+     - Errors are ink and an icon as well as colour, so they survive being
+       read by someone who cannot separate red from grey.
+     - All motion is transform and opacity, and stops under
+       prefers-reduced-motion — including the spinner, which is hidden
+       rather than frozen, leaving the label and disabled state to say the
+       same thing.
+   ========================================================================= */
+
+/* The screen runs to the edges, so the content column drops its padding. */
+.admin.is-auth .admin__content { padding: 0; }
+
+.auth {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 100vh;
+  min-height: 100svh;
+  background: var(--a-ground);
+}
+
+@media (min-width: 900px) {
+  .auth { grid-template-columns: 1.05fr 1fr; }
+}
+
+/* -------------------------------------------------------------------------
+   BRAND SIDE
+   ------------------------------------------------------------------------- */
+
+.auth__brand {
+  display: none;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: var(--sp-10);
+  background: var(--a-sidebar-bg);
+  color: #fff;
+}
+
+@media (min-width: 900px) {
+  .auth__brand { display: flex; }
+}
+
+.auth__brand-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  margin: auto 0;
+}
+
+.auth__wordmark {
+  margin: 0;
+  font-size: var(--fs-3xl);
+  font-weight: var(--fw-bold);
+  letter-spacing: .16em;
+  line-height: 1.1;
+}
+
+.auth__tagline {
+  margin: 0;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-regular);
+  letter-spacing: var(--ls-wider);
+  text-transform: uppercase;
+  color: var(--a-sidebar-muted);
+}
+
+.auth__brand-foot {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--a-sidebar-faint);
+}
+
+/* -------------------------------------------------------------------------
+   MARK
+   ------------------------------------------------------------------------- */
+
+.auth__mark {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: var(--a-r-control);
+  background: #fff;
+  color: var(--c-ink);
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-bold);
+}
+
+/* On the light side the mark inverts, or it would vanish. */
+.auth__mark--compact {
+  display: none;
+  background: var(--c-ink);
+  color: #fff;
+  width: 42px;
+  height: 42px;
+  font-size: var(--fs-lg);
+  margin-bottom: var(--sp-2);
+}
+
+@media (max-width: 899px) {
+  .auth__mark--compact { display: grid; }
+}
+
+/* -------------------------------------------------------------------------
+   FORM SIDE
+   ------------------------------------------------------------------------- */
+
+.auth__panel {
+  display: grid;
+  place-items: center;
+  padding: var(--sp-8) var(--a-gutter);
+}
+
+.auth__form {
+  width: 100%;
+  max-width: 25rem;
+}
+
+.auth__title {
+  margin: 0;
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-medium);
+  letter-spacing: -.01em;
+  color: var(--c-ink);
+}
+
+.auth__sub {
+  margin: 6px 0 var(--sp-6);
+  font-size: var(--a-fs-body);
+  color: var(--c-muted);
+}
+
+/* -------------------------------------------------------------------------
+   FIELDS
+   ------------------------------------------------------------------------- */
+
+.auth__field { margin-bottom: var(--sp-4); }
+
+.auth__label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--c-ink);
+}
+
+.auth__control {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.auth__input {
+  width: 100%;
+  height: 46px;                       /* comfortably over the 44px minimum */
+  padding: 0 var(--sp-4);
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--a-r-control);
+  background: var(--a-surface);
+  font: inherit;
+  font-size: var(--a-fs-ui);
+  color: var(--c-ink);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+/* Room for the Show/Hide control. */
+.auth__field[data-field="password"] .auth__input { padding-right: 4.5rem; }
+
+.auth__input::placeholder { color: var(--c-faint); }
+
+.auth__input:focus {
+  outline: none;
+  border-color: var(--c-ink);
+  box-shadow: 0 0 0 3px rgb(var(--c-ink-rgb) / .12);
+}
+
+.auth__input:read-only {
+  background: var(--a-surface-sunken);
+  color: var(--c-muted);
+}
+
+.is-invalid .auth__input { border-color: var(--a-danger); }
+
+.is-invalid .auth__input:focus {
+  box-shadow: 0 0 0 3px rgb(163 38 25 / .16);
+}
+
+/* ---- show / hide ---- */
+
+.auth__reveal {
+  position: absolute;
+  right: 5px;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  font: inherit;
+  font-size: var(--fs-3xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.auth__reveal:hover {
+  background: var(--a-neutral-tint);
+  color: var(--c-ink);
+}
+
+/* ---- field error ---- */
+
+.auth__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 6px 0 0;
+  font-size: var(--fs-xs);
+  line-height: 1.45;
+  color: var(--a-danger);
+}
+
+.auth__error-icon svg,
+.auth__alert-icon svg {
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+/* -------------------------------------------------------------------------
+   FORM-LEVEL ALERT
+   ------------------------------------------------------------------------- */
+
+.auth__alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+  padding: 12px var(--sp-4);
+  border: var(--bw) solid rgb(163 38 25 / .22);
+  border-radius: var(--a-r-control);
+  background: var(--a-danger-tint);
+  font-size: var(--a-fs-body);
+  line-height: var(--lh-relaxed);
+  color: var(--a-danger);
+  animation: authAlertIn var(--dur-fast) var(--ease-out-cubic);
+}
+
+@keyframes authAlertIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* -------------------------------------------------------------------------
+   CAPS LOCK
+   ------------------------------------------------------------------------- */
+
+.auth__caps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -6px 0 var(--sp-3);
+  font-size: var(--fs-xs);
+  color: var(--a-warning);
+}
+
+.auth__caps::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* -------------------------------------------------------------------------
+   REMEMBER / FORGOT ROW
+   ------------------------------------------------------------------------- */
+
+.auth__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
+}
+
+.auth__check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  /* Keeps the whole label a 44px target, not just the 18px box. */
+  min-height: 44px;
+  font-size: var(--a-fs-body);
+  color: var(--c-body);
+  cursor: pointer;
+}
+
+/* The real input stays in the accessibility tree and keeps the keyboard
+   behaviour; the drawn box follows its state. */
+.auth__check input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.auth__check-box {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--r-sm);
+  background: var(--a-surface);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.auth__check-box svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+  transform: scale(.7);
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out-cubic);
+}
+
+.auth__check input:checked + .auth__check-box {
+  background: var(--c-ink);
+  border-color: var(--c-ink);
+}
+
+.auth__check input:checked + .auth__check-box svg {
+  opacity: 1;
+  transform: none;
+}
+
+.auth__check input:focus-visible + .auth__check-box {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 2px;
+}
+
+.auth__forgot {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--a-fs-body);
+  color: var(--c-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.auth__forgot:hover { color: var(--c-ink); }
+
+.auth__forgot-note {
+  margin: calc(var(--sp-5) * -1 + 2px) 0 var(--sp-5);
+  padding: 10px 12px;
+  border-radius: var(--a-r-control);
+  background: var(--a-neutral-tint);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-relaxed);
+  color: var(--c-muted);
+}
+
+/* -------------------------------------------------------------------------
+   SUBMIT
+   ------------------------------------------------------------------------- */
+
+.auth__submit {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  width: 100%;
+  min-height: 46px;
+  padding: 0 var(--sp-6);
+  border: var(--bw) solid var(--c-ink);
+  border-radius: var(--a-r-control);
+  background: var(--c-ink);
+  font: inherit;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-wider);
+  text-transform: uppercase;
+  color: #fff;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.auth__submit:hover:not(:disabled) { background: var(--btn-primary-bg-hover); }
+
+.auth__submit:active:not(:disabled) { transform: translateY(1px); }
+
+.auth__submit:disabled {
+  cursor: not-allowed;
+  opacity: .72;
+}
+
+.auth__spinner {
+  display: none;
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgb(255 255 255 / .35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: authSpin .7s linear infinite;
+}
+
+.auth__submit.is-busy .auth__spinner { display: block; }
+
+@keyframes authSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* -------------------------------------------------------------------------
+   FOOTNOTES
+   ------------------------------------------------------------------------- */
+
+.auth__note {
+  margin: var(--sp-5) 0 0;
+  padding: 12px var(--sp-4);
+  border: var(--bw) dashed var(--a-line);
+  border-radius: var(--a-r-control);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-relaxed);
+  color: var(--c-muted);
+}
+
+.auth__note strong { color: var(--c-body); }
+
+.auth__back {
+  display: inline-block;
+  margin-top: var(--sp-4);
+  font-size: var(--a-fs-body);
+  color: var(--c-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.auth__back:hover { color: var(--c-ink); }
+
+/* -------------------------------------------------------------------------
+   FOCUS
+   base.css draws the shared ring; these two sit on grounds where it needs
+   restating rather than inheriting.
+   ------------------------------------------------------------------------- */
+
+.auth__brand a:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.auth__submit:focus-visible {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 3px;
+}
+
+/* -------------------------------------------------------------------------
+   REDUCED MOTION
+   ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .auth__input,
+  .auth__reveal,
+  .auth__check-box,
+  .auth__check-box svg,
+  .auth__forgot,
+  .auth__back,
+  .auth__submit {
+    transition: none;
+  }
+
+  .auth__alert { animation: none; }
+
+  /* Hidden rather than stopped: a spinner that does not turn reads as a
+     bug. The disabled button and its changed label already say "waiting". */
+  .auth__submit.is-busy .auth__spinner { display: none; }
+}

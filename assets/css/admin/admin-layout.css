@@ -325,59 +325,11 @@
 
 .a-placeholder .btn { margin-top: var(--sp-2); }
 
-/* -------------------------------------------------------------------------
-   10. AUTH SCREEN
-   The sign-in route renders with no chrome around it.
-   ------------------------------------------------------------------------- */
-
-.a-auth {
-  display: grid;
-  place-items: center;
-  min-height: calc(100svh - (var(--a-gutter) * 2));
-  padding: var(--sp-6) 0;
-}
-
-.a-auth__card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sp-4);
-  width: 100%;
-  max-width: 30rem;
-}
-
-.a-auth__mark {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: var(--a-r-control);
-  background: var(--c-ink);
-  color: #fff;
-  font-size: var(--fs-lg);
-  font-weight: var(--fw-bold);
-  letter-spacing: .02em;
-}
-
-.a-auth__title {
-  margin: 0;
-  font-size: var(--fs-lg);
-  font-weight: var(--fw-medium);
-  letter-spacing: var(--ls-wide);
-  color: var(--c-ink);
-}
-
-.a-auth__note {
-  margin: 0;
-  max-width: 26rem;
-  font-size: var(--fs-3xs);
-  line-height: var(--lh-relaxed);
-  text-align: center;
-  color: var(--c-faint);
-}
+/* The sign-in screen itself lives in components/admin-auth.css. Only the
+   frame's response to that route is here — see .admin.is-auth above. */
 
 /* -------------------------------------------------------------------------
-   11. RESPONSIVE
+   10. RESPONSIVE
    ------------------------------------------------------------------------- */
 
 @media (max-width: 989px) {
@@ -387,7 +339,7 @@
 }
 
 /* -------------------------------------------------------------------------
-   12. REDUCED MOTION
+   11. REDUCED MOTION
    ------------------------------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
