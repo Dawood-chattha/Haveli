@@ -153,17 +153,30 @@ window.ZB = window.ZB || {};
   function currentRows() {
     var rows = added.concat(ZB.catalogue.all().map(toRow));
 
+    /* ALWAYS A COPY, EVEN WHEN THERE IS NOTHING TO MERGE
+       The obvious shortcut is to return `row` untouched when it has no
+       overlay entry. It is wrong: a row created this session lives in
+       `added`, and handing that object out means a caller holds a live
+       reference into the repo's own state. Two things then go wrong. A
+       page can change the store by accident, without going through a
+       write method. And a value read a moment ago silently changes under
+       whoever is still holding it — which is not how a value fetched from
+       a server behaves, and is exactly the difference that would break
+       these pages the day a backend is connected.
+
+       A shallow copy is enough: writes replace whole fields. */
     return rows
       .filter(function (row) { return !removed[row.id]; })
       .map(function (row) {
-        if (!edited[row.id]) return row;
-
-        /* A shallow merge is enough: the form writes whole fields. */
         var merged = {};
         Object.keys(row).forEach(function (key) { merged[key] = row[key]; });
-        Object.keys(edited[row.id]).forEach(function (key) {
-          merged[key] = edited[row.id][key];
-        });
+
+        if (edited[row.id]) {
+          Object.keys(edited[row.id]).forEach(function (key) {
+            merged[key] = edited[row.id][key];
+          });
+        }
+
         return merged;
       });
   }
@@ -378,6 +391,205 @@ window.ZB = window.ZB || {};
              Object.keys(removed).length > 0;
     }
   };
+
+  /* -----------------------------------------------------------------------
+     Inventory
+
+     NOT A SECOND LIST OF PRODUCTS
+     Inventory reads currentRows() — the same products, through the same
+     overlay, as the product list. It is a different question asked of the
+     same records: the product screen asks "what do we sell", this one asks
+     "what is about to run out". Two lists would be two places for a stock
+     number to live, and they would disagree the first time one was edited.
+
+     A stock change made here therefore shows on the product list, and the
+     other way round, without either screen knowing the other exists.
+     ----------------------------------------------------------------------- */
+
+  /**
+   * Below this, a product is "low" rather than merely in stock.
+   *
+   * Kept here rather than in the pages because three screens draw that
+   * distinction — the product list's stock pill, this section's filter, and
+   * the dashboard's alert — and a threshold that means ten in one place and
+   * five in another is a bug nobody notices until a product sells out under
+   * a badge that said it was fine.
+   */
+  var LOW_STOCK_AT = 10;
+
+  function stockLevelOf(row) {
+    if (!row.stock) return 'out';
+    return row.stock < LOW_STOCK_AT ? 'low' : 'in';
+  }
+
+  Repo.inventory = {
+
+    lowStockAt: LOW_STOCK_AT,
+
+    /** 'out' | 'low' | 'in' for one row, so pages never re-derive it. */
+    levelOf: stockLevelOf,
+
+    /* Lowest stock first by default, and that is the whole screen: an
+       inventory list sorted by name is a catalogue with a number on it.
+       The rows that need attention are the ones at the top. */
+    sorts: [
+      { id: 'stock-asc', label: 'Lowest stock first' },
+      { id: 'stock-desc', label: 'Highest stock first' },
+      { id: 'value-desc', label: 'Most stock value' },
+      { id: 'name-asc', label: 'Name A–Z' },
+      { id: 'name-desc', label: 'Name Z–A' }
+    ],
+
+    levels: [
+      { id: 'out', label: 'Out of stock' },
+      { id: 'low', label: 'Running low' },
+      { id: 'in', label: 'In stock' }
+    ],
+
+    facets: function () {
+      var rows = currentRows();
+      var depts = {};
+      rows.forEach(function (row) { depts[row.dept] = row.deptLabel; });
+
+      var present = {};
+      rows.forEach(function (row) { present[stockLevelOf(row)] = true; });
+
+      return Repo.defer({
+        departments: Object.keys(depts).sort(function (a, b) {
+          return depts[a].localeCompare(depts[b]);
+        }).map(function (id) { return { id: id, label: depts[id] }; }),
+
+        levels: Repo.inventory.levels.filter(function (level) {
+          return present[level.id];
+        })
+      });
+    },
+
+    /** options: { search, dept, level, sort, page, perPage } */
+    list: function (options) {
+      options = options || {};
+      var rows = currentRows();
+
+      if (options.search) {
+        var needle = String(options.search).toLowerCase();
+        rows = rows.filter(function (row) {
+          return row.title.toLowerCase().indexOf(needle) > -1 ||
+                 row.sku.toLowerCase().indexOf(needle) > -1 ||
+                 row.categoryLabel.toLowerCase().indexOf(needle) > -1;
+        });
+      }
+
+      if (options.dept) {
+        rows = rows.filter(function (row) { return row.dept === options.dept; });
+      }
+
+      if (options.level) {
+        rows = rows.filter(function (row) {
+          return stockLevelOf(row) === options.level;
+        });
+      }
+
+      var compare = {
+        'stock-asc':  function (a, b) { return a.stock - b.stock; },
+        'stock-desc': function (a, b) { return b.stock - a.stock; },
+        'value-desc': function (a, b) {
+          return (b.stock * b.price) - (a.stock * a.price);
+        },
+        'name-asc':   function (a, b) { return a.title.localeCompare(b.title); },
+        'name-desc':  function (a, b) { return b.title.localeCompare(a.title); }
+      }[options.sort] || function (a, b) { return a.stock - b.stock; };
+
+      rows = rows.slice().sort(compare);
+
+      var total = rows.length;
+      var perPage = options.perPage || 20;
+      var pages = Math.max(1, Math.ceil(total / perPage));
+      var page = Math.min(Math.max(1, options.page || 1), pages);
+      var start = (page - 1) * perPage;
+
+      return Repo.defer({
+        items: rows.slice(start, start + perPage).map(function (row) {
+          var out = {};
+          Object.keys(row).forEach(function (key) { out[key] = row[key]; });
+          out.level = stockLevelOf(row);
+          out.value = row.stock * row.price;
+          return out;
+        }),
+        total: total, page: page, pages: pages, perPage: perPage,
+        /* Units and value for the whole filtered set, not just this page:
+           "48 products running low" is only half an answer without "worth
+           replacing them costs this much". */
+        units: rows.reduce(function (sum, row) { return sum + row.stock; }, 0),
+        value: rows.reduce(function (sum, row) {
+          return sum + (row.stock * row.price);
+        }, 0)
+      });
+    },
+
+    summary: function () {
+      var rows = currentRows();
+      var counts = { out: 0, low: 0, in: 0 };
+
+      rows.forEach(function (row) { counts[stockLevelOf(row)] += 1; });
+
+      return Repo.defer({
+        products: rows.length,
+        out: counts.out,
+        low: counts.low,
+        units: rows.reduce(function (sum, row) { return sum + row.stock; }, 0),
+        /* Retail value of what is on the shelf. Priced at what it sells
+           for, not at cost — there is no cost price in this build, and
+           inventing one would put a number on this screen that no other
+           screen could corroborate. */
+        value: rows.reduce(function (sum, row) {
+          return sum + (row.stock * row.price);
+        }, 0)
+      });
+    },
+
+    /* -- writes. Straight through to the product overlay. -- */
+
+    /**
+     * Set one product's stock.
+     *
+     * Also settles the two fields that have to move with it. A product on
+     * the shelf that says "Out of stock", or a sold-out one still marked
+     * active, is a row that contradicts itself — and the storefront reads
+     * `inStock` to decide whether the buy button works.
+     *
+     * A draft stays a draft: it is hidden from the shop for a reason that
+     * has nothing to do with stock, and restocking it must not publish it.
+     */
+    setStock: function (id, stock) {
+      var quantity = Math.max(0, Math.round(Number(stock)));
+      if (!isFinite(quantity)) {
+        return Promise.reject({ message: 'That is not a quantity.' });
+      }
+
+      var row = currentRows().filter(function (r) { return r.id === id; })[0];
+      if (!row) return Promise.reject({ message: 'That product no longer exists.' });
+
+      var change = { stock: quantity, inStock: quantity > 0 };
+
+      if (row.status !== 'draft') {
+        change.status = quantity > 0 ? 'active' : 'out-of-stock';
+      }
+
+      return Repo.products.update(id, change);
+    },
+
+    /** Add to or take from what is there. Never goes below zero. */
+    adjustStock: function (id, delta) {
+      var row = currentRows().filter(function (r) { return r.id === id; })[0];
+      if (!row) return Promise.reject({ message: 'That product no longer exists.' });
+
+      return Repo.inventory.setStock(id, row.stock + delta);
+    },
+
+    hasUnsavedEdits: function () {
+      return Repo.products.hasUnsavedEdits();
+    }
+  };
   /* -----------------------------------------------------------------------
      Orders
 
@@ -430,15 +642,24 @@ window.ZB = window.ZB || {};
     return hit ? hit.label : id;
   }
 
-  /** One order with any changes made this session applied on top. */
+  /**
+   * One order with any changes made this session applied on top.
+   *
+   * Always a copy, for the reason spelled out over currentRows(): handing
+   * back the mock's own object lets a caller change the store without
+   * going through a write method, and makes a value read a moment ago
+   * change under whoever is holding it.
+   */
   function withEdits(order) {
-    if (!orderEdits[order.id]) return order;
-
     var merged = {};
     Object.keys(order).forEach(function (key) { merged[key] = order[key]; });
-    Object.keys(orderEdits[order.id]).forEach(function (key) {
-      merged[key] = orderEdits[order.id][key];
-    });
+
+    if (orderEdits[order.id]) {
+      Object.keys(orderEdits[order.id]).forEach(function (key) {
+        merged[key] = orderEdits[order.id][key];
+      });
+    }
+
     return merged;
   }
 

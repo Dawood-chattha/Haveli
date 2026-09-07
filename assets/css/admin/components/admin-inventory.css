@@ -1,0 +1,167 @@
+/* =========================================================================
+   admin-inventory.css — the stock sheet
+   -------------------------------------------------------------------------
+   Table, toolbar, chips and pager come from admin-products.css; the tiles
+   and their pressed state from admin-categories.css and admin-orders.css.
+   What is here is the quantity control and the two markers that make a row
+   worth looking at.
+
+   THE ROW MARKER IS A RULE, NOT A WASH
+   An out-of-stock row is marked with a bar down its leading edge rather
+   than by tinting the whole row. A tinted row fights every pill and
+   thumbnail sitting on it, and forty tinted rows in a list sorted lowest
+   first is a pink table — at which point the marking has stopped marking
+   anything. The bar is at the edge, out of the way of the content, and
+   reads down a column at a glance.
+
+   It is also never the only signal. The Level column says "Out of stock"
+   in words, and the quantity says 0.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   TILES
+
+   Two of the four are filters — the ones an owner opens this screen to
+   act on. Units and value are totals with no subset behind them, so they
+   stay plain rather than becoming buttons that do nothing.
+   ------------------------------------------------------------------------- */
+
+.a-metric--out[aria-pressed="true"] {
+  background: var(--a-danger);
+  border-color: var(--a-danger);
+}
+
+.a-metric--low[aria-pressed="true"] {
+  background: var(--a-warning);
+  border-color: var(--a-warning);
+}
+
+/* The value in an un-pressed alert tile carries its own colour, so the
+   count reads as the warning it is before anyone clicks anything. */
+.a-metric--out[aria-pressed="false"] .a-stat__value { color: var(--a-danger); }
+.a-metric--low[aria-pressed="false"] .a-stat__value { color: var(--a-warning); }
+
+/* -------------------------------------------------------------------------
+   THE TABLE
+   ------------------------------------------------------------------------- */
+
+.a-table--inventory { min-width: 50rem; }
+
+.a-cell--stepper { width: 1%; white-space: nowrap; }
+
+.a-inv-row { position: relative; }
+
+/* Drawn on the first cell rather than the row: a border on a <tr> is
+   ignored under border-collapse, which is the collapse this table uses. */
+.a-inv-row--out > *:first-child,
+.a-inv-row--low > *:first-child {
+  position: relative;
+}
+
+.a-inv-row--out > *:first-child::before,
+.a-inv-row--low > *:first-child::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+}
+
+.a-inv-row--out > *:first-child::before { background: var(--a-danger); }
+.a-inv-row--low > *:first-child::before { background: var(--a-warning); }
+
+/* -------------------------------------------------------------------------
+   THE QUANTITY CONTROL
+
+   The browser's own number spinners are a few pixels tall, differ between
+   browsers, and are close to unusable on a touch screen — so they are
+   hidden and replaced with buttons either side, at a size a thumb can
+   actually hit.
+
+   The input keeps type="number" underneath: the keyboard on a phone, the
+   arrow keys on a desktop, and the field's own semantics all come from
+   that and none of them should be reimplemented.
+   ------------------------------------------------------------------------- */
+
+.a-stepper {
+  display: inline-flex;
+  align-items: stretch;
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--a-r-control);
+  background: var(--a-surface);
+  overflow: hidden;
+}
+
+.a-stepper__btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  min-height: 34px;
+  border: 0;
+  background: var(--a-surface-sunken);
+  font: inherit;
+  font-size: var(--fs-md);
+  line-height: 1;
+  color: var(--c-body);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.a-stepper__btn:hover:not(:disabled) { background: var(--a-neutral-tint); color: var(--c-ink); }
+
+.a-stepper__btn:disabled { opacity: .4; cursor: not-allowed; }
+
+.a-stepper__btn:focus-visible {
+  outline: 2px solid var(--c-ink);
+  outline-offset: -2px;
+}
+
+.a-stepper__input {
+  width: 4.25rem;
+  min-height: 34px;
+  padding: 0 6px;
+  border: 0;
+  border-inline: var(--bw) solid var(--a-line);
+  background: var(--a-surface);
+  font: inherit;
+  font-size: var(--a-fs-body);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--c-ink);
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.a-stepper__input::-webkit-outer-spin-button,
+.a-stepper__input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.a-stepper__input:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--c-ink);
+}
+
+/* -------------------------------------------------------------------------
+   RESPONSIVE
+
+   The table scrolls inside its card, which admin-products.css already
+   arranges. Nothing is dropped: SKU, quantity and level are the three
+   columns this screen exists for, and hiding any of them at a narrow width
+   would leave a stock sheet that cannot be used on a phone — which is
+   exactly where a stock count gets taken.
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 749px) {
+  /* A thumb-sized target, once there is a thumb on it. */
+  .a-stepper__btn { width: 40px; min-height: 40px; }
+  .a-stepper__input { min-height: 40px; width: 4.5rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .a-stepper__btn { transition: none; }
+}

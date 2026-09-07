@@ -383,9 +383,15 @@ window.ZB.adminPages = window.ZB.adminPages || {};
     }
 
     var rows = result.items.map(function (row) {
-      var stockClass = row.stock === 0 ? 'out-of-stock' : (row.stock < 10 ? 'low' : 'neutral');
-      var stockLabel = row.stock === 0 ? 'Out of stock'
-                     : row.stock < 10 ? row.stock + ' left' : String(row.stock);
+      /* "Running low" is decided in the repo, not here. The inventory
+         screen filters on the same idea and the pill and the filter have
+         to mean the same number — a threshold that is ten in one place and
+         five in another is a bug nobody notices until something sells out
+         under a badge that said it was fine. */
+      var level = ZB.repo.inventory.levelOf(row);
+      var stockClass = level === 'out' ? 'out-of-stock' : (level === 'low' ? 'low' : 'neutral');
+      var stockLabel = level === 'out' ? 'Out of stock'
+                     : level === 'low' ? row.stock + ' left' : String(row.stock);
 
       return '' +
         '<tr>' +

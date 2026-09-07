@@ -70,19 +70,7 @@ window.ZB.adminPages = window.ZB.adminPages || {};
   /* Customers, and the single-customer view, are built sections now. They
      live in pages/customers.js and pages/customer-detail.js. */
 
-  ZB.adminPages.inventory = stub({
-    title: 'Inventory',
-    sub: 'What is left on the shelf.',
-    phase: '9',
-    icon: 'archive',
-    blurb: 'Stock levels across the catalogue, with the items that need ' +
-           'attention brought to the top.',
-    bullets: [
-      'SKU, available quantity and stock status',
-      'Low stock and out of stock indicators',
-      'Search and filter'
-    ]
-  });
+  /* Inventory is a built section now, and lives in pages/inventory.js. */
 
   ZB.adminPages.banners = stub({
     title: 'Banners',
