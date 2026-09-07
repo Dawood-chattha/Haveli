@@ -1,0 +1,365 @@
+/* =========================================================================
+   admin-reports.css — the period report
+   -------------------------------------------------------------------------
+   Cards, stat tiles, the range control, the chart frame and the compact
+   table come from admin-layout.css, admin-dashboard.css and
+   admin-chart.css. What is here is the period bar, the scope line, the
+   ranked bar list, and the catalogue-coverage block.
+
+   WHY THE SPLITS ARE BARS AND NOT PIES
+   Every split on this page routinely has five slices, and five slices in a
+   pie cannot be compared by eye — the reader ends up reading the labels,
+   at which point the pie has done nothing a list would not have done
+   better. A ranked bar list is read top to bottom in the order that
+   matters, aligns every figure in a column, and survives being narrow.
+
+   AND THE BAR IS NEVER THE ONLY SIGNAL
+   Each row carries its own value and its share as a number. The bar is a
+   shortcut for the eye; the figures are the content. Nothing here depends
+   on judging a length, and nothing depends on a colour.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   THE PERIOD BAR
+
+   Presets and a custom range on one line, above everything they scope. A
+   period control inside one card would silently disagree with the card
+   beside it.
+   ------------------------------------------------------------------------- */
+
+.a-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+
+.a-period__custom {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.a-period__word {
+  font-size: var(--a-fs-body);
+  color: var(--c-muted);
+}
+
+.a-period__field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.a-period__field label {
+  font-size: var(--a-fs-body);
+  color: var(--c-body);
+}
+
+.a-input--date {
+  width: auto;
+  min-height: 34px;
+  padding: 0 8px;
+  font-size: var(--a-fs-body);
+}
+
+/* -------------------------------------------------------------------------
+   THE SCOPE LINE
+
+   What period is on screen, in words, and any way in which it is not the
+   period that was asked for. A clamped range that says nothing is a report
+   quietly answering a different question.
+   ------------------------------------------------------------------------- */
+
+.a-report__scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2) var(--sp-3);
+  margin: 0 0 var(--sp-4);
+  font-size: var(--a-fs-body);
+}
+
+.a-report__period {
+  font-weight: 500;
+  color: var(--c-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.a-report__caveat {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 5px;
+  color: var(--a-warning);
+  line-height: 1.5;
+}
+
+.a-report__caveat .a-icon {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
+}
+
+/* -------------------------------------------------------------------------
+   LAYOUT
+   ------------------------------------------------------------------------- */
+
+.a-report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.a-report.is-refreshing {
+  opacity: .55;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+/* Six figures as a 3x2 block rather than an auto-fitting row.
+   auto-fit put five across and left the sixth stranded on a line of its
+   own, which reads as "and one other thing" instead of as one set of six
+   — and the columns it produced were narrow enough to break "PKR
+   2,719,340" over two lines. Three columns give every figure room. */
+.a-report__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+
+/* Two splits side by side: they are read against each other — the stage a
+   queue is sitting in, and how those orders were paid for. */
+.a-report__pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--sp-4);
+}
+
+.a-report__card .a-card__aside {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.a-report__empty {
+  margin: 0;
+  padding: var(--sp-5) 0;
+  text-align: center;
+  font-size: var(--a-fs-body);
+  color: var(--c-muted);
+}
+
+/* A wide table scrolls inside its own card. The page itself never scrolls
+   sideways. */
+.a-report__scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* -------------------------------------------------------------------------
+   THE RANKED BAR LIST
+
+   A four-part grid: label, value, bar, share — so the numbers line up in
+   columns down the list rather than sitting wherever the label ends. The
+   meta line runs under the label on its own row.
+   ------------------------------------------------------------------------- */
+
+.a-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.a-bars__row {
+  display: grid;
+  grid-template-columns: minmax(6rem, 1fr) auto;
+  grid-template-areas:
+    "label value"
+    "track share"
+    "meta  meta";
+  align-items: center;
+  gap: 4px var(--sp-3);
+}
+
+.a-bars__label {
+  grid-area: label;
+  font-size: var(--a-fs-ui);
+  font-weight: 500;
+  color: var(--c-ink);
+}
+
+.a-bars__value {
+  grid-area: value;
+  font-size: var(--a-fs-ui);
+  font-weight: 500;
+  color: var(--c-ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.a-bars__track {
+  grid-area: track;
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--a-neutral-tint);
+  overflow: hidden;
+}
+
+.a-bars__fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--c-ink);
+  transition: width var(--dur-mid) var(--ease-out);
+}
+
+.a-bars__share {
+  grid-area: share;
+  font-size: var(--a-fs-body);
+  color: var(--c-body);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 3.2rem;
+  text-align: right;
+}
+
+.a-bars__meta {
+  grid-area: meta;
+  font-size: var(--a-fs-body);
+  color: var(--c-muted);
+}
+
+/* A row that carries no money — a cancelled stage — is dimmed rather than
+   coloured, and its meta line says in words that it is not revenue. */
+.a-bars__row--quiet .a-bars__label,
+.a-bars__row--quiet .a-bars__value { color: var(--c-body); }
+.a-bars__row--quiet .a-bars__fill { background: var(--a-neutral); }
+
+/* -------------------------------------------------------------------------
+   CATALOGUE COVERAGE
+
+   How much of the shop sold anything at all — the figure a best-sellers
+   list is structurally incapable of showing.
+   ------------------------------------------------------------------------- */
+
+.a-coverage {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: var(--bw) solid var(--a-line);
+}
+
+.a-coverage__line {
+  margin: 0 0 8px;
+  font-size: var(--a-fs-ui);
+  color: var(--c-body);
+}
+
+.a-coverage__line strong {
+  font-weight: 700;
+  color: var(--c-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.a-coverage__track { height: 8px; border-radius: 4px; }
+
+.a-coverage__note {
+  margin: 8px 0 0;
+  font-size: var(--a-fs-body);
+  line-height: 1.55;
+  color: var(--c-muted);
+}
+
+/* -------------------------------------------------------------------------
+   THE CUSTOMER FIGURES
+
+   Four numbers that are not tiles: they belong to this card and are read
+   against each other, so they sit inside it rather than joining the
+   headline row above, where they would compete with the figures that
+   scope the whole page.
+   ------------------------------------------------------------------------- */
+
+.a-report__figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  padding-bottom: var(--sp-4);
+  border-bottom: var(--bw) solid var(--a-line);
+}
+
+.a-figure__label {
+  margin: 0;
+  font-size: var(--a-fs-body);
+  color: var(--c-muted);
+}
+
+.a-figure__value {
+  margin: 2px 0 0;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--c-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.a-figure__note {
+  margin: 4px 0 0;
+  font-size: var(--a-fs-body);
+  line-height: 1.5;
+  color: var(--c-body);
+}
+
+/* -------------------------------------------------------------------------
+   THE TOP-PRODUCTS TABLE
+   ------------------------------------------------------------------------- */
+
+.a-table--top { min-width: 40rem; }
+
+.a-cell--rank {
+  width: 1%;
+  color: var(--c-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.a-cell--product {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 16rem;
+}
+
+.a-cell--product .a-thumb {
+  flex: none;
+  border-radius: 4px;
+  object-fit: cover;
+  background: var(--a-neutral-tint);
+}
+
+/* -------------------------------------------------------------------------
+   RESPONSIVE
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 1099px) {
+  .a-report__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 749px) {
+  .a-period { gap: var(--sp-2); }
+
+  /* The custom range takes its own line rather than being squeezed beside
+     five preset buttons. */
+  .a-period__custom { width: 100%; }
+
+  .a-report__scope { gap: 4px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .a-bars__fill,
+  .a-report.is-refreshing { transition: none; }
+}

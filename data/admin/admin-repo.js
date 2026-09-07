@@ -1130,9 +1130,17 @@ window.ZB = window.ZB || {};
      never disagree. Cancelled orders are never revenue.
      ----------------------------------------------------------------------- */
 
-  /** Orders inside the last `days` days, newest first. */
+  /**
+   * Orders inside the last `days` days, newest first.
+   *
+   * Through currentOrders(), never the raw mock. Reading the mock directly
+   * would leave the dashboard describing orders as they were generated
+   * rather than as they now stand: cancel an order on the orders screen
+   * and the customer's spend would drop while the dashboard's revenue did
+   * not, which is two screens disagreeing about the same afternoon.
+   */
   function ordersWithin(days) {
-    return ZB.adminMock.orders().filter(function (o) { return o.daysAgo < days; });
+    return currentOrders().filter(function (o) { return o.daysAgo < days; });
   }
 
   function revenueOf(list) {
@@ -1160,7 +1168,7 @@ window.ZB = window.ZB || {};
     summary: function (days) {
       days = days || 30;
 
-      var all = ZB.adminMock.orders();
+      var all = currentOrders();
       var current = ordersWithin(days);
       var previous = all.filter(function (o) {
         return o.daysAgo >= days && o.daysAgo < days * 2;
@@ -1268,7 +1276,7 @@ window.ZB = window.ZB || {};
      */
     activity: function (limit) {
       var out = [];
-      var recent = ZB.adminMock.orders().slice(0, 12);
+      var recent = currentOrders().slice(0, 12);
 
       recent.forEach(function (order) {
         if (order.status === 'shipped') {
@@ -1303,7 +1311,7 @@ window.ZB = window.ZB || {};
         return !p.inStock;
       }).length;
 
-      var waiting = ZB.adminMock.orders().filter(function (o) {
+      var waiting = currentOrders().filter(function (o) {
         return o.status === 'pending' || o.status === 'processing';
       }).length;
 
@@ -2490,6 +2498,477 @@ window.ZB = window.ZB || {};
     hasUnsavedEdits: function () {
       return cpAdded.length > 0 || Object.keys(cpEdited).length > 0 ||
              Object.keys(cpRemoved).length > 0;
+    }
+  };
+
+  /* -----------------------------------------------------------------------
+     Reports
+
+     WHAT THIS IS FOR THAT THE DASHBOARD IS NOT
+     The dashboard answers "how are we doing right now" — a glance, a fixed
+     recent window, and a way out to the screen where something gets done.
+     A report answers "what happened over a period, and what does it break
+     down into". The difference is composition and comparison: shares,
+     splits, the same figure against the period before it, and the numbers
+     an owner would take to a meeting rather than act on in the next five
+     minutes. Nothing here is a second copy of a dashboard tile.
+
+     EVERY FIGURE IS COUNTED FROM THE ORDERS THE PANEL ALREADY SHOWS
+     Through currentOrders(), which is the order list with this session's
+     status changes applied. That matters more here than anywhere else: a
+     report is exactly where somebody would notice that cancelling an order
+     on one screen did not change the total on another.
+
+     THE HISTORY HAS AN EDGE AND THE REPORT SAYS SO
+     There are ninety days of orders and no more. A period that reaches
+     past that is clamped, and the clamp is reported rather than hidden —
+     a report showing "this year" against ninety days of data, without
+     saying so, is worse than one that refuses the question.
+     ----------------------------------------------------------------------- */
+
+  function historyDays() {
+    return (ZB.adminSeed && ZB.adminSeed.days) || 90;
+  }
+
+  function midnightToday() {
+    var now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }
+
+  /** Whole days between a date and today. Today is 0, yesterday is 1. */
+  function daysAgoOf(value) {
+    var day = new Date(value);
+    if (isNaN(day.getTime())) return NaN;
+    var flat = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+    return Math.round((midnightToday() - flat) / 86400000);
+  }
+
+  function dateFromDaysAgo(days) {
+    var day = midnightToday();
+    day.setDate(day.getDate() - days);
+    return day;
+  }
+
+  /* A window is held as two day offsets rather than two dates, because
+     every order carries `daysAgo` and nothing else has to be parsed to
+     compare against it. `oldest` is the larger number. */
+  function windowOf(oldest, newest) {
+    return { oldest: oldest, newest: newest, days: oldest - newest + 1 };
+  }
+
+  function ordersIn(range) {
+    return currentOrders().filter(function (order) {
+      return order.daysAgo <= range.oldest && order.daysAgo >= range.newest;
+    });
+  }
+
+  var REPORT_PRESETS = [
+    { id: '7',          label: 'Last 7 days' },
+    { id: '30',         label: 'Last 30 days' },
+    { id: '90',         label: 'Last 90 days' },
+    { id: 'this-month', label: 'This month' },
+    { id: 'last-month', label: 'Last month' }
+  ];
+
+  /**
+   * Turn whatever the page has into one window, plus the window before it.
+   *
+   * options: { preset } or { from, to } as YYYY-MM-DD.
+   *
+   * The comparison window is the same length immediately before. It is
+   * marked `complete` only when the whole of it is inside the history; an
+   * incomplete one is compared against nothing, because "sales are down
+   * 60%" against a period that is half missing is not a fact, it is an
+   * artefact of where the data stops.
+   */
+  function resolveRange(options) {
+    options = options || {};
+    var limit = historyDays() - 1;   /* the oldest daysAgo that has orders */
+
+    var oldest;
+    var newest;
+    var label;
+    var custom = false;
+
+    if (options.from || options.to) {
+      custom = true;
+      var fromDays = daysAgoOf(options.from);
+      var toDays = daysAgoOf(options.to);
+
+      /* Either end may be missing or unreadable; the other end still
+         describes a usable window, so one bad date does not throw the
+         whole report away. */
+      if (isNaN(fromDays)) fromDays = limit;
+      if (isNaN(toDays)) toDays = 0;
+
+      oldest = Math.max(fromDays, toDays);
+      newest = Math.min(fromDays, toDays);
+    } else if (options.preset === 'this-month') {
+      var now = midnightToday();
+      oldest = daysAgoOf(new Date(now.getFullYear(), now.getMonth(), 1));
+      newest = 0;
+      label = 'This month';
+    } else if (options.preset === 'last-month') {
+      var today = midnightToday();
+      var firstOfThis = new Date(today.getFullYear(), today.getMonth(), 1);
+      var firstOfLast = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      var lastOfLast = new Date(today.getFullYear(), today.getMonth(), 0);
+      oldest = daysAgoOf(firstOfLast);
+      newest = daysAgoOf(lastOfLast);
+      label = 'Last month';
+      /* Referenced so the intent of firstOfThis is not lost to a reader:
+         last month ends the day before this month starts. */
+      if (newest < 0) newest = daysAgoOf(firstOfThis) + 1;
+    } else {
+      var days = parseInt(options.preset, 10);
+      if (!days || days < 1) days = 30;
+      oldest = days - 1;
+      newest = 0;
+      label = 'Last ' + days + ' days';
+    }
+
+    /* Clamped at both ends: nothing before the history begins, and nothing
+       after today, because there are no orders in the future either. */
+    var wantedOldest = oldest;
+    var wantedNewest = newest;
+
+    if (newest < 0) newest = 0;
+    if (oldest > limit) oldest = limit;
+    if (oldest < newest) oldest = newest;
+
+    var range = windowOf(oldest, newest);
+
+    range.preset = custom ? '' : (options.preset || '30');
+    range.custom = custom;
+    range.fromDate = dateFromDaysAgo(oldest);
+    range.toDate = dateFromDaysAgo(newest);
+    range.label = label || 'Custom period';
+    range.clampedStart = wantedOldest > limit;
+    range.clampedEnd = wantedNewest < 0;
+    range.historyDays = historyDays();
+
+    var previousOldest = oldest + range.days;
+    range.previous = windowOf(previousOldest, oldest + 1);
+    range.previous.complete = previousOldest <= limit;
+
+    return range;
+  }
+
+  function revenueIn(list) {
+    return list.reduce(function (sum, order) {
+      return order.status === 'cancelled' ? sum : sum + order.total;
+    }, 0);
+  }
+
+  function unitsIn(list) {
+    return list.reduce(function (sum, order) {
+      return order.status === 'cancelled' ? sum : sum + order.itemCount;
+    }, 0);
+  }
+
+  /** The figures for one window, with nothing compared to anything. */
+  function figuresFor(range) {
+    var all = ordersIn(range);
+    var live = all.filter(function (order) { return order.status !== 'cancelled'; });
+    var cancelled = all.filter(function (order) { return order.status === 'cancelled'; });
+
+    var revenue = revenueIn(all);
+    var units = unitsIn(all);
+
+    var people = ZB.adminMock.customers().filter(function (person) {
+      return person.joinedDaysAgo <= range.oldest &&
+             person.joinedDaysAgo >= range.newest;
+    });
+
+    return {
+      orders: all.length,
+      paidOrders: live.length,
+      revenue: revenue,
+      units: units,
+      /* Averages over the orders that produced the revenue. Dividing by
+         every order, cancellations included, would report an average order
+         value no order ever had. */
+      average: live.length ? revenue / live.length : 0,
+      itemsPerOrder: live.length ? units / live.length : 0,
+      cancelled: cancelled.length,
+      cancelledValue: cancelled.reduce(function (sum, o) { return sum + o.total; }, 0),
+      cancelRate: all.length ? (cancelled.length / all.length) * 100 : 0,
+      refunded: all.filter(function (o) { return o.payment === 'refunded'; })
+                   .reduce(function (sum, o) { return sum + o.total; }, 0),
+      unpaid: all.filter(function (o) { return o.payment === 'unpaid'; })
+                 .reduce(function (sum, o) { return sum + o.total; }, 0),
+      newCustomers: people.length
+    };
+  }
+
+  /** Percentage change, or null when there is nothing honest to compare. */
+  function shift(now, before) {
+    if (before === null || before === undefined || !before) return null;
+    return ((now - before) / before) * 100;
+  }
+
+  function shareOf(part, whole) {
+    return whole ? (part / whole) * 100 : 0;
+  }
+
+  /** Sort by revenue, biggest first, and hand back the share of the total. */
+  function ranked(map, total, key) {
+    var rows = Object.keys(map).map(function (id) { return map[id]; });
+    rows.sort(function (a, b) { return b[key] - a[key]; });
+    rows.forEach(function (row) { row.share = shareOf(row[key], total); });
+    return rows;
+  }
+
+  Repo.reports = {
+
+    presets: REPORT_PRESETS,
+
+    /** Exposed so the page can render the period control without guessing. */
+    resolve: function (options) { return resolveRange(options); },
+
+    /** The dates an <input type="date"> needs for the custom controls. */
+    toDateInput: function (value) { return toDateInput(value); },
+
+    /**
+     * The headline figures, each against the same window before it.
+     * resolves: { range, now, before, change: { ... } }
+     */
+    overview: function (options) {
+      var range = resolveRange(options);
+      var now = figuresFor(range);
+      var before = range.previous.complete ? figuresFor(range.previous) : null;
+
+      var change = {};
+      ['revenue', 'orders', 'units', 'average', 'newCustomers'].forEach(function (key) {
+        change[key] = before ? shift(now[key], before[key]) : null;
+      });
+
+      return Repo.defer({
+        range: range,
+        now: now,
+        before: before,
+        change: change
+      });
+    },
+
+    /**
+     * Daily revenue across the window, oldest first.
+     *
+     * Every day appears, including the ones with no orders, so the line's
+     * shape is the real shape rather than a compressed one that hides the
+     * quiet days by leaving them out.
+     */
+    series: function (options) {
+      var range = resolveRange(options);
+      var buckets = [];
+      var byDay = {};
+
+      for (var d = range.oldest; d >= range.newest; d--) {
+        var bucket = {
+          date: dateFromDaysAgo(d),
+          daysAgo: d,
+          value: 0,
+          orders: 0
+        };
+        byDay[d] = bucket;
+        buckets.push(bucket);
+      }
+
+      ordersIn(range).forEach(function (order) {
+        var bucket = byDay[order.daysAgo];
+        if (!bucket) return;
+        bucket.orders += 1;
+        if (order.status !== 'cancelled') bucket.value += order.total;
+      });
+
+      return Repo.defer(buckets);
+    },
+
+    /**
+     * How the period splits.
+     *
+     * Three breakdowns, all shares of the same total, so the figures on
+     * one can be read against the figures on another.
+     */
+    breakdown: function (options) {
+      var range = resolveRange(options);
+      var all = ordersIn(range);
+      var total = revenueIn(all);
+
+      var statuses = {};
+      var payments = {};
+      var departments = {};
+
+      all.forEach(function (order) {
+        var live = order.status !== 'cancelled';
+
+        var status = statuses[order.status] || (statuses[order.status] = {
+          id: order.status, label: order.statusLabel, orders: 0, value: 0
+        });
+        status.orders += 1;
+        if (live) status.value += order.total;
+
+        var payment = payments[order.payment] || (payments[order.payment] = {
+          id: order.payment, label: order.paymentLabel, orders: 0, value: 0
+        });
+        payment.orders += 1;
+        if (live) payment.value += order.total;
+
+        if (!live) return;
+
+        order.items.forEach(function (line) {
+          var product = ZB.catalogue.byId(line.id);
+          if (!product) return;
+
+          var dept = departments[product.dept] || (departments[product.dept] = {
+            id: product.dept, label: product.deptLabel, units: 0, revenue: 0
+          });
+          dept.units += line.qty;
+          dept.revenue += line.price * line.qty;
+        });
+      });
+
+      /* Status is not ranked by value. It is a sequence — pending,
+         processing, shipped, delivered, cancelled — and reordering it by
+         size would turn a queue into a league table, which is not what
+         anybody reads a status split for. */
+      var statusOrder = STATUS_FLOW.concat(['cancelled']);
+      var statusRows = statusOrder
+        .filter(function (id) { return statuses[id]; })
+        .map(function (id) {
+          statuses[id].share = shareOf(statuses[id].orders, all.length);
+          return statuses[id];
+        });
+
+      return Repo.defer({
+        range: range,
+        totalOrders: all.length,
+        totalRevenue: total,
+        statuses: statusRows,
+        payments: ranked(payments, total, 'value'),
+        departments: ranked(departments, total, 'revenue')
+      });
+    },
+
+    /**
+     * Which products actually sold.
+     *
+     * The best sellers, and — the half a top-five list always leaves out —
+     * how much of the catalogue sold nothing at all. A shop with 560
+     * products and 190 that moved in a quarter has a problem no ranking of
+     * the top five will ever show it.
+     */
+    products: function (options, limit) {
+      var range = resolveRange(options);
+      var totals = {};
+      var total = 0;
+
+      ordersIn(range).forEach(function (order) {
+        if (order.status === 'cancelled') return;
+
+        order.items.forEach(function (line) {
+          var row = totals[line.id] || (totals[line.id] = {
+            id: line.id,
+            title: line.title,
+            image: line.image,
+            units: 0,
+            revenue: 0,
+            orders: 0,
+            seen: {}
+          });
+          row.units += line.qty;
+          row.revenue += line.price * line.qty;
+          /* Distinct orders, not lines. One order carrying the same
+             product on two lines is one order, and a column headed
+             "Orders" that counts lines is quietly reporting something
+             else under the right name. */
+          if (!row.seen[order.id]) {
+            row.seen[order.id] = true;
+            row.orders += 1;
+          }
+          total += line.price * line.qty;
+        });
+      });
+
+      var rows = ranked(totals, total, 'revenue');
+      /* The bookkeeping set is not part of the answer. */
+      rows.forEach(function (row) { delete row.seen; });
+
+      var catalogue = ZB.catalogue.all().length;
+
+      return Repo.defer({
+        range: range,
+        items: rows.slice(0, limit || 10),
+        sold: rows.length,
+        catalogue: catalogue,
+        unsold: Math.max(0, catalogue - rows.length),
+        soldShare: shareOf(rows.length, catalogue),
+        revenue: total
+      });
+    },
+
+    /**
+     * Who bought, and whether they had bought before.
+     *
+     * "Returning" means the customer had at least one order before this
+     * window opened — not that they ordered twice inside it. A shop that
+     * counted only repeat orders within the period would report a loyal
+     * customer who buys once a quarter as a brand-new one every time.
+     */
+    customers: function (options, limit) {
+      var range = resolveRange(options);
+      var inRange = ordersIn(range);
+
+      var earlier = {};
+      currentOrders().forEach(function (order) {
+        if (order.daysAgo > range.oldest) earlier[order.customerId] = true;
+      });
+
+      var buyers = {};
+      inRange.forEach(function (order) {
+        var row = buyers[order.customerId] || (buyers[order.customerId] = {
+          id: order.customerId,
+          name: order.customerName,
+          city: order.city,
+          orders: 0,
+          spent: 0,
+          returning: !!earlier[order.customerId]
+        });
+        row.orders += 1;
+        if (order.status !== 'cancelled') row.spent += order.total;
+      });
+
+      var rows = Object.keys(buyers).map(function (id) { return buyers[id]; });
+      var returning = rows.filter(function (row) { return row.returning; });
+      var revenue = rows.reduce(function (sum, row) { return sum + row.spent; }, 0);
+
+      rows.sort(function (a, b) { return b.spent - a.spent; });
+      rows.forEach(function (row) { row.share = shareOf(row.spent, revenue); });
+
+      var people = ZB.adminMock.customers();
+      var joined = people.filter(function (person) {
+        return person.joinedDaysAgo <= range.oldest &&
+               person.joinedDaysAgo >= range.newest;
+      });
+
+      return Repo.defer({
+        range: range,
+        buyers: rows.length,
+        returning: returning.length,
+        first: rows.length - returning.length,
+        returningShare: shareOf(returning.length, rows.length),
+        returningRevenue: returning.reduce(function (sum, row) {
+          return sum + row.spent;
+        }, 0),
+        revenue: revenue,
+        joined: joined.length,
+        registered: people.length,
+        /* How many of the people on the books actually bought in the
+           window. A customer list is a mailing list until this number
+           says otherwise. */
+        activeShare: shareOf(rows.length, people.length),
+        top: rows.slice(0, limit || 8)
+      });
     }
   };
 

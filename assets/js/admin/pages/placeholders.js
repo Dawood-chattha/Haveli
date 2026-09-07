@@ -76,18 +76,7 @@ window.ZB.adminPages = window.ZB.adminPages || {};
 
   /* Coupons is a built section now, and lives in pages/coupons.js. */
 
-  ZB.adminPages.reports = stub({
-    title: 'Reports',
-    sub: 'How the store is performing.',
-    phase: '11',
-    icon: 'chart',
-    blurb: 'Sales, orders and product performance over a period you choose.',
-    bullets: [
-      'Sales and orders reports',
-      'Product performance and customer statistics',
-      'Revenue overview with date filters'
-    ]
-  });
+  /* Reports is a built section now, and lives in pages/reports.js. */
 
   ZB.adminPages.settings = stub({
     title: 'Settings',
