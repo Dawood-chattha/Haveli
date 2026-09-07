@@ -33,13 +33,37 @@
   -webkit-backdrop-filter: blur(10px) saturate(1);
   backdrop-filter: blur(10px) saturate(1);
 
-  color: #fff;
+  /* THE INK DEPENDS ON WHAT IS BEHIND THE BAR
+
+     This was white everywhere, because the reference's header is white
+     everywhere — and that works there because every page of it opens on a
+     full-bleed image. This shop does not: the homepage has the hero, and
+     the other eleven routes open on white paper. So on a category page, a
+     product page, the cart, the wishlist and every static page, the whole
+     header — wordmark, menu, search, account, wishlist, cart — was white on
+     white and simply could not be seen. The site's only navigation was
+     invisible everywhere except the front door.
+
+     Ink is therefore the default, and white is what the homepage opts into,
+     rather than the other way round: a page added later that forgets to say
+     which it wants gets the one that is legible on paper.
+
+     Everything inside the bar takes its colour from here — the wordmark,
+     the icon strokes and the hamburger's three lines are all `inherit` or
+     `currentColor` now, so this single declaration governs the lot and the
+     two states cannot come apart. */
+  color: var(--c-ink);
 
   /* The bar spans the full width but is mostly empty. Let clicks through the
      empty stretches so the hero underneath stays reachable; the controls
      themselves opt back in. */
   pointer-events: none;
 }
+
+/* The homepage opens on the hero carousel, which is what the white ink and
+   the frosted glass above were measured against. The router keeps
+   `data-route` on <body> in step with the current route. */
+body[data-route="/"] .header__bar { color: #fff; }
 
 :root { --header-inset: 7px; }
 
@@ -79,7 +103,7 @@
   display: inline-flex;
   align-items: center;
   height: 46px;
-  color: #fff;
+  color: inherit;
   font-size: 1.125rem;
   font-weight: var(--fw-bold);
   letter-spacing: .22em;
@@ -106,7 +130,7 @@
   justify-content: center;
   width: 44px;
   height: 44px;
-  color: #fff;
+  color: inherit;
   border-radius: var(--r-sm);
   transition:
     opacity var(--dur-fast) var(--ease-out),
@@ -125,7 +149,12 @@
   stroke-linejoin: round;
 }
 
-/* Cart count. Hidden while the cart is empty. */
+/* Cart and wishlist counts. Hidden while the list is empty.
+
+   The badge is the bar's colours the other way round, so it reads against
+   the icon it sits on whichever way the bar is drawn. A fixed white badge
+   would have been invisible on the white pages for exactly the reason the
+   white ink was. */
 .header__count {
   position: absolute;
   top: 6px;
@@ -135,8 +164,8 @@
   padding-inline: 4px;
   display: grid;
   place-items: center;
-  background: #fff;
-  color: var(--c-ink);
+  background: var(--c-ink);
+  color: #fff;
   border-radius: var(--r-pill);
   font-size: 10px;
   font-weight: var(--fw-bold);
@@ -144,6 +173,8 @@
   transform: scale(0);
   transition: transform var(--dur) var(--ease-out-quad);
 }
+body[data-route="/"] .header__count { background: #fff; color: var(--c-ink); }
+
 .header__count.is-visible { transform: scale(1); }
 
 /* Fired by JS whenever the count changes. */
@@ -168,7 +199,7 @@
   gap: 4px;
   width: 44px;
   height: 44px;
-  color: #fff;
+  color: inherit;
   border-radius: var(--r-sm);
 }
 
@@ -201,4 +232,26 @@
   .header__search--mobile  { display: inline-flex; }
   .header__search--desktop { display: none; }
   .header__columns { padding-inline: 0; }
+}
+
+/* THE NARROWEST PHONES
+
+   Five controls and a wordmark: menu and search on the left, account,
+   wishlist and cart on the right. At 44px each with the standard gap that
+   is 339px of content, and a 320px screen does not have it — the row
+   overflowed its container and the cart, being last, was the part pushed
+   off the edge. The page does not scroll sideways, so it was not merely
+   awkward: it could not be reached at all.
+
+   The 16px between the columns is what gives, because it is the only part
+   of that sum that is spacing rather than a control. 4px is still a visible
+   separation and it buys back 24px, which is more than the shortfall.
+
+   Shrinking the icons instead would have been the easier edit and the wrong
+   one: they are 44px because that is what a fingertip covers, and a phone
+   this narrow is the last place to take that back. */
+@media (max-width: 400px) {
+  :root { --header-inset: 2px; }
+  .header__columns { gap: var(--sp-1); }
+  .header__column { gap: 2px; }
 }

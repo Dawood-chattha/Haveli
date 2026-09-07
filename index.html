@@ -87,6 +87,22 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="8" r="4"/></svg>
         </button>
 
+        <!-- Saving a product had nowhere to show. The heart on a card filled
+             in and nothing else on the page changed: there was no count, no
+             icon, and the only routes to /wishlist were inside the account
+             panel and down in the footer. So a saved item existed and was
+             invisible, which reads as the feature not working.
+
+             A link rather than a panel button, because unlike the cart there
+             is a whole page for this and no useful summary to put in a
+             drawer. The count is the same component the cart badge uses and
+             behaves the same way, so the two read as one idea. -->
+        <a class="header__action" href="/wishlist" aria-label="Wishlist">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5C7 17 3.5 14 3.5 10.2A4.2 4.2 0 0 1 12 7.7a4.2 4.2 0 0 1 8.5 2.5c0 3.8-3.5 6.8-8.5 10.3Z"/></svg>
+          <span class="header__count" id="wish-count" aria-hidden="true">0</span>
+          <span class="visually-hidden" id="wish-count-label">Items saved: 0</span>
+        </a>
+
         <button class="header__action" type="button"
                 data-panel-open="cart" aria-label="Cart">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12l1 12H5L6 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>

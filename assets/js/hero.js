@@ -164,7 +164,26 @@ window.ZB = window.ZB || {};
       if (this.timer) { window.clearInterval(this.timer); this.timer = null; }
     },
 
+    /*
+     * THESE VALUES ARE NO LONGER ONLY THE DEVELOPER'S
+     *
+     * This built its markup from ZB.heroSlides without escaping, which was
+     * defensible while that list was a data file nobody but the developer
+     * edited. It is not any more: the admin panel's banners screen writes
+     * headlines, body copy and alt text straight into this same array, so
+     * these strings are now typed by whoever runs the shop — and the day
+     * they are persisted by a backend, they will be typed by whoever has an
+     * account. Text that reaches innerHTML is escaped; there is no version
+     * of this rule that has exceptions for trusted authors.
+     *
+     * `href` is escaped for the same reason but that alone would not make an
+     * arbitrary URL safe, so the banners screen offers a list of the site's
+     * real destinations rather than a free text field. See the note on
+     * checkLink() in data/admin/admin-repo.js.
+     */
     render: function () {
+      var esc = ZB.ui.esc;
+
       var html = ZB.heroSlides.map(function (s, i) {
         // Only the first slide is eager: the rest are off-screen at load.
         var loading = i === 0 ? 'eager' : 'lazy';
@@ -173,14 +192,16 @@ window.ZB = window.ZB || {};
           '<div class="hero__slide" role="group" aria-roledescription="slide" ' +
                'aria-label="' + (i + 1) + ' of ' + ZB.heroSlides.length + '">' +
             '<div class="hero__media">' +
-              '<img src="' + s.image + '" alt="' + s.alt + '" loading="' + loading + '" decoding="async">' +
+              '<img src="' + esc(s.image) + '" alt="' + esc(s.alt) + '"' +
+                  ' loading="' + loading + '" decoding="async">' +
             '</div>' +
             '<div class="hero__content">' +
-              '<div class="hero__eyebrow" style="--i:0">' + s.eyebrow + '</div>' +
-              '<h2 class="hero__headline" style="--i:1">' + s.headline + '</h2>' +
-              '<p class="hero__body" style="--i:2">' + s.body + '</p>' +
-              '<a class="btn btn--on-image hero__cta" style="--i:3" href="' + s.href + '">' + s.cta + '</a>' +
-              '<div class="hero__proof" style="--i:4">' + s.proof + '</div>' +
+              '<div class="hero__eyebrow" style="--i:0">' + esc(s.eyebrow) + '</div>' +
+              '<h2 class="hero__headline" style="--i:1">' + esc(s.headline) + '</h2>' +
+              '<p class="hero__body" style="--i:2">' + esc(s.body) + '</p>' +
+              '<a class="btn btn--on-image hero__cta" style="--i:3"' +
+                 ' href="' + esc(s.href) + '">' + esc(s.cta) + '</a>' +
+              '<div class="hero__proof" style="--i:4">' + esc(s.proof) + '</div>' +
             '</div>' +
           '</div>';
       }).join('');

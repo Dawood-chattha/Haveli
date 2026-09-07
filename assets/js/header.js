@@ -382,6 +382,41 @@ window.ZB = window.ZB || {};
   };
 
   /* =======================================================================
+     WISHLIST BADGE
+
+     The same badge, and deliberately the same behaviour: saving a product
+     should feel like adding one to the cart, because to the reader it is
+     the same kind of act — something was kept, and the header says so.
+
+     Without it, tapping a heart filled the heart in and changed nothing
+     else on the page. The item was saved and invisible.
+
+     One difference, and it is the reason this counts rows rather than
+     quantities: a wishlist has no quantity. Three saved products is three,
+     however many of each you would eventually buy.
+     ======================================================================= */
+
+  ZB.wishCount = 0;
+
+  ZB.setWishCount = function (n) {
+    var badge = document.getElementById('wish-count');
+    var live = document.getElementById('wish-count-label');
+    ZB.wishCount = Math.max(0, n | 0);
+
+    if (badge) {
+      badge.textContent = ZB.wishCount;
+      badge.classList.toggle('is-visible', ZB.wishCount > 0);
+
+      badge.classList.remove('is-bumped');
+      void badge.offsetWidth;
+      if (ZB.wishCount > 0) badge.classList.add('is-bumped');
+    }
+    if (live) {
+      live.textContent = 'Items saved: ' + ZB.wishCount;
+    }
+  };
+
+  /* =======================================================================
      SEARCH MODAL — presentation only for now.
      ======================================================================= */
 
@@ -602,12 +637,18 @@ window.ZB = window.ZB || {};
     initSearch();
     initCartPanel();
 
-    // The badge follows the store, so anything that changes the cart —
-    // a product page, the cart page, another tab's restore — updates it.
+    // Both badges follow the store, so anything that changes either list —
+    // a product page, the cart page, a heart on a card, another tab's
+    // restore — updates them. One subscription, because they are answering
+    // the same event and two could fall out of step.
     if (ZB.store) {
-      ZB.store.subscribe(function () { ZB.setCartCount(ZB.store.cartCount()); });
+      ZB.store.subscribe(function (state) {
+        ZB.setCartCount(ZB.store.cartCount());
+        ZB.setWishCount(state.wishlist.length);
+      });
     } else {
       ZB.setCartCount(0);
+      ZB.setWishCount(0);
     }
   }
 
