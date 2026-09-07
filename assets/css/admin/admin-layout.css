@@ -244,9 +244,13 @@
 
 /* -------------------------------------------------------------------------
    9. PLACEHOLDER
-   Shown where a section is still to be built. It is styled as a finished
-   thing rather than a broken one, so an unbuilt route is obviously unbuilt
-   and not obviously failing.
+   This drew the pages that stood in for sections still to be built. Every
+   section has its own module now, and the one page still built on it is
+   the not-found page: an address that matches nothing should look like a
+   finished answer rather than a failure, which is what this shape gives it.
+
+   The mark, phase label and bullet list that went with an unbuilt section
+   went out with them.
    ------------------------------------------------------------------------- */
 
 .a-placeholder {
@@ -263,65 +267,12 @@
   text-align: center;
 }
 
-.a-placeholder__mark {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--a-neutral-tint);
-  color: var(--c-muted);
-}
-
-.a-placeholder__phase {
-  margin: 0;
-  font-size: var(--fs-3xs);
-  font-weight: var(--fw-bold);
-  letter-spacing: var(--ls-wider);
-  text-transform: uppercase;
-  color: var(--c-faint);
-}
-
-.a-placeholder__title {
-  margin: 0;
-  font-size: var(--fs-lg);
-  font-weight: var(--fw-medium);
-  color: var(--c-ink);
-}
-
 .a-placeholder__blurb {
   margin: 0;
   max-width: 30rem;
   font-size: var(--a-fs-body);
   line-height: var(--lh-relaxed);
   color: var(--c-muted);
-}
-
-.a-placeholder__list {
-  margin: var(--sp-2) 0 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 6px;
-  text-align: left;
-}
-
-.a-placeholder__list li {
-  position: relative;
-  padding-left: var(--sp-5);
-  font-size: var(--a-fs-body);
-  color: var(--c-body);
-}
-
-.a-placeholder__list li::before {
-  content: "";
-  position: absolute;
-  left: 6px;
-  top: 8px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--c-faint);
 }
 
 .a-placeholder .btn { margin-top: var(--sp-2); }

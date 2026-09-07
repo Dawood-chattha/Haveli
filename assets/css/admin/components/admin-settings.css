@@ -1,0 +1,299 @@
+/* =========================================================================
+   admin-settings.css — store, profile, notifications, appearance
+   -------------------------------------------------------------------------
+   The cards, fields, switches, buttons and notice all come from
+   admin-layout.css, admin-forms.css and admin-coupons.css. What is here is
+   the four things this screen has that nothing else does: the mark that
+   says whether a section can do anything, the read-only row that explains
+   why a value cannot be changed, the explained radio choice, and the two
+   density steps.
+
+   WHY THE EFFECT MARK IS TEXT AND NOT A COLOURED DOT
+   "In force", "Partly in force" and "Recorded only" are the most important
+   sentence on the page — they are the difference between a switch that
+   works and one that does not. A dot would need a legend, and a legend is
+   read once and forgotten. The words carry it; the colour only agrees.
+   ========================================================================= */
+
+.a-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.a-set__card { overflow: hidden; }
+
+.a-set__icon {
+  display: inline-flex;
+  margin-right: 8px;
+  vertical-align: -3px;
+  color: var(--c-muted);
+}
+
+.a-set__icon .a-icon { width: 18px; height: 18px; }
+
+.a-set__blurb {
+  margin: 0 0 var(--sp-4);
+  font-size: var(--a-fs-ui);
+  line-height: var(--lh-relaxed);
+  color: var(--c-body);
+}
+
+.a-set__blurb strong { font-weight: 500; color: var(--c-ink); }
+
+.a-set__rule {
+  height: 0;
+  margin: var(--sp-5) 0;
+  border: 0;
+  border-top: var(--bw) solid var(--a-line);
+}
+
+/* -------------------------------------------------------------------------
+   THE EFFECT MARK
+   ------------------------------------------------------------------------- */
+
+.a-effect {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--a-r-pill);
+  font-size: var(--fs-3xs);
+  font-weight: 500;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+
+.a-effect--live     { color: var(--a-success); background: var(--a-success-tint); }
+.a-effect--part     { color: var(--a-info);    background: var(--a-info-tint); }
+.a-effect--recorded { color: var(--a-neutral); background: var(--a-neutral-tint); }
+
+/* -------------------------------------------------------------------------
+   THE READ-ONLY ROW
+
+   A value that is shown and cannot be changed. Deliberately not a disabled
+   input: a greyed-out control invites the reader to work out how to enable
+   it, and there is no way — the answer is a sentence, so this is a sentence.
+   ------------------------------------------------------------------------- */
+
+.a-readonly {
+  margin-bottom: var(--sp-5);
+  padding: var(--sp-3) var(--sp-4);
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--a-r-control);
+  background: var(--a-surface-sunken);
+}
+
+.a-readonly:last-child { margin-bottom: 0; }
+
+.a-readonly__label {
+  margin: 0;
+  font-size: var(--a-fs-body);
+  color: var(--c-muted);
+}
+
+.a-readonly__value {
+  margin: 2px 0 0;
+  font-size: var(--a-fs-ui);
+  font-weight: 500;
+  color: var(--c-ink);
+}
+
+.a-readonly__note {
+  margin: 6px 0 0;
+  max-width: 62ch;
+  font-size: var(--a-fs-body);
+  line-height: 1.6;
+  color: var(--c-body);
+}
+
+/* -------------------------------------------------------------------------
+   THE EXPLAINED CHOICE
+
+   Real radios with the input hidden from sight but not from the browser:
+   arrow keys, grouping and the accessibility tree all still work, and only
+   the drawing is replaced.
+   ------------------------------------------------------------------------- */
+
+.a-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: var(--sp-3);
+}
+
+.a-choice {
+  display: block;
+  position: relative;
+  cursor: pointer;
+}
+
+.a-choice__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.a-choice__body {
+  display: block;
+  padding: var(--sp-3) var(--sp-4);
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--a-r-control);
+  background: var(--a-surface);
+  transition: border-color var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.a-choice__body:hover { border-color: var(--c-ink); }
+
+.a-choice__label {
+  display: block;
+  font-size: var(--a-fs-ui);
+  font-weight: 500;
+  color: var(--c-ink);
+}
+
+.a-choice__note {
+  display: block;
+  margin-top: 3px;
+  font-size: var(--a-fs-body);
+  line-height: 1.5;
+  color: var(--c-muted);
+}
+
+/* The chosen one is bordered and ringed, not tinted: a tint on one card in
+   a row of white cards reads as "highlighted", which is not the same as
+   "this is the one in use". */
+.a-choice__input:checked + .a-choice__body {
+  border-color: var(--c-ink);
+  box-shadow: inset 0 0 0 1px var(--c-ink);
+}
+
+.a-choice__input:focus-visible + .a-choice__body {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 2px;
+}
+
+/* -------------------------------------------------------------------------
+   SWITCH LIST
+   ------------------------------------------------------------------------- */
+
+.a-set__switches {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.a-set__switches .a-field { margin-bottom: 0; }
+
+/* -------------------------------------------------------------------------
+   THE SAVE ROW
+
+   Sunk into the foot of its own card rather than floating over the page.
+   A single sticky bar would have to say which of four sections it is about,
+   and the honest answer would be "whichever you last touched" — which is a
+   sentence nobody should have to read to know what a Save button saves.
+   ------------------------------------------------------------------------- */
+
+.a-set__foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-top: var(--bw) solid var(--a-line);
+  background: var(--a-surface-sunken);
+}
+
+.a-set__state {
+  margin: 0;
+  font-size: var(--a-fs-body);
+  color: var(--c-muted);
+}
+
+.a-set__state.is-dirty { color: var(--a-warning); }
+
+.a-set__actions {
+  display: flex;
+  gap: var(--sp-2);
+  margin-left: auto;
+}
+
+/* -------------------------------------------------------------------------
+   THE QUIET NOTICE
+
+   The page-level explanation of the three marks. It is guidance rather than
+   a warning, so it borrows the notice's shape and drops its colour — a
+   warning that is always on screen stops being read as one.
+   ------------------------------------------------------------------------- */
+
+.a-notice--quiet {
+  border-color: var(--a-line);
+  background: var(--a-surface);
+  color: var(--c-body);
+}
+
+.a-notice--quiet .a-icon { color: var(--c-muted); }
+.a-notice--quiet strong { color: var(--c-ink); }
+
+/* -------------------------------------------------------------------------
+   DENSITY
+
+   Compact retunes the spacing tokens inside the panel rather than
+   restyling components one by one. Every admin surface is already built on
+   these, so one block moves the whole panel and nothing can be left behind
+   at the old spacing.
+
+   The scale is squeezed, not halved: the aim is more rows on a screen, and
+   a step small enough that a table stops being readable would be a worse
+   answer to the same question. Touch targets are untouched — --sp-2 and
+   below are what buttons and controls are sized from, and shrinking those
+   would make the panel harder to use on the tablets it is squeezing for.
+   ------------------------------------------------------------------------- */
+
+.admin[data-density="compact"] {
+  --sp-3: .625rem;   /* 12 -> 10 */
+  --sp-4: .8125rem;  /* 16 -> 13 */
+  --sp-5: 1rem;      /* 20 -> 16 */
+  --sp-6: 1.125rem;  /* 24 -> 18 */
+  --sp-8: 1.5rem;    /* 32 -> 24 */
+  --sp-10: 1.75rem;  /* 40 -> 28 */
+
+  --a-gutter: clamp(12px, .75rem + .6vw, 20px);
+}
+
+/* -------------------------------------------------------------------------
+   MOTION
+
+   "Reduce motion" is the panel's own switch and sits alongside the
+   prefers-reduced-motion rules the stylesheets already carry — it does not
+   replace them. Somebody who has asked their operating system for less
+   motion still gets less motion whatever is chosen here; this can only take
+   more away, never hand it back.
+   ------------------------------------------------------------------------- */
+
+.admin[data-motion="reduced"] *,
+.admin[data-motion="reduced"] *::before,
+.admin[data-motion="reduced"] *::after {
+  animation-duration: .01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: .01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* -------------------------------------------------------------------------
+   RESPONSIVE
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 559px) {
+  .a-set__actions { width: 100%; margin-left: 0; }
+  .a-set__actions .a-btn { flex: 1 1 auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .a-choice__body { transition: none; }
+}

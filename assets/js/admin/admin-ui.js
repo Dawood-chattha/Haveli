@@ -207,31 +207,14 @@ window.ZB = window.ZB || {};
                    'running', 'scheduled', 'used-up', 'expired', 'off'];
       var safe = known.indexOf(kind) > -1 ? kind : 'neutral';
       return '<span class="a-pill a-pill--' + safe + '">' + AdminUI.esc(label) + '</span>';
-    },
-
-    /**
-     * The page shown where a section is still to be built.
-     *
-     * These exist so every route in the menu leads somewhere real from the
-     * first phase onward: a menu item that renders nothing is impossible to
-     * tell apart from one that is broken.
-     *
-     * o: { title, phase, blurb, bullets[], icon }
-     */
-    placeholder: function (o) {
-      var bullets = (o.bullets || []).map(function (item) {
-        return '<li>' + AdminUI.esc(item) + '</li>';
-      }).join('');
-
-      return '' +
-        '<div class="a-placeholder">' +
-          '<div class="a-placeholder__mark">' + AdminUI.icon(o.icon || 'clock') + '</div>' +
-          '<p class="a-placeholder__phase">Phase ' + AdminUI.esc(o.phase) + '</p>' +
-          '<h2 class="a-placeholder__title">' + AdminUI.esc(o.title) + '</h2>' +
-          '<p class="a-placeholder__blurb">' + AdminUI.esc(o.blurb) + '</p>' +
-          (bullets ? '<ul class="a-placeholder__list">' + bullets + '</ul>' : '') +
-        '</div>';
     }
+
+    /* There was a `placeholder` helper here, for the pages that stood in
+       for sections still to be built. Every section has its own module now,
+       so it drew nothing and has been removed rather than left as a
+       function the next person has to check the callers of. The shape it
+       produced survives in pages/not-found.js, which is the one page that
+       still needs it. */
   };
 
   ZB.adminUI = AdminUI;

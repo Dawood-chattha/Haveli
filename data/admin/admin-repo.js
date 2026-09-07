@@ -32,10 +32,10 @@
    delay, so loading states are real and get tested — confines that swap to
    this file.
 
-   WHAT IS NOT HERE YET
-   The settings record arrives in its own phase, as a sibling of `products`
-   and in the same shape. Nothing is stubbed out in advance, so a method
-   that exists here always works.
+   EVERY SECTION THE PANEL HAS IS HERE
+   Products, inventory, orders, customers, metrics, categories, banners,
+   coupons, reports and settings. Nothing is stubbed out in advance, so a
+   method that exists here always works.
 
    SECURITY
    Nothing in this file is a credential and nothing may become one. Whatever
@@ -409,22 +409,31 @@ window.ZB = window.ZB || {};
   /**
    * Below this, a product is "low" rather than merely in stock.
    *
-   * Kept here rather than in the pages because three screens draw that
-   * distinction — the product list's stock pill, this section's filter, and
-   * the dashboard's alert — and a threshold that means ten in one place and
-   * five in another is a bug nobody notices until a product sells out under
-   * a badge that said it was fine.
+   * Kept here rather than in the pages because two screens draw that
+   * distinction — the product list's stock pill and this section's filter
+   * and tile — and a threshold that means ten in one place and five in
+   * another is a bug nobody notices until a product sells out under a badge
+   * that said it was fine.
+   *
+   * The dashboard is not one of them. Its alert counts products at zero,
+   * which is a different question with a different answer.
+   *
+   * The number itself is a setting rather than a constant, so the owner can
+   * move it — but it is still decided in exactly one place. lowStockAt()
+   * lives with the settings section further down and reads the record;
+   * everything that needs the threshold comes through here.
    */
-  var LOW_STOCK_AT = 10;
-
   function stockLevelOf(row) {
     if (!row.stock) return 'out';
-    return row.stock < LOW_STOCK_AT ? 'low' : 'in';
+    return row.stock < lowStockAt() ? 'low' : 'in';
   }
 
   Repo.inventory = {
 
-    lowStockAt: LOW_STOCK_AT,
+    /* A function now, not a number: it can change while the panel is open.
+       A value read once at load would leave a screen filtering on the old
+       threshold until it was navigated away from and back. */
+    lowStockAt: lowStockAt,
 
     /** 'out' | 'low' | 'in' for one row, so pages never re-derive it. */
     levelOf: stockLevelOf,
@@ -1211,7 +1220,13 @@ window.ZB = window.ZB || {};
           return o.status === 'pending' || o.status === 'processing';
         }).length,
 
-        lowStock: products.filter(function (p) { return !p.inStock; }).length
+        /* Out of stock, not running low. The dashboard tile that reads this
+           says "Products out of stock" and means it; the running-low
+           threshold is a different question and belongs to the inventory
+           screen, which asks it. A field called lowStock holding a count of
+           products at zero is the sort of name that eventually gets used
+           for what it says rather than what it is. */
+        outOfStock: products.filter(function (p) { return !p.inStock; }).length
       });
     },
 
@@ -2969,6 +2984,270 @@ window.ZB = window.ZB || {};
         activeShare: shareOf(rows.length, people.length),
         top: rows.slice(0, limit || 8)
       });
+    }
+  };
+
+  /* -----------------------------------------------------------------------
+     Settings
+
+     WHAT A SETTING IS FOR, AND WHY THAT IS NOT ONE RECORD
+     "Settings" is the screen most likely to become a drawer everything gets
+     dropped into, so this section keeps four groups apart and never merges
+     them: the shop's own details, the person signed in, what is worth being
+     told about, and how the panel is drawn. They are saved separately
+     because they fail separately — mistyping the support address and
+     preferring a denser table are not one change, and a screen that saves
+     them together makes the second ship with the first.
+
+     SOME OF THESE ARE ALREADY IN FORCE AND SOME ARE ONLY RECORDED
+     Only part of a settings screen can do anything in a build with no
+     server, and which part is not obvious from looking at it:
+
+       store.lowStockAt   in force  — two screens read it below
+       profile.name       in force  — the sidebar redraws from it
+       appearance.*       in force  — but owned by the shell, not by this
+                                      module; see the next note
+       everything else    recorded  — kept, shown, and waiting for a backend
+
+     That difference is not hidden. The page marks each group, because a
+     switch that looks like it turns email on and does not is worse than no
+     switch at all.
+
+     WHY APPEARANCE IS NOT A SECTION OF THIS RECORD
+     Store details, the profile and the notification choices describe the
+     business: they are the same for whoever signs in and they are what a
+     database will eventually hold. Appearance is a preference about one
+     browser on one desk, of exactly the kind the sidebar's collapse state
+     already is — so it lives in admin-shell.js beside it rather than being
+     smuggled through a data layer that is on its way to a server. The
+     option lists below stay here because they are vocabulary the page and
+     the shell must agree on; the values do not.
+
+     WHERE THE PROFILE COMES FROM
+     Not from data/admin/admin-settings.js. The signed-in identity already
+     lives in ZB.adminUser and the sidebar draws it from there; a second
+     copy would give the panel two answers to "who is signed in" and the
+     first edit would make them disagree. This section reads and writes that
+     object, in the same way the banners section manages the storefront's
+     own ZB.heroSlides.
+
+     WHAT THIS SECTION MUST NEVER HOLD
+     No password, no token, no API key, and no role that means anything.
+     `role` is returned so the page can show it and is refused on write:
+     whatever a frontend writes into a field called "role" is a label on a
+     screen, never a permission. Permission is decided where the data lives,
+     by a service that checks who is asking on every read and write. If this
+     module ever appears to grant one, it is lying.
+     ----------------------------------------------------------------------- */
+
+  /* Changed values, by section. Same seam as every other section here: the
+     defaults are never mutated, so `reset` has something to go back to. */
+  var stEdited = { store: {}, notifications: {} };
+
+  /* The profile is written straight back to ZB.adminUser — see above — so
+     the only thing tracked here is whether it has been touched at all. */
+  var stProfileEdited = false;
+
+  function stDefaults() {
+    return (ZB.adminSettings) || {};
+  }
+
+  /** Defaults with this session's changes applied, for one section. */
+  function stSection(name) {
+    var base = stDefaults()[name] || {};
+    var out = {};
+    Object.keys(base).forEach(function (key) { out[key] = base[key]; });
+    Object.keys(stEdited[name] || {}).forEach(function (key) {
+      out[key] = stEdited[name][key];
+    });
+    return out;
+  }
+
+  /**
+   * How low is low.
+   *
+   * A function rather than the constant this used to be, so the threshold
+   * has exactly one home and the settings screen can move it. The product
+   * list's stock pill, the inventory filter and the dashboard's alert all
+   * arrive here, which is the point: a threshold that means ten in one
+   * place and five in another is a bug nobody notices until something sells
+   * out under a badge that said it was fine.
+   *
+   * A missing or nonsensical value falls back to ten rather than throwing.
+   * A settings file somebody mistyped should cost a wrong threshold, not a
+   * dead inventory screen.
+   */
+  function lowStockAt() {
+    var value = Number(stSection('store').lowStockAt);
+    return value > 0 ? value : 10;
+  }
+
+  /* The appearance choices, as the page has to offer them. Kept here rather
+     than in the page so that the value written into the record and the
+     option that produced it cannot drift apart. */
+  var DENSITIES = [
+    { id: 'comfortable', label: 'Comfortable',
+      note: 'The default spacing. Easier to scan, fewer rows on screen.' },
+    { id: 'compact', label: 'Compact',
+      note: 'Tighter rows and padding, for long lists on a large screen.' }
+  ];
+
+  var SIDEBAR_MODES = [
+    { id: 'expanded', label: 'Expanded', note: 'Icons and labels.' },
+    { id: 'collapsed', label: 'Collapsed', note: 'Icons only, with the label as a tooltip.' }
+  ];
+
+  var MOTIONS = [
+    { id: 'system', label: 'Follow my system setting',
+      note: 'Animations run unless this device asks for reduced motion.' },
+    { id: 'reduced', label: 'Reduce motion',
+      note: 'Transitions and animations are switched off in the panel.' }
+  ];
+
+  /* The four groups, in the order the page draws them, with what each one
+     can actually do today. `effect` is what the page marks them with. */
+  var SETTING_SECTIONS = [
+    { id: 'store', label: 'Store', effect: 'part',
+      blurb: 'The shop’s own details, and the stock level that counts as low.' },
+    { id: 'profile', label: 'Profile', effect: 'part',
+      blurb: 'The account signed in to this panel.' },
+    { id: 'notifications', label: 'Notifications', effect: 'recorded',
+      blurb: 'What is worth being told about.' },
+    { id: 'appearance', label: 'Appearance', effect: 'live',
+      blurb: 'How this panel is drawn on this device. Kept on this device only.' }
+  ];
+
+  /**
+   * Notification events, as data.
+   *
+   * The page renders one switch per entry, so adding an event is a line
+   * here rather than a block of markup — and the label and the key it
+   * writes cannot come apart.
+   */
+  var NOTICE_EVENTS = [
+    { id: 'newOrder', label: 'A new order arrives',
+      help: 'The one most shops want. Quiet only if somebody is already watching the queue.' },
+    { id: 'orderCancelled', label: 'An order is cancelled',
+      help: 'Worth knowing because the stock goes back and the money does not arrive.' },
+    { id: 'lowStock', label: 'A product runs low',
+      help: 'Uses the stock level set under Store.' },
+    { id: 'newCustomer', label: 'Somebody creates an account',
+      help: 'Off by default — on a busy shop this is the one that becomes noise.' },
+    { id: 'weeklySummary', label: 'A weekly summary',
+      help: 'Monday morning: the week’s revenue, orders and anything that ran out.' }
+  ];
+
+  Repo.settings = {
+
+    sections: SETTING_SECTIONS,
+    densities: DENSITIES,
+    sidebarModes: SIDEBAR_MODES,
+    motions: MOTIONS,
+    events: NOTICE_EVENTS,
+
+    /** The fixed currency, and why it is fixed. Read only, deliberately. */
+    currency: function () {
+      var c = stDefaults().currency || {};
+      return {
+        code: c.code || 'PKR',
+        label: c.label || '',
+        symbol: c.symbol || ''
+      };
+    },
+
+    /** The whole record, as a copy. Nothing internal is ever handed out. */
+    get: function () {
+      var user = ZB.adminUser || {};
+
+      return Repo.defer({
+        store: stSection('store'),
+        profile: {
+          name: user.name || '',
+          email: user.email || '',
+          role: user.role || '',
+          initials: user.initials || ''
+        },
+        notifications: stSection('notifications')
+      });
+    },
+
+    /**
+     * Save one section. Resolves with that section as it now stands.
+     *
+     * Unknown keys are dropped rather than stored: a section is a fixed set
+     * of fields, and quietly accepting a misspelled one would save
+     * something the page then reads back as missing.
+     */
+    update: function (name, values) {
+      if (name === 'profile') return Repo.settings.updateProfile(values);
+
+      var base = stDefaults()[name];
+      if (!base) return Promise.reject({ message: 'There is no such settings group.' });
+
+      Object.keys(values || {}).forEach(function (key) {
+        if (Object.prototype.hasOwnProperty.call(base, key)) {
+          stEdited[name][key] = values[key];
+        }
+      });
+
+      return Repo.defer(stSection(name));
+    },
+
+    /**
+     * Save the profile, which means writing to ZB.adminUser.
+     *
+     * `role` is read from the incoming values and thrown away. It is shown
+     * on the screen so the owner knows what the account is, and it is not
+     * editable here, because a role a frontend can set is not a permission
+     * — it is a word on a page. See the note above this section.
+     */
+    updateProfile: function (values) {
+      var user = ZB.adminUser || (ZB.adminUser = {});
+      var name = String((values && values.name) || '').trim();
+      var email = String((values && values.email) || '').trim();
+
+      if (name) {
+        user.name = name;
+        /* Derived rather than typed. Two fields for one fact drift, and
+           the initials are the half nobody remembers to update. */
+        user.initials = name.split(/\s+/).slice(0, 2).map(function (part) {
+          return part.charAt(0).toUpperCase();
+        }).join('') || user.initials;
+      }
+      if (email) user.email = email;
+
+      stProfileEdited = true;
+
+      return Repo.defer({
+        name: user.name, email: user.email,
+        role: user.role, initials: user.initials
+      });
+    },
+
+    /** Put one section back to what the panel opened with. */
+    reset: function (name) {
+      if (name === 'profile') {
+        return Promise.reject({
+          message: 'The profile has no defaults to return to — it is the signed-in account.'
+        });
+      }
+      if (!stEdited[name]) {
+        return Promise.reject({ message: 'There is no such settings group.' });
+      }
+
+      stEdited[name] = {};
+      return Repo.defer(stSection(name));
+    },
+
+    /** Whether a single section differs from the defaults. */
+    isEdited: function (name) {
+      if (name === 'profile') return stProfileEdited;
+      return Object.keys(stEdited[name] || {}).length > 0;
+    },
+
+    hasUnsavedEdits: function () {
+      return stProfileEdited || ['store', 'notifications']
+        .some(function (name) { return Repo.settings.isEdited(name); });
     }
   };
 

@@ -27,6 +27,18 @@ window.ZB = window.ZB || {};
      left. Nothing sensitive is stored here, and nothing ever should be. */
   var COLLAPSE_KEY = 'zb.admin.sidebar.collapsed';
 
+  /* The other two chrome preferences, in one entry beside it: how tightly
+     the panel is spaced, and whether it animates. Same rule as above —
+     these describe this browser on this desk, not the person using it, and
+     nothing about the user, the shop or any credential may ever be added
+     here. Everything the panel knows that is not a device preference goes
+     through data/admin/admin-repo.js instead.
+
+     They live here rather than in that record because they are not shop
+     data: they are the same kind of thing as the collapse state, and they
+     are why appearance is the one part of Settings that survives a reload. */
+  var APPEARANCE_KEY = 'zb.admin.appearance';
+
   var DRAWER_QUERY = '(max-width: 989px)';
 
   var Shell = {
@@ -39,6 +51,10 @@ window.ZB = window.ZB || {};
     collapsed: false,
     drawerOpen: false,
     returnFocusTo: null,
+
+    /* Filled from the defaults in data/admin/admin-settings.js, then from
+       whatever this browser has stored. */
+    appearance: null,
 
     /* -------------------------------------------------------------------
        Boot
@@ -56,6 +72,11 @@ window.ZB = window.ZB || {};
 
       this.collapsed = this.readCollapsed();
       this.applyCollapse();
+
+      /* Before the first page paints, so the panel is never drawn at one
+         density and then re-drawn at another. */
+      this.appearance = this.readAppearance();
+      this.applyAppearance();
 
       this.bind();
       this.loadBadges();
@@ -363,6 +384,98 @@ window.ZB = window.ZB || {};
         toggle.setAttribute('aria-label', on ? 'Expand menu' : 'Collapse menu');
         toggle.setAttribute('aria-expanded', on ? 'false' : 'true');
       }
+    },
+
+    /** Set the collapse state outright. The settings screen uses this. */
+    setCollapsed: function (on) {
+      if (this.collapsed === !!on) return;
+      this.toggleCollapse();
+    },
+
+    /* -------------------------------------------------------------------
+       Appearance
+
+       Two preferences, both applied as attributes on the panel's root so
+       that the whole answer is in CSS: `data-density` retunes the spacing
+       tokens, `data-motion="reduced"` switches transitions off. No page
+       has to know either exists, and neither can leave a component behind.
+
+       `motion: 'system'` deliberately sets nothing. The panel's stylesheets
+       already honour prefers-reduced-motion, so "follow my system setting"
+       is the absence of an override rather than a second opinion about it —
+       and somebody who has asked their operating system for less motion
+       must not have it handed back by a store admin panel.
+       ------------------------------------------------------------------- */
+
+    readAppearance: function () {
+      var defaults = (ZB.adminSettings && ZB.adminSettings.appearance) || {};
+      var out = {
+        density: defaults.density || 'comfortable',
+        motion: defaults.motion || 'system'
+      };
+
+      /* Same defensive read as the collapse state: localStorage throws in
+         some privacy modes, and a stored value can be anything at all if
+         somebody has edited it by hand. A bad value means the default, not
+         a broken panel. */
+      try {
+        var stored = JSON.parse(localStorage.getItem(APPEARANCE_KEY) || '{}');
+        if (stored.density === 'compact' || stored.density === 'comfortable') {
+          out.density = stored.density;
+        }
+        if (stored.motion === 'reduced' || stored.motion === 'system') {
+          out.motion = stored.motion;
+        }
+      } catch (e) { /* the defaults stand */ }
+
+      return out;
+    },
+
+    applyAppearance: function () {
+      var a = this.appearance || { density: 'comfortable', motion: 'system' };
+      this.root.setAttribute('data-density', a.density);
+
+      if (a.motion === 'reduced') this.root.setAttribute('data-motion', 'reduced');
+      else this.root.removeAttribute('data-motion');
+    },
+
+    /** Change one or both, apply, and remember. Returns the new state. */
+    setAppearance: function (patch) {
+      this.appearance = this.appearance || this.readAppearance();
+
+      Object.keys(patch || {}).forEach(function (key) {
+        this.appearance[key] = patch[key];
+      }, this);
+
+      this.applyAppearance();
+
+      try {
+        localStorage.setItem(APPEARANCE_KEY, JSON.stringify(this.appearance));
+      } catch (e) { /* the preference simply will not survive a reload */ }
+
+      return this.appearance;
+    },
+
+    /**
+     * Redraw the sidebar's profile block from ZB.adminUser.
+     *
+     * Only that block, not the whole sidebar: rebuilding the menu would
+     * throw away the active item and, on a phone, the open drawer. The
+     * settings screen calls this after saving a name so the sidebar agrees
+     * with the form without a reload.
+     */
+    refreshUser: function () {
+      var host = this.sidebar && this.sidebar.querySelector('.a-sidebar__identity');
+      var avatar = this.sidebar && this.sidebar.querySelector('.a-sidebar__avatar');
+      var user = ZB.adminUser || {};
+      var ui = ZB.adminUI;
+      if (!host) return;
+
+      host.innerHTML =
+        '<span class="a-sidebar__name">' + ui.esc(user.name || '') + '</span>' +
+        '<span class="a-sidebar__role">' + ui.esc(user.role || '') + '</span>';
+
+      if (avatar) avatar.textContent = user.initials || '';
     },
 
     /* -------------------------------------------------------------------

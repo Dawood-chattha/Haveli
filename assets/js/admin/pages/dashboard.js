@@ -365,7 +365,7 @@ window.ZB.adminPages = window.ZB.adminPages || {};
       }) +
       alertTile({
         tone: 'danger', icon: 'archive', path: '/admin/inventory',
-        value: chart.full(summary.lowStock),
+        value: chart.full(summary.outOfStock),
         label: 'Products out of stock'
       });
   }
