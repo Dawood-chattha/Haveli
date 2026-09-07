@@ -19,8 +19,10 @@ ehthumbs_vista.db
 desktop.ini
 $RECYCLE.BIN/
 
-# --- OneDrive ---
-# The project folder lives inside OneDrive, which leaves sync state behind.
+# --- Sync artefacts ---
+# The project used to live inside OneDrive, which left these behind. It has
+# been moved out since, but the rules cost nothing and other sync clients
+# leave the same litter.
 *.tmp
 ~$*
 
@@ -39,3 +41,52 @@ $RECYCLE.BIN/
 # The local dev server can be started with its output redirected to a file.
 *.log
 dev/*.log
+
+# =============================================================================
+# NOTHING BELOW EXISTS IN THIS PROJECT YET
+# -----------------------------------------------------------------------------
+# The entries above cover what is actually here today. These cover what would
+# arrive the day a backend is connected, and they are written in advance on
+# purpose: the first commit after adding a real service is exactly when a
+# credential file gets swept up by a hurried `git add -A`, and a secret that
+# has been pushed once has to be treated as leaked even after it is deleted.
+#
+# Git only ignores files it is not already tracking, so adding these now costs
+# nothing and cannot change what is committed today.
+# =============================================================================
+
+# --- Secrets ---
+# Any key, token or service-account credential belongs on a server and never
+# in this repository. See the security note at the top of
+# data/admin/admin-repo.js.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+serviceAccount*.json
+*-service-account.json
+firebase-adminsdk*.json
+secrets.json
+credentials.json
+
+# --- Dependencies and build output ---
+# The site is deliberately dependency-free and has no build step. If either
+# ever changes, the installed tree and the generated output are not source.
+node_modules/
+.pnp/
+.pnp.*
+dist/
+build/
+.cache/
+.parcel-cache/
+.vite/
+
+# --- Hosting and tooling state ---
+.vercel/
+.netlify/
+.firebase/
+.wrangler/
+coverage/
