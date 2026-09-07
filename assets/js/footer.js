@@ -73,15 +73,23 @@ window.ZB = window.ZB || {};
             '<div class="footer__legal">' + legal + '</div>' +
             '<div class="footer__social" aria-label="Social channels">' + social + '</div>' +
 
-            /* The way into the management panel. It crosses into a separate
-               HTML document, so `data-full-load` tells the router to leave
-               it alone and let the browser navigate — see router.js.
+            /* THERE IS NO LINK TO THE ADMIN PANEL HERE, AND THAT IS DELIBERATE
+               There was an "Owner Login" link in this row. It was removed
+               because the shop's own pages should not advertise where the
+               management panel is: the address is reached by typing it, and
+               only the people who run the shop need to know it.
 
-               It is not a security boundary and is not meant to be one: the
-               panel is reachable by typing the address whether this link
-               exists or not. Real protection has to be enforced by a server,
-               never by whether a link is drawn. */
-            '<a class="footer__owner" href="/admin/login" data-full-load>Owner Login</a>' +
+               WHAT THAT IS AND IS NOT
+               It is one fewer place the address is published. It is NOT
+               protection, and nothing here should ever be mistaken for it —
+               an unlisted address is still an address, and anyone who finds
+               it reaches the same panel. What actually protects the panel is
+               a server that checks who is asking on every read and write.
+               See the note at the top of assets/js/admin/admin-auth.js.
+
+               Nothing else on the customer side references /admin. If a link
+               to it is ever wanted again, it belongs behind a signed-in
+               account, not in the footer of every page. */
           '</div>' +
 
         '</div>';

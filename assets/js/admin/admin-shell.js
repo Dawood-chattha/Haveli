@@ -78,6 +78,10 @@ window.ZB = window.ZB || {};
       this.appearance = this.readAppearance();
       this.applyAppearance();
 
+      /* Before the first render, so a closed drawer is never briefly
+         tabbable on a phone while the first page is being drawn. */
+      this.applyDrawerInert();
+
       this.bind();
       this.loadBadges();
     },
@@ -270,9 +274,30 @@ window.ZB = window.ZB || {};
 
       /* Leaving drawer widths must not strand an open drawer. */
       window.addEventListener('resize', ZB.util.debounce(function () {
-        if (!self.isDrawerMode() && self.drawerOpen) self.closeDrawer();
-        self.applyCollapse();
+        self.onWidthChange();
       }, 150));
+
+      /* AND THE BREAKPOINT ITSELF, NOT ONLY RESIZE
+         Everything above is really watching for one thing: whether the
+         sidebar is a drawer or a column. `resize` is an indirect way to ask
+         that — it fires constantly during a drag and not at all for some
+         changes that do cross the breakpoint, such as a page zoom, and the
+         debounce means the answer arrives late in either case.
+
+         Missing it is not cosmetic. A sidebar that was a closed drawer is
+         inert; if the panel becomes a desktop column without this being
+         re-checked, the whole menu stays unreachable by keyboard on a screen
+         that is plainly showing it.
+
+         So the media query is listened to directly, which fires exactly once
+         at the moment the answer changes, whatever caused it. The resize
+         handler stays because a width change within one mode still matters
+         to the collapse state. */
+      var drawerMQ = window.matchMedia(DRAWER_QUERY);
+      var onModeChange = function () { self.onWidthChange(); };
+
+      if (drawerMQ.addEventListener) drawerMQ.addEventListener('change', onModeChange);
+      else if (drawerMQ.addListener) drawerMQ.addListener(onModeChange);
 
       document.addEventListener('zb:navigated', function (e) {
         self.onNavigate(e.detail.path, e.detail.params);
@@ -386,6 +411,49 @@ window.ZB = window.ZB || {};
       }
     },
 
+    /**
+     * Everything that depends on how wide the panel is.
+     *
+     * One method rather than three call sites, because the two listeners
+     * that reach it — `resize` and the breakpoint's own media query — must
+     * not be able to do different amounts of the work.
+     */
+    onWidthChange: function () {
+      if (!this.isDrawerMode() && this.drawerOpen) this.closeDrawer();
+      this.applyDrawerInert();
+      this.applyCollapse();
+    },
+
+    /**
+     * A closed drawer must not be reachable.
+     *
+     * Below 990px the sidebar is moved off the left edge with a transform,
+     * which takes it out of sight and leaves it in the document: its links
+     * and buttons stayed in the tab order and in the accessibility tree, so
+     * a keyboard user had to tab through an entire invisible menu before
+     * reaching the page, and a screen reader announced a navigation nobody
+     * had opened.
+     *
+     * `inert` is what removes it, immediately and without touching how it
+     * is drawn — so the slide out still animates. Above 990px the sidebar
+     * is a real column of the page and must never carry it, which is why
+     * this asks about the width every time rather than only on close.
+     *
+     * Called on boot, on open, on close and on resize; those are all the
+     * ways either half of the condition can change.
+     */
+    applyDrawerInert: function () {
+      var closedDrawer = this.isDrawerMode() && !this.drawerOpen;
+
+      /* Older engines have no `inert`. They are left as they were rather
+         than given a half-measure such as aria-hidden, which would hide the
+         menu from a screen reader while leaving it tabbable — worse than
+         the problem, because the reader would then land on controls their
+         software has been told do not exist. */
+      if (closedDrawer) this.sidebar.setAttribute('inert', '');
+      else this.sidebar.removeAttribute('inert');
+    },
+
     /** Set the collapse state outright. The settings screen uses this. */
     setCollapsed: function (on) {
       if (this.collapsed === !!on) return;
@@ -488,6 +556,9 @@ window.ZB = window.ZB || {};
       this.returnFocusTo = document.activeElement;
 
       this.root.classList.add('is-drawer-open');
+      /* Before anything tries to focus inside it: an inert subtree cannot
+         take focus, so lifting it has to come first. */
+      this.applyDrawerInert();
       ZB.util.lockScroll(true);
       this.sidebar.setAttribute('aria-modal', 'true');
       this.sidebar.setAttribute('role', 'dialog');
@@ -512,11 +583,36 @@ window.ZB = window.ZB || {};
       if (trigger) trigger.setAttribute('aria-expanded', 'false');
 
       /* Only pull focus back if it is still inside the drawer; a click on a
-         menu link has already moved it somewhere better. */
-      if (this.returnFocusTo && this.sidebar.contains(document.activeElement)) {
-        this.returnFocusTo.focus();
+         menu link has already moved it somewhere better.
+
+         Where it goes back to needs care. `returnFocusTo` is whatever had
+         focus when the drawer opened, and on a phone that is routinely
+         nothing at all: tapping a button does not always focus it, so the
+         recorded element is <body>, and calling focus() on <body> does not
+         move focus anywhere. The drawer then closed with focus still on a
+         link inside it — a link that is now hidden off the left edge, which
+         is where the next Tab would have carried on from.
+
+         So a return target that cannot hold focus, or that is itself inside
+         the drawer, falls back to the button that opens it. That is both a
+         real place to be and the obvious one: it is what the reader just
+         used. */
+      if (this.sidebar.contains(document.activeElement)) {
+        var back = this.returnFocusTo;
+        if (!back || back === document.body || this.sidebar.contains(back)) {
+          back = this.root.querySelector('[data-admin-drawer]');
+        }
+        if (back) back.focus();
       }
       this.returnFocusTo = null;
+
+      /* Last, and that order is the whole of it. Making the subtree inert
+         blurs whatever is focused inside it, so doing this first would
+         leave focus on <body> and the check above with nothing to find —
+         the drawer would close correctly and drop the reader at the top of
+         the document. Focus is moved somewhere real, and only then is the
+         drawer put beyond reach. */
+      this.applyDrawerInert();
     },
 
     focusable: function () {

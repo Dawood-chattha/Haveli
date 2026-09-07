@@ -371,6 +371,29 @@
 
 @media (max-width: 989px) {
 
+  /* A CLOSED DRAWER IS HIDDEN, NOT MERELY MOVED
+     Translating the panel off the left edge takes it out of sight and
+     leaves everything else about it in place: its fourteen links and
+     buttons stayed in the tab order and stayed in the accessibility tree.
+     A keyboard user at this width had to tab through an entire invisible
+     menu before reaching the page, and a screen reader read out a
+     navigation that was not open.
+
+     The fix is the `inert` attribute, and admin-shell.js puts it there —
+     see applyDrawerInert(). It takes the whole subtree out of the tab order
+     and out of the accessibility tree in one step, immediately, and without
+     touching how the drawer is drawn, so the slide out still animates.
+
+     It is not done in CSS. The obvious stylesheet answer is a transitioned
+     `visibility`, and it was tried twice here: as a delay
+     (`visibility 0s linear .3s`) and as a duration
+     (`visibility var(--dur-slow) linear`). Chrome ran the transition into
+     the open state and then never completed the one back out, so the closed
+     drawer stayed visible and all fourteen controls stayed tabbable — the
+     exact bug this note is about, wearing the fix's clothes. An attribute
+     that is either present or absent has no such failure mode.
+
+     What CSS keeps is only the drawing. */
   .a-sidebar {
     position: fixed;
     top: 0;

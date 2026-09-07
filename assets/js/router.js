@@ -89,6 +89,33 @@ window.ZB = window.ZB || {};
     return i > -1 ? p.slice(0, i) : p;
   }
 
+  /**
+   * Whether the cross-fade between routes should happen at all.
+   *
+   * This used to be ZB.reduceMotion, which main.js captures once at load.
+   * Two things it therefore could not see:
+   *
+   *   - the system setting being changed after the page loaded, which a
+   *     reader who has just turned it on has every reason to expect to work;
+   *   - the admin panel's own Reduce motion switch, which stamps
+   *     data-motion="reduced" on the panel root (see admin-shell.js). That
+   *     switch turned the CSS transitions off and left the timeout below
+   *     running, so choosing it replaced a 160ms cross-fade with a 160ms
+   *     pause in which nothing happened — a setting delivering a delay in
+   *     place of the motion it had removed.
+   *
+   * Asked at navigation time, both are answered. Nothing here knows what an
+   * admin panel is: it asks whether anything on the page has said motion is
+   * off, and the storefront simply never has such an element, so its
+   * behaviour is unchanged.
+   */
+  function motionOff() {
+    if (window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
+
+    return !!document.querySelector('[data-motion="reduced"]');
+  }
+
   /* -----------------------------------------------------------------------
      Router
      ----------------------------------------------------------------------- */
@@ -201,7 +228,7 @@ window.ZB = window.ZB || {};
       };
 
       // Skip the wait on the very first paint.
-      if (previous === null || ZB.reduceMotion) swap();
+      if (previous === null || motionOff()) swap();
       else window.setTimeout(swap, 160);
     },
 

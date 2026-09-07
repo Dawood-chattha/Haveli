@@ -316,13 +316,13 @@
   .a-slide__actions { justify-content: space-between; }
 }
 
-@media (max-width: 749px) {
-  /* The arrows are the buttons pressed repeatedly on this screen, and a
-     32px target is a 32px target whether the pointer is a mouse or a
-     thumb. Grown to the same size the inventory stepper uses, for the
-     same reason and only where there is a thumb on them. */
-  .a-slide__order .a-iconbtn { width: 40px; height: 40px; }
-}
+/* There was a rule here growing the reorder arrows to 40px below 749px.
+   It has been removed: it asked about the screen's width when the question
+   was whether a finger is doing the pressing, so it missed a touch tablet
+   and fired on a narrow window on a desk. assets/css/admin/admin-touch.css
+   now sizes every target in the panel off (pointer: coarse), these arrows
+   included, and one answer in one place is better than this one being the
+   exception that was handled early. */
 
 @media (prefers-reduced-motion: reduce) {
   .a-slide.is-new { animation: none; }

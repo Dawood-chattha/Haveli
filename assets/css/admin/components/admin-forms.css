@@ -460,6 +460,26 @@
   gap: var(--sp-4);
 }
 
+/* A ROW OWNS THE SPACE BELOW IT, NOT ITS CHILDREN
+
+   `.a-field:last-child { margin-bottom: 0 }` is right for the last field in
+   a card and wrong inside a row. There the second field is the last child,
+   so it dropped its bottom margin while its neighbour kept one — which made
+   the gap under the row depend on which of the two happened to be taller,
+   and removed it altogether when the taller one was on the right.
+
+   Stacked on a narrow screen the same rule cost the gap entirely: the two
+   fields became one column, the second was still the last child, and the
+   next row's label sat directly against the previous field's input with
+   nothing between them.
+
+   So the children keep no bottom margin here and the row carries it. */
+.a-form__row > .a-field,
+.a-form__row > .a-field:last-child { margin-bottom: 0; }
+
+.a-form__row { margin-bottom: var(--sp-5); }
+.a-form__row:last-child { margin-bottom: 0; }
+
 .a-form__bar {
   display: flex;
   align-items: center;

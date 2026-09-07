@@ -209,24 +209,16 @@
   color: rgb(255 255 255 / .6);
 }
 
-/* The route into the management panel. Kept quiet on purpose: it is for the
-   owner, and a shopper has no use for it, so it sits at the end of the last
-   row at the lowest contrast in the footer and only comes up on hover. */
-.footer__owner {
-  color: rgb(255 255 255 / .38);
-  transition: color var(--dur-fast) var(--ease-out);
-}
-.footer__owner:hover { color: rgb(255 255 255 / .8); }
+/* There was a quiet "Owner Login" link at the end of this row. It has been
+   removed: the shop's own pages should not advertise where the management
+   panel lives — see the note in assets/js/footer.js. Its styles went with
+   it rather than being left behind for a link that no longer exists. */
 
 @media (max-width: 749px) {
   .footer__social { margin-left: 0; }
-  /* On one column the row wraps, so this pushes to the far edge instead of
-     trailing straight after the social list. */
-  .footer__owner { margin-left: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .footer__links a,
-  .footer__legal a,
-  .footer__owner { transition: none; }
+  .footer__legal a { transition: none; }
 }

@@ -1,0 +1,129 @@
+/* =========================================================================
+   admin-touch.css — target sizes for fingers
+   -------------------------------------------------------------------------
+   Loaded last, so it wins over the component files without any of them
+   having to know it exists.
+
+   THE QUESTION IS THE INPUT DEVICE, NOT THE SCREEN WIDTH
+   The obvious way to write this is a max-width query: below some breakpoint,
+   make everything bigger. That is the wrong test twice over. A 1280px
+   Windows tablet is driven by a finger and would keep the 32px buttons; a
+   960px browser window on a desk gets a phone's spacing for no reason and
+   the tables lose a column's worth of room to it.
+
+   `(pointer: coarse)` asks the only question that matters — is the primary
+   input a fingertip — so a touch device is served at any width and a mouse
+   is served at any width. Nothing here is triggered by resizing a window.
+
+   WHY 44px
+   It is the size a fingertip actually covers. Below it, the two things that
+   go wrong are both silent: a tap lands beside the control and appears to
+   do nothing, or it lands on the neighbour and does the wrong thing. In a
+   row of icon buttons where one is Delete, the second failure is the one
+   that matters, which is why the gaps are widened here as well as the
+   buttons. Growing the buttons and leaving them 3px apart would move the
+   targets closer to each other, not further.
+
+   WHAT IS NOT CHANGED
+   Nothing about the layout, the type scale, or which controls exist — only
+   how much of the screen a control claims. Icons stay the size they are;
+   the box around them grows. And nothing here touches the storefront: it
+   is a separate document with its own stylesheets, measured against its own
+   reference, and it is not this file's business.
+   ========================================================================= */
+
+@media (pointer: coarse) {
+
+  /* -----------------------------------------------------------------------
+     ROW ACTIONS
+
+     The densest controls in the panel and the ones most worth getting
+     right: edit, delete, move up, move down, switch on. They sit three or
+     four to a row in a table that already scrolls sideways in its own box,
+     so the extra width costs nothing that was not already scrollable.
+     ----------------------------------------------------------------------- */
+
+  .a-iconbtn,
+  .a-iconbtn--void {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* 44 + 6 puts 50px between centres. At the old 3px gap the two hit areas
+     would have overlapped by 41px, and a tap between Delete and Edit would
+     have been decided by a pixel. */
+  .a-rowactions { gap: 6px; }
+
+  /* -----------------------------------------------------------------------
+     BUTTONS, CHIPS AND PAGERS
+     ----------------------------------------------------------------------- */
+
+  .a-btn { min-height: 44px; }
+
+  /* The inventory stepper's minus and plus. These are pressed repeatedly —
+     a stock count is corrected by three or four taps, not one — so a near
+     miss here is not a single annoyance but a run of them. */
+  .a-stepper__btn { width: 44px; min-height: 44px; }
+
+  .a-chip,
+  .a-chipbox__face,
+  .a-range__option,
+  .a-card__toggle,
+  .a-pager__no,
+  .a-pager__step {
+    min-height: 44px;
+  }
+
+  /* Height alone is not a target. A size chip reading "S" is two characters
+     wide, so it comes out 34px across however tall it is; a page number is
+     one character. Both need the other dimension stated. */
+  .a-chipbox__face,
+  .a-pager__no,
+  .a-pager__step {
+    min-width: 44px;
+  }
+
+  /* The toggle is padded rather than sized, so it needs the box as well as
+     the height to centre its label in the new height. */
+  .a-card__toggle {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* Filter chips sit in a wrapping row; without this the extra height alone
+     would leave them touching top to bottom. */
+  .a-chipset,
+  .a-chips { gap: var(--sp-2); }
+
+  /* -----------------------------------------------------------------------
+     FIELDS
+
+     A select is tapped, not typed into, so it is the one field where the
+     height is a target rather than a place to put text.
+     ----------------------------------------------------------------------- */
+
+  .a-input,
+  .a-select__input { min-height: 44px; }
+
+  .a-input--date { min-height: 44px; }
+
+  /* -----------------------------------------------------------------------
+     THE CHROME
+
+     The menu button, the notifications button, the sidebar's collapse and
+     sign-out. These are small and they are permanent — every screen has
+     them — so they are the ones a finger reaches for most often.
+     ----------------------------------------------------------------------- */
+
+  .a-topbar__menu,
+  .a-topbar__icon-btn,
+  .a-sidebar__toggle {
+    width: 44px;
+    height: 44px;
+  }
+
+  .a-sidebar__logout {
+    width: 40px;
+    height: 40px;
+  }
+}
