@@ -33,9 +33,9 @@
    this file.
 
    WHAT IS NOT HERE YET
-   Coupons, banners and the settings record arrive in their own phases. They
-   will be added as siblings of `products`, in the same shape. Nothing is
-   stubbed out in advance, so a method that exists here always works.
+   The settings record arrives in its own phase, as a sibling of `products`
+   and in the same shape. Nothing is stubbed out in advance, so a method
+   that exists here always works.
 
    SECURITY
    Nothing in this file is a credential and nothing may become one. Whatever
@@ -1732,6 +1732,764 @@ window.ZB = window.ZB || {};
     hasUnsavedEdits: function () {
       return catAdded.length > 0 || Object.keys(catEdited).length > 0 ||
              Object.keys(catRemoved).length > 0;
+    }
+  };
+
+  /* -----------------------------------------------------------------------
+     Banners
+
+     WHERE A BANNER COMES FROM
+     The same place the shop's homepage gets it: ZB.heroSlides. Exactly the
+     reasoning the category section uses — the storefront already holds this
+     list, and a second one kept here would let the panel and the shop
+     disagree about what the homepage is currently showing.
+
+     WHY ORDER IS A FIRST-CLASS OPERATION AND NOT A SORT
+     A carousel is an ordered thing. Slide one is what almost everybody
+     sees, slide seven is what almost nobody does, and that difference is
+     most of the reason an owner opens this screen. So there is no sort
+     control — there is a way to move a slide up and down, and the list is
+     always in the order the shop plays them.
+
+     THE LINK CHECK
+     Every slide carries a call to action, and a call to action that lands
+     on "page not found" is the most expensive broken thing a storefront
+     can have: it is on the homepage, above the fold, and it is the button
+     the campaign was bought to make people press. So the destination is
+     checked against the routes the storefront actually serves rather than
+     merely stored, and a slide pointing nowhere is marked as such. The
+     check reads the same catalogue and navigation the shop's own pages
+     resolve against, so it cannot go out of step with them.
+     ----------------------------------------------------------------------- */
+
+  var bnEdited = {};     /* id -> changed fields */
+  var bnRemoved = {};    /* id -> true */
+  var bnAdded = [];      /* created this session */
+  var bnSequence = null; /* explicit order, once anything has been moved */
+  var bnNextId = 1;
+
+  /* The storefront routes that take no parameters, from assets/js/routes.js.
+     Kept beside the ones that do, below, so the whole answer to "does this
+     link work" is in one place. */
+  var FLAT_ROUTES = [
+    '/', '/search', '/cart', '/wishlist', '/account', '/stores', '/tracking',
+    '/careers', '/faqs', '/how-to-buy', '/payment', '/shipping', '/returns',
+    '/about', '/contact', '/terms', '/privacy'
+  ];
+
+  /**
+   * Does this path resolve to a real storefront page?
+   *
+   * Returns { ok, reason } rather than a bare boolean: the screen has to
+   * tell the reader WHICH part is wrong, and "Men has no category called
+   * kurtaa" is a fixable message where "invalid" is not.
+   */
+  function checkLink(href) {
+    var path = String(href || '').trim();
+
+    if (!path) return { ok: false, reason: 'No link set.' };
+    if (path.charAt(0) !== '/') {
+      return {
+        ok: false,
+        reason: 'Links must start with / — an outside address leaves the shop.'
+      };
+    }
+
+    /* The query and the hash are not part of the route. */
+    path = path.split('#')[0].split('?')[0];
+    if (path.length > 1 && path.charAt(path.length - 1) === '/') {
+      path = path.slice(0, -1);
+    }
+
+    if (FLAT_ROUTES.indexOf(path) > -1) return { ok: true, reason: '' };
+
+    var parts = path.split('/').filter(function (bit) { return bit; });
+
+    if (parts[0] === 'product') {
+      if (!parts[1]) return { ok: false, reason: 'A product link needs a product id.' };
+      return ZB.catalogue.byId(parts[1])
+        ? { ok: true, reason: '' }
+        : { ok: false, reason: 'No product has the id “' + parts[1] + '”.' };
+    }
+
+    if (parts[0] === 'category') {
+      var dept = (ZB.navigation || []).filter(function (row) {
+        return row.id === parts[1];
+      })[0];
+
+      if (!dept) {
+        return {
+          ok: false,
+          reason: 'There is no department called “' + (parts[1] || '') + '”.'
+        };
+      }
+      if (!parts[2]) return { ok: true, reason: '' };
+
+      /* Matched against the same flattened tree the categories screen
+         shows, so a sub-category counts as a destination too. */
+      var found = navigationRows().some(function (row) {
+        return row.dept === dept.id && row.slug === parts[2];
+      });
+
+      return found
+        ? { ok: true, reason: '' }
+        : { ok: false, reason: dept.label + ' has no category called “' + parts[2] + '”.' };
+    }
+
+    return { ok: false, reason: 'Nothing in the shop answers that address.' };
+  }
+
+  /** ZB.heroSlides, flattened into rows with an id. */
+  function heroRows() {
+    return (ZB.heroSlides || []).map(function (slide, i) {
+      return {
+        id: 'hero-' + (i + 1),
+        image: slide.image,
+        alt: slide.alt,
+        eyebrow: slide.eyebrow,
+        headline: slide.headline,
+        body: slide.body,
+        cta: slide.cta,
+        href: slide.href,
+        proof: slide.proof,
+        status: 'active',
+        source: 'hero'
+      };
+    });
+  }
+
+  /** The carousel as the admin currently sees it, in playing order. */
+  function currentBanners() {
+    var rows = heroRows().concat(bnAdded);
+
+    rows = rows
+      .filter(function (row) { return !bnRemoved[row.id]; })
+      .map(function (row) {
+        var merged = {};
+        Object.keys(row).forEach(function (key) { merged[key] = row[key]; });
+
+        if (bnEdited[row.id]) {
+          Object.keys(bnEdited[row.id]).forEach(function (key) {
+            merged[key] = bnEdited[row.id][key];
+          });
+        }
+
+        var link = checkLink(merged.href);
+        merged.linkOk = link.ok;
+        merged.linkReason = link.reason;
+        return merged;
+      });
+
+    /* An explicit sequence only exists once something has been moved.
+       Until then the file's own order is the answer, and an id the
+       sequence has never heard of — one added since — goes to the end
+       rather than disappearing. */
+    if (bnSequence) {
+      var at = {};
+      bnSequence.forEach(function (id, i) { at[id] = i; });
+      rows.sort(function (a, b) {
+        var ai = at[a.id] === undefined ? 9999 : at[a.id];
+        var bi = at[b.id] === undefined ? 9999 : at[b.id];
+        return ai - bi;
+      });
+    }
+
+    /* Position is what a shopper experiences, so it counts only the slides
+       that actually play. A hidden slide keeps its place in the list — it
+       is easier to bring back where it was — but is not given a number in
+       a run it is not part of. */
+    var seen = 0;
+    rows.forEach(function (row, i) {
+      row.index = i;
+      row.position = row.status === 'active' ? ++seen : 0;
+    });
+
+    return rows;
+  }
+
+  function bannerIds() {
+    return currentBanners().map(function (row) { return row.id; });
+  }
+
+  Repo.banners = {
+
+    /**
+     * The whole carousel, in order.
+     * options: { view } — 'active', 'hidden', 'broken', or nothing for all.
+     * resolves: { items, total, active, hidden, broken }
+     *
+     * Never paged. Seven slides is the whole of it, and paging a list this
+     * short would hide the one thing the screen is for: seeing the run of
+     * slides in the order they play.
+     */
+    list: function (options) {
+      options = options || {};
+      var all = currentBanners();
+
+      var rows = all.filter(function (row) {
+        if (options.view === 'active') return row.status === 'active';
+        if (options.view === 'hidden') return row.status !== 'active';
+        if (options.view === 'broken') return !row.linkOk;
+        return true;
+      });
+
+      return Repo.defer({
+        items: rows,
+        total: rows.length,
+        active: all.filter(function (row) { return row.status === 'active'; }).length,
+        hidden: all.filter(function (row) { return row.status !== 'active'; }).length,
+        broken: all.filter(function (row) { return !row.linkOk; }).length
+      });
+    },
+
+    get: function (id) {
+      var hit = currentBanners().filter(function (row) { return row.id === id; })[0];
+      return Repo.defer(hit || null);
+    },
+
+    summary: function () {
+      var rows = currentBanners();
+      var live = rows.filter(function (row) { return row.status === 'active'; });
+
+      return Repo.defer({
+        total: rows.length,
+        active: live.length,
+        hidden: rows.length - live.length,
+        /* Counted across every slide, not only the live ones: a broken
+           link on a hidden slide is a trap set for whoever turns it on. */
+        broken: rows.filter(function (row) { return !row.linkOk; }).length
+      });
+    },
+
+    /** Exposed so the form can check a link before it is saved. */
+    checkLink: function (href) { return checkLink(href); },
+
+    /**
+     * Where a slide is allowed to point, as a list.
+     *
+     * Offered instead of a free-text box because every destination this
+     * shop has is knowable, and typing a path by hand is how the broken
+     * ones got there in the first place. A current value that is not in
+     * the list is added to it, so opening a slide that already points
+     * somewhere odd does not silently rewrite where it goes.
+     */
+    linkOptions: function (current) {
+      var options = [{ id: '/', label: 'Homepage' }];
+
+      navigationRows().forEach(function (row) {
+        options.push({
+          id: '/category/' + row.dept + '/' + row.slug,
+          label: row.deptLabel + ' → ' + row.label +
+                 (row.level === 1 ? ' (all)' : '')
+        });
+      });
+
+      [['/search', 'Search'], ['/stores', 'Store finder'],
+       ['/tracking', 'Order tracking'], ['/about', 'About us'],
+       ['/contact', 'Contact']].forEach(function (pair) {
+        options.push({ id: pair[0], label: pair[1] });
+      });
+
+      var known = options.some(function (item) { return item.id === current; });
+      if (current && !known) {
+        options.unshift({ id: current, label: current + ' — as it is set now' });
+      }
+
+      return options;
+    },
+
+    /* -- writes. In memory only, exactly like products and categories. -- */
+
+    create: function (data) {
+      var row = {
+        id: 'new-banner-' + (bnNextId++),
+        image: data.image || '',
+        alt: data.alt || '',
+        eyebrow: data.eyebrow || '',
+        headline: data.headline || '',
+        body: data.body || '',
+        cta: data.cta || '',
+        href: data.href || '/',
+        proof: data.proof || '',
+        status: data.status || 'active',
+        source: 'new'
+      };
+
+      bnAdded.push(row);
+      /* A new slide goes at the end of the run. Said in both places so the
+         two orderings cannot disagree about where it landed. */
+      if (bnSequence) bnSequence.push(row.id);
+
+      return Repo.defer(row);
+    },
+
+    update: function (id, data) {
+      var exists = currentBanners().some(function (row) { return row.id === id; });
+      if (!exists) {
+        return Promise.reject({ message: 'That banner no longer exists.' });
+      }
+
+      var own = bnAdded.filter(function (row) { return row.id === id; })[0];
+
+      if (own) {
+        Object.keys(data).forEach(function (key) { own[key] = data[key]; });
+      } else {
+        bnEdited[id] = bnEdited[id] || {};
+        Object.keys(data).forEach(function (key) { bnEdited[id][key] = data[key]; });
+      }
+
+      return Repo.banners.get(id);
+    },
+
+    /**
+     * Move a slide by one place.
+     *
+     * By one, and never by drag: a drag needs a pointer, a steady hand and
+     * a list that fits on screen, and it has no keyboard at all. Two
+     * buttons work with a thumb, with a keyboard and with a screen reader
+     * — and for a run of seven slides, one place at a time is not slow.
+     *
+     * `delta` is -1 or +1. Moving past either end does nothing rather than
+     * wrapping, because a slide jumping from first to last is not what
+     * anybody pressing "up" meant.
+     */
+    move: function (id, delta) {
+      var order = bannerIds();
+      var from = order.indexOf(id);
+      var to = from + (delta < 0 ? -1 : 1);
+
+      if (from < 0 || to < 0 || to >= order.length) {
+        return Repo.defer({ moved: false, order: order });
+      }
+
+      order.splice(to, 0, order.splice(from, 1)[0]);
+      bnSequence = order;
+
+      return Repo.defer({ moved: true, from: from, to: to, order: order });
+    },
+
+    /** Put the whole run back the way it was. Used by undo. */
+    setOrder: function (order) {
+      bnSequence = order ? order.slice() : null;
+      return Repo.defer(true);
+    },
+
+    remove: function (id) {
+      var row = currentBanners().filter(function (item) { return item.id === id; })[0];
+      if (!row) return Repo.defer(null);
+
+      /* The order is captured too. Deleting slide three and undoing it has
+         to put it back at three, not at the end of the run. */
+      var undo = {
+        id: id,
+        order: bannerIds(),
+        row: null,
+        wasRemoved: false,
+        edits: bnEdited[id] || null
+      };
+
+      var own = bnAdded.filter(function (item) { return item.id === id; })[0];
+      if (own) {
+        undo.row = own;
+        bnAdded = bnAdded.filter(function (item) { return item.id !== id; });
+      } else {
+        undo.wasRemoved = true;
+        bnRemoved[id] = true;
+      }
+
+      if (bnEdited[id]) delete bnEdited[id];
+
+      return Repo.defer(undo);
+    },
+
+    restore: function (undo) {
+      if (!undo) return Repo.defer(false);
+
+      if (undo.row) bnAdded.push(undo.row);
+      if (undo.wasRemoved) delete bnRemoved[undo.id];
+      if (undo.edits) bnEdited[undo.id] = undo.edits;
+      if (undo.order) bnSequence = undo.order.slice();
+
+      return Repo.defer(true);
+    },
+
+    hasUnsavedEdits: function () {
+      return bnAdded.length > 0 || bnSequence !== null ||
+             Object.keys(bnEdited).length > 0 ||
+             Object.keys(bnRemoved).length > 0;
+    }
+  };
+
+  /* -----------------------------------------------------------------------
+     Coupons
+
+     WHY THE STATE IS DERIVED AND NEVER STORED
+     A coupon's state is a fact about its dates and its usage, not a field
+     somebody sets. If "expired" were a value in a dropdown, this list would
+     eventually show a coupon marked Running whose end date was last March
+     — and the owner would believe it. So there is exactly one thing a
+     person decides, "switched off or not", and everything else is worked
+     out at the moment of asking:
+
+       switched off       -> Switched off
+       starts in future   -> Scheduled
+       end date has gone  -> Expired
+       usage limit hit    -> Used up
+       otherwise          -> Running
+
+     WHAT THIS BUILD HONESTLY CANNOT DO
+     None of these is accepted at a checkout. There is no discount field in
+     the cart and no server to validate a code against, so these rows
+     describe what the shop WOULD honour once a backend exists. The screen
+     says so in words rather than letting a code that does nothing look
+     like a code that works.
+
+     Dates arrive from admin-seed.js as day offsets and become real dates
+     here, so that file cannot go stale — see the note beside them.
+     ----------------------------------------------------------------------- */
+
+  var cpEdited = {};
+  var cpRemoved = {};
+  var cpAdded = [];
+  var cpNextId = 1;
+
+  /** Midnight today, so a coupon ending "today" lasts the whole day. */
+  function startOfToday() {
+    var now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }
+
+  function dayOffset(days) {
+    var day = startOfToday();
+    day.setDate(day.getDate() + days);
+    return day;
+  }
+
+  /** Whole days from today. Negative is in the past. */
+  function daysFromToday(value) {
+    var day = new Date(value);
+    if (isNaN(day.getTime())) return 0;
+    var flat = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+    return Math.round((flat - startOfToday()) / 86400000);
+  }
+
+  /** 2026-09-07 — the value an <input type="date"> reads and writes. */
+  function toDateInput(value) {
+    var day = new Date(value);
+    if (isNaN(day.getTime())) return '';
+
+    var month = String(day.getMonth() + 1);
+    var date = String(day.getDate());
+
+    return day.getFullYear() + '-' +
+           (month.length < 2 ? '0' + month : month) + '-' +
+           (date.length < 2 ? '0' + date : date);
+  }
+
+  /** A date input's value, as a timestamp at local midnight. */
+  function fromDateInput(value) {
+    var bits = String(value || '').split('-');
+    if (bits.length !== 3) return NaN;
+
+    var day = new Date(Number(bits[0]), Number(bits[1]) - 1, Number(bits[2]));
+    return isNaN(day.getTime()) ? NaN : day.getTime();
+  }
+
+  var COUPON_TYPES = [
+    { id: 'percent',  label: 'Percentage off' },
+    { id: 'fixed',    label: 'Fixed amount off' },
+    { id: 'shipping', label: 'Free delivery' }
+  ];
+
+  var COUPON_STATES = [
+    { id: 'running',   label: 'Running' },
+    { id: 'scheduled', label: 'Scheduled' },
+    { id: 'used-up',   label: 'Used up' },
+    { id: 'expired',   label: 'Expired' },
+    { id: 'off',       label: 'Switched off' }
+  ];
+
+  /**
+   * Everything about a coupon that follows from its own fields.
+   *
+   * Kept in one function so the list, the tiles and the dialog can never
+   * describe the same coupon differently — the failure where a row says
+   * Running and the dialog it opens says Expired.
+   */
+  function shapeCoupon(row) {
+    var out = {};
+    Object.keys(row).forEach(function (key) { out[key] = row[key]; });
+
+    var today = startOfToday().getTime();
+
+    out.startsInDays = daysFromToday(out.startsAt);
+    out.endsInDays = daysFromToday(out.expiresAt);
+    out.limitReached = !!out.usageLimit && out.used >= out.usageLimit;
+
+    if (out.disabled)                    out.state = 'off';
+    else if (out.startsAt > today)       out.state = 'scheduled';
+    else if (out.expiresAt < today)      out.state = 'expired';
+    else if (out.limitReached)           out.state = 'used-up';
+    else                                 out.state = 'running';
+
+    /* "Live" is the question that matters at a glance: would a shopper
+       typing this code right now have it accepted. Four of the five states
+       answer no, for four different reasons, and the reason is what the
+       row shows beside the answer. */
+    out.live = out.state === 'running';
+
+    out.discountLabel =
+      out.type === 'percent'  ? out.value + '% off' :
+      out.type === 'shipping' ? 'Free delivery' :
+                                ZB.ui.money(out.value) + ' off';
+
+    out.usedShare = out.usageLimit
+      ? Math.min(100, Math.round((out.used / out.usageLimit) * 100))
+      : 0;
+
+    return out;
+  }
+
+  /** The seed rows, with their day offsets turned into real dates. */
+  function seedCoupons() {
+    return ((ZB.adminSeed && ZB.adminSeed.coupons) || []).map(function (seed, i) {
+      return {
+        id: 'coupon-' + (i + 1),
+        code: seed.code,
+        note: seed.note,
+        type: seed.type,
+        value: seed.value,
+        minSpend: seed.minSpend,
+        startsAt: dayOffset(seed.startsIn).getTime(),
+        expiresAt: dayOffset(seed.endsIn).getTime(),
+        usageLimit: seed.limit,
+        used: seed.used,
+        disabled: seed.disabled,
+        source: 'seed'
+      };
+    });
+  }
+
+  function currentCoupons() {
+    var rows = cpAdded.concat(seedCoupons());
+
+    return rows
+      .filter(function (row) { return !cpRemoved[row.id]; })
+      .map(function (row) {
+        var merged = {};
+        Object.keys(row).forEach(function (key) { merged[key] = row[key]; });
+
+        if (cpEdited[row.id]) {
+          Object.keys(cpEdited[row.id]).forEach(function (key) {
+            merged[key] = cpEdited[row.id][key];
+          });
+        }
+
+        return shapeCoupon(merged);
+      });
+  }
+
+  var COUPON_SORTS = {
+    'ending-soon': function (a, b) {
+      /* Coupons that are not running go last whichever way the others
+         fall — "ending soonest" is a question about live ones, and an
+         expired code at the top of that list answers nothing. */
+      if (a.live !== b.live) return a.live ? -1 : 1;
+      return a.expiresAt - b.expiresAt;
+    },
+    'code-asc':   function (a, b) { return a.code.localeCompare(b.code); },
+    'used-desc':  function (a, b) { return b.used - a.used; },
+    'value-desc': function (a, b) { return b.value - a.value; },
+    'newest':     function (a, b) { return b.startsAt - a.startsAt; }
+  };
+
+  Repo.coupons = {
+
+    types: COUPON_TYPES,
+    states: COUPON_STATES,
+
+    sorts: [
+      { id: 'ending-soon', label: 'Ending soonest' },
+      { id: 'newest', label: 'Newest' },
+      { id: 'code-asc', label: 'Code A–Z' },
+      { id: 'used-desc', label: 'Most used' },
+      { id: 'value-desc', label: 'Largest discount' }
+    ],
+
+    /* Only the states and types the data actually holds, so a control can
+       never offer a filter that returns nothing. */
+    facets: function () {
+      var rows = currentCoupons();
+
+      return Repo.defer({
+        states: COUPON_STATES.filter(function (state) {
+          return rows.some(function (row) { return row.state === state.id; });
+        }),
+        types: COUPON_TYPES.filter(function (type) {
+          return rows.some(function (row) { return row.type === type.id; });
+        })
+      });
+    },
+
+    /**
+     * A page of coupons.
+     * options: { search, state, type, sort, page, perPage }
+     */
+    list: function (options) {
+      options = options || {};
+      var rows = currentCoupons();
+
+      if (options.search) {
+        var needle = String(options.search).toLowerCase();
+        rows = rows.filter(function (row) {
+          return row.code.toLowerCase().indexOf(needle) > -1 ||
+                 (row.note || '').toLowerCase().indexOf(needle) > -1;
+        });
+      }
+
+      if (options.state) {
+        rows = rows.filter(function (row) { return row.state === options.state; });
+      }
+
+      if (options.type) {
+        rows = rows.filter(function (row) { return row.type === options.type; });
+      }
+
+      var compare = COUPON_SORTS[options.sort] || COUPON_SORTS['ending-soon'];
+      rows = rows.slice().sort(compare);
+
+      var total = rows.length;
+      var perPage = options.perPage || 20;
+      var pages = Math.max(1, Math.ceil(total / perPage));
+      var page = Math.min(Math.max(1, options.page || 1), pages);
+      var start = (page - 1) * perPage;
+
+      return Repo.defer({
+        items: rows.slice(start, start + perPage),
+        total: total,
+        page: page,
+        pages: pages,
+        perPage: perPage
+      });
+    },
+
+    get: function (id) {
+      var hit = currentCoupons().filter(function (row) { return row.id === id; })[0];
+      return Repo.defer(hit || null);
+    },
+
+    summary: function () {
+      var rows = currentCoupons();
+      var live = rows.filter(function (row) { return row.live; });
+
+      /* "Ending this week" rather than a second grand total: a coupon
+         expiring on Friday is the only thing on this screen with a
+         deadline, and it is the reason to open it on a Monday. */
+      var soon = live.filter(function (row) {
+        return row.endsInDays >= 0 && row.endsInDays <= 7;
+      });
+
+      return Repo.defer({
+        total: rows.length,
+        live: live.length,
+        soon: soon.length,
+        scheduled: rows.filter(function (row) { return row.state === 'scheduled'; }).length,
+        redemptions: rows.reduce(function (sum, row) { return sum + row.used; }, 0)
+      });
+    },
+
+    /** Is this code already taken? Case-insensitive, as a shopper types it. */
+    codeTaken: function (code, ignoreId) {
+      var wanted = String(code || '').trim().toUpperCase();
+      return currentCoupons().some(function (row) {
+        return row.id !== ignoreId && row.code.toUpperCase() === wanted;
+      });
+    },
+
+    /* Date helpers, kept here so the page never does calendar maths of its
+       own. Two implementations of "what day is that" is how a list and the
+       dialog above it end up disagreeing by one. */
+    toDateInput: function (value) { return toDateInput(value); },
+    fromDateInput: function (value) { return fromDateInput(value); },
+    daysFromToday: function (value) { return daysFromToday(value); },
+
+    /* -- writes. In memory only. -- */
+
+    create: function (data) {
+      var row = {
+        id: 'new-coupon-' + (cpNextId++),
+        code: String(data.code || '').trim().toUpperCase(),
+        note: data.note || '',
+        type: data.type || 'percent',
+        value: Number(data.value) || 0,
+        minSpend: Number(data.minSpend) || 0,
+        startsAt: data.startsAt,
+        expiresAt: data.expiresAt,
+        usageLimit: Number(data.usageLimit) || 0,
+        /* A coupon created here has never been redeemed, and that is not a
+           field on the form: typing a redemption count would be inventing
+           a sale that did not happen. */
+        used: 0,
+        disabled: !!data.disabled,
+        source: 'new'
+      };
+
+      cpAdded.unshift(row);
+      return Repo.defer(shapeCoupon(row));
+    },
+
+    update: function (id, data) {
+      var exists = currentCoupons().some(function (row) { return row.id === id; });
+      if (!exists) {
+        return Promise.reject({ message: 'That coupon no longer exists.' });
+      }
+
+      var own = cpAdded.filter(function (row) { return row.id === id; })[0];
+
+      var patch = {};
+      Object.keys(data).forEach(function (key) { patch[key] = data[key]; });
+      if (patch.code !== undefined) patch.code = String(patch.code).trim().toUpperCase();
+
+      if (own) {
+        Object.keys(patch).forEach(function (key) { own[key] = patch[key]; });
+      } else {
+        cpEdited[id] = cpEdited[id] || {};
+        Object.keys(patch).forEach(function (key) { cpEdited[id][key] = patch[key]; });
+      }
+
+      return Repo.coupons.get(id);
+    },
+
+    remove: function (id) {
+      var undo = { id: id, row: null, wasRemoved: false, edits: cpEdited[id] || null };
+
+      var own = cpAdded.filter(function (row) { return row.id === id; })[0];
+      if (own) {
+        undo.row = own;
+        cpAdded = cpAdded.filter(function (row) { return row.id !== id; });
+      } else {
+        undo.wasRemoved = true;
+        cpRemoved[id] = true;
+      }
+
+      if (cpEdited[id]) delete cpEdited[id];
+
+      return Repo.defer(undo);
+    },
+
+    restore: function (undo) {
+      if (!undo) return Repo.defer(false);
+
+      if (undo.row) cpAdded.unshift(undo.row);
+      if (undo.wasRemoved) delete cpRemoved[undo.id];
+      if (undo.edits) cpEdited[undo.id] = undo.edits;
+
+      return Repo.defer(true);
+    },
+
+    hasUnsavedEdits: function () {
+      return cpAdded.length > 0 || Object.keys(cpEdited).length > 0 ||
+             Object.keys(cpRemoved).length > 0;
     }
   };
 

@@ -102,7 +102,19 @@ window.ZB = window.ZB || {};
 
     check:   '<path d="m5 12.5 4.5 4.5L19 7"/>',
 
-    back:    '<path d="M20 12H4"/><path d="m10 6-6 6 6 6"/>'
+    back:    '<path d="M20 12H4"/><path d="m10 6-6 6 6 6"/>',
+
+    up:      '<path d="M12 20V5"/><path d="m5.5 11.5 6.5-6.5 6.5 6.5"/>',
+
+    down:    '<path d="M12 4v15"/><path d="m5.5 12.5 6.5 6.5 6.5-6.5"/>',
+
+    link:    '<path d="M10.5 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 1 0-5.7-5.7l-1.2 1.2"/>' +
+             '<path d="M13.5 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 1 0 5.7 5.7l1.2-1.2"/>',
+
+    warn:    '<path d="M12 3.5 21 19.5H3L12 3.5Z"/>' +
+             '<path d="M12 10v4"/><path d="M12 16.6v.1"/>',
+
+    plus:    '<path d="M12 5v14"/><path d="M5 12h14"/>'
   };
 
   var AdminUI = {
@@ -189,7 +201,10 @@ window.ZB = window.ZB || {};
      */
     statusPill: function (kind, label) {
       var known = ['active', 'draft', 'hidden', 'out-of-stock', 'low', 'pending',
-                   'processing', 'shipped', 'delivered', 'cancelled', 'neutral'];
+                   'processing', 'shipped', 'delivered', 'cancelled', 'neutral',
+                   /* Coupon states. Derived from dates and usage, never set
+                      by hand — see the note in admin-repo.js. */
+                   'running', 'scheduled', 'used-up', 'expired', 'off'];
       var safe = known.indexOf(kind) > -1 ? kind : 'neutral';
       return '<span class="a-pill a-pill--' + safe + '">' + AdminUI.esc(label) + '</span>';
     },

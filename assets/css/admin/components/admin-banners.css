@@ -1,0 +1,329 @@
+/* =========================================================================
+   admin-banners.css — the hero carousel, as a run of previews
+   -------------------------------------------------------------------------
+   Tiles, empty states and row actions come from admin-products.css,
+   admin-categories.css and admin-orders.css. What is here is the slide
+   itself.
+
+   THE PREVIEW IS THE ROW
+   A hero slide is a picture with words over it, and the only question
+   worth asking about one is whether those words survive that picture. A
+   filename cannot answer it and neither can a thumbnail of the photograph
+   alone, so the preview draws the real composition — image, wash, eyebrow,
+   headline, button — at a size where the answer is still visible.
+
+   WHY THE WASH IS PART OF THE PREVIEW AND NOT DECORATION
+   The storefront darkens the bottom of each slide so white text holds
+   against whatever is behind it. If this preview left that out, a headline
+   that is unreadable in the shop would look fine here, which is precisely
+   backwards: the preview would be hiding the defect it exists to reveal.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   TILES
+
+   The base button and its inverted pressed state come from
+   admin-orders.css. Only the broken-links tile departs from it: it is the
+   one count on this screen that means something is wrong right now, so it
+   carries the danger colour before anybody presses it, and takes it into
+   the pressed state instead of the ink.
+   ------------------------------------------------------------------------- */
+
+.a-metric--broken[aria-pressed="false"] .a-stat__value { color: var(--a-danger); }
+
+/* Zero broken links is good news. Painted red it reads as a problem at a
+   glance and costs a second look to discover it is the opposite. */
+.a-metric--broken.is-clean[aria-pressed="false"] .a-stat__value { color: var(--c-ink); }
+
+.a-metric--broken[aria-pressed="true"] {
+  background: var(--a-danger);
+  border-color: var(--a-danger);
+}
+
+/* -------------------------------------------------------------------------
+   THE RUN
+   ------------------------------------------------------------------------- */
+
+.a-slides {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.a-slide {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr) auto;
+  gap: var(--sp-4);
+  align-items: start;
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: var(--bw) solid var(--a-line-soft);
+}
+
+.a-slide:last-child { border-bottom: 0; }
+
+/* A hidden slide is dimmed rather than struck through or tinted: it is
+   still a real slide, in its real place, and it is coming back. The pill
+   beside the headline says which one it is in words — the dimming alone
+   would be colour carrying meaning on its own. */
+.a-slide--hidden .a-slide__preview { opacity: .48; }
+.a-slide--hidden .a-slide__title { color: var(--c-body); }
+
+.a-slide.is-new {
+  animation: a-slide-flash var(--dur-slow) var(--ease-out);
+}
+
+@keyframes a-slide-flash {
+  from { background: var(--a-warning-tint); }
+  to   { background: transparent; }
+}
+
+/* -------------------------------------------------------------------------
+   THE PREVIEW
+   ------------------------------------------------------------------------- */
+
+.a-slide__preview {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--a-r-card);
+  overflow: hidden;
+  background: var(--a-neutral-tint);
+}
+
+.a-slide__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.a-slide__wash {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgb(3 3 2 / .78) 0%,
+    rgb(3 3 2 / .30) 42%,
+    rgb(3 3 2 / 0) 72%
+  );
+}
+
+.a-slide__copy {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 10px 12px;
+  color: #fff;
+}
+
+.a-slide__eyebrow {
+  margin: 0 0 2px;
+  font-size: 9px;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / .78);
+}
+
+.a-slide__headline {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  line-height: 1.2;
+  /* Two lines and then an ellipsis. A preview that grows to fit a long
+     headline stops being a preview of a fixed-height slide. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.a-slide__cta {
+  display: inline-block;
+  margin: 8px 0 0;
+  padding: 4px 10px;
+  border-radius: var(--a-r-control);
+  background: #fff;
+  color: var(--c-ink);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+/* The position, on the image because that is where the eye already is
+   when counting down the run. */
+.a-slide__badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  min-width: 22px;
+  margin: 0;
+  padding: 3px 6px;
+  border-radius: var(--a-r-control);
+  background: rgb(255 255 255 / .92);
+  color: var(--c-ink);
+  font-size: var(--a-fs-body);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* -------------------------------------------------------------------------
+   THE DETAIL
+   ------------------------------------------------------------------------- */
+
+.a-slide__detail { min-width: 0; }
+
+.a-slide__heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: 6px;
+}
+
+.a-slide__title {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--c-ink);
+}
+
+.a-slide__body {
+  margin: 0 0 8px;
+  font-size: var(--a-fs-body);
+  line-height: 1.55;
+  color: var(--c-body);
+}
+
+.a-slide__link,
+.a-slide__flag {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 4px;
+  font-size: var(--a-fs-body);
+  line-height: 1.5;
+}
+
+.a-slide__link .a-icon,
+.a-slide__flag .a-icon {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
+}
+
+.a-slide__link { color: var(--c-body); }
+.a-slide__link a { color: var(--c-body); word-break: break-all; }
+.a-slide__link a:hover { color: var(--c-ink); }
+
+/* A link going nowhere is the single most expensive thing on this screen,
+   so it is coloured, it carries a triangle, and it says which part of the
+   address the shop does not recognise. Three signals, none of them colour
+   on its own. */
+.a-slide__flag { color: var(--a-warning); }
+.a-slide__flag--bad { color: var(--a-danger); }
+.a-slide__flag strong { font-weight: 500; word-break: break-all; }
+
+/* -------------------------------------------------------------------------
+   THE ACTIONS
+
+   Order first and separated by a hairline, because moving a slide is a
+   different kind of act from editing it — one changes what shoppers see
+   first, the other changes what it says.
+   ------------------------------------------------------------------------- */
+
+.a-slide__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.a-slide__order {
+  display: flex;
+  gap: 2px;
+  padding-right: var(--sp-2);
+  border-right: var(--bw) solid var(--a-line);
+}
+
+.a-slide__order .a-iconbtn:disabled {
+  opacity: .3;
+  cursor: not-allowed;
+}
+
+/* -------------------------------------------------------------------------
+   THE IMAGE CHECK, INSIDE THE FORM
+
+   The path is typed, so it can be wrong, and a wrong path is a blank
+   rectangle on the homepage. The browser already knows whether the file
+   loaded; this shows that answer instead of leaving it to be found later.
+   ------------------------------------------------------------------------- */
+
+.a-imgcheck {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2);
+  border: var(--bw) solid var(--a-line);
+  border-radius: var(--a-r-control);
+  background: var(--a-surface-sunken);
+}
+
+.a-imgcheck__img {
+  width: 108px;
+  height: 61px;
+  flex: none;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--a-neutral-tint);
+}
+
+.a-imgcheck__note {
+  margin: 0;
+  font-size: var(--a-fs-body);
+  color: var(--c-body);
+  font-variant-numeric: tabular-nums;
+}
+
+.a-imgcheck[data-state="bad"] { border-color: var(--a-danger); }
+.a-imgcheck[data-state="bad"] .a-imgcheck__note { color: var(--a-danger); }
+.a-imgcheck[data-state="bad"] .a-imgcheck__img { visibility: hidden; }
+.a-imgcheck[data-state="empty"] .a-imgcheck__img { visibility: hidden; }
+
+/* -------------------------------------------------------------------------
+   RESPONSIVE
+
+   The preview keeps its width down to a tablet and then takes the full
+   row: a hero image squeezed into a 140px column stops showing whether the
+   headline is legible, which is the only reason it is drawn at all.
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 1100px) {
+  .a-slide { grid-template-columns: 230px minmax(0, 1fr) auto; }
+}
+
+@media (max-width: 860px) {
+  .a-slide {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-3);
+    padding: var(--sp-4);
+  }
+
+  .a-slide__preview { max-width: 420px; }
+
+  /* Actions move to their own line and spread, so both ends are reachable
+     with a thumb rather than stacked in a corner. */
+  .a-slide__actions { justify-content: space-between; }
+}
+
+@media (max-width: 749px) {
+  /* The arrows are the buttons pressed repeatedly on this screen, and a
+     32px target is a 32px target whether the pointer is a mouse or a
+     thumb. Grown to the same size the inventory stepper uses, for the
+     same reason and only where there is a thumb on them. */
+  .a-slide__order .a-iconbtn { width: 40px; height: 40px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .a-slide.is-new { animation: none; }
+}

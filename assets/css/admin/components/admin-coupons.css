@@ -1,0 +1,166 @@
+/* =========================================================================
+   admin-coupons.css — the discount codes
+   -------------------------------------------------------------------------
+   Toolbar, chips, result bar, table, empty states and pager come from
+   admin-products.css; the tiles from admin-categories.css; the quiet row
+   from admin-customers.css. What is here is the four things a coupon has
+   that nothing else in the panel does: a code, five states, a usage bar,
+   and a notice the screen must not be read without.
+
+   THE FIVE STATES ARE FIVE COLOURS, AND THAT IS NOT THE SIGNAL
+   Running, Scheduled, Used up, Expired and Switched off are all drawn as
+   pills — but the pill only ever repeats what the line under it says in
+   words, and that line gives the reason as well ("ended 22 days ago",
+   "500 of 500 used"). Colour here is a shortcut for people who can use
+   one, never the carrier.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   THE NOTICE
+
+   These codes are not accepted at any checkout. That is the sort of fact
+   that has to sit above the content rather than beside it: anywhere
+   quieter and somebody hands a customer a code that does nothing.
+   ------------------------------------------------------------------------- */
+
+.a-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border: var(--bw) solid var(--a-warning);
+  border-radius: var(--a-r-card);
+  background: var(--a-warning-tint);
+  color: var(--a-warning);
+}
+
+.a-notice .a-icon { flex: none; margin-top: 1px; }
+
+.a-notice p {
+  margin: 0;
+  font-size: var(--a-fs-body);
+  line-height: 1.55;
+}
+
+.a-notice strong { font-weight: 700; }
+
+/* -------------------------------------------------------------------------
+   STATE PILLS
+
+   Running takes the success colour, Scheduled the informational one, and
+   the three that mean "not working" are separated rather than lumped
+   together: used up is a success that ran out, expired is a date that
+   passed, and switched off is a decision somebody made. Reading them as
+   one grey would hide which of the three it is, and they are not fixed
+   the same way.
+   ------------------------------------------------------------------------- */
+
+.a-pill--running   { color: var(--a-success); background: var(--a-success-tint); }
+.a-pill--scheduled { color: var(--a-info);    background: var(--a-info-tint); }
+.a-pill--used-up   { color: var(--a-warning); background: var(--a-warning-tint); }
+.a-pill--expired   { color: var(--a-danger);  background: var(--a-danger-tint); }
+.a-pill--off       { color: var(--a-neutral); background: var(--a-neutral-tint); }
+
+/* -------------------------------------------------------------------------
+   THE TABLE
+   ------------------------------------------------------------------------- */
+
+.a-table--coupons { min-width: 52rem; }
+
+.a-cell--code { min-width: 12rem; }
+
+/* A code is typed by a customer and read out over a phone, so it is set
+   in a monospaced face at a size that separates 0 from O and 1 from l.
+   The rest of the panel is Roboto; this is the one place where being
+   transcribable beats matching. */
+.a-code {
+  display: inline-block;
+  padding: 2px 7px;
+  border: var(--bw) solid var(--a-line);
+  border-radius: 4px;
+  background: var(--a-surface-sunken);
+  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+  font-size: var(--a-fs-body);
+  font-weight: 500;
+  letter-spacing: .02em;
+  color: var(--c-ink);
+}
+
+/* State and reason share a cell, so the cell needs room for the sentence
+   without the table deciding to wrap the pill. */
+.a-table--coupons td .a-cell__meta { white-space: normal; }
+
+.a-cell--usage { min-width: 8.5rem; }
+
+/* -------------------------------------------------------------------------
+   THE USAGE BAR
+
+   Drawn only where there is a limit to be a proportion of — an unlimited
+   code gets its number and the word "no limit" instead. An empty track
+   under a count that can never fill it would imply a ceiling that does
+   not exist, which is the opposite of what unlimited means.
+   ------------------------------------------------------------------------- */
+
+.a-usage {
+  display: block;
+  height: 4px;
+  margin-top: 5px;
+  border-radius: 2px;
+  background: var(--a-neutral-tint);
+  overflow: hidden;
+}
+
+.a-usage__fill {
+  display: block;
+  height: 100%;
+  background: var(--c-ink);
+  transition: width var(--dur-mid) var(--ease-out);
+}
+
+/* A limit that has been reached is the reason the coupon stopped working,
+   so the bar says so rather than simply being full. */
+.a-usage__fill.is-full { background: var(--a-warning); }
+
+.a-usage__of {
+  font-weight: 400;
+  color: var(--a-neutral);
+}
+
+/* -------------------------------------------------------------------------
+   THE ON/OFF BUTTON
+
+   In the row, because switching a code off is the routine act on this
+   screen — a campaign ends early, a code leaks — and burying it in a
+   dialog would make the daily thing slower than the dangerous one.
+   ------------------------------------------------------------------------- */
+
+.a-iconbtn--on { color: var(--a-success); }
+.a-iconbtn--on:hover { background: var(--a-neutral-tint); color: var(--c-ink); }
+
+/* An expired coupon has no meaningful switch, so the space is held rather
+   than closed up: without it the edit and delete buttons on that row sit
+   one place to the left of every other row's, and the eye has to re-find
+   them on each line. */
+.a-iconbtn--void {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+}
+
+/* -------------------------------------------------------------------------
+   RESPONSIVE
+
+   The table scrolls inside its card, which admin-products.css arranges.
+   No column is dropped: code, discount, state and usage are the four
+   things this screen exists to show, and a coupon list without its state
+   is a list of words.
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 749px) {
+  .a-notice { padding: var(--sp-3); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .a-usage__fill { transition: none; }
+}

@@ -72,31 +72,9 @@ window.ZB.adminPages = window.ZB.adminPages || {};
 
   /* Inventory is a built section now, and lives in pages/inventory.js. */
 
-  ZB.adminPages.banners = stub({
-    title: 'Banners',
-    sub: 'The promotional slides on the homepage.',
-    phase: '10',
-    icon: 'image',
-    blurb: 'Control of the hero carousel the storefront opens with.',
-    bullets: [
-      'Preview, title, subtitle and image',
-      'Link target and active state',
-      'Add, edit and delete'
-    ]
-  });
+  /* Banners is a built section now, and lives in pages/banners.js. */
 
-  ZB.adminPages.coupons = stub({
-    title: 'Coupons',
-    sub: 'Discount codes.',
-    phase: '10',
-    icon: 'ticket',
-    blurb: 'Codes, what they take off, and how long they last.',
-    bullets: [
-      'Code, discount type and value',
-      'Expiry, usage limit and status',
-      'Add, edit and delete'
-    ]
-  });
+  /* Coupons is a built section now, and lives in pages/coupons.js. */
 
   ZB.adminPages.reports = stub({
     title: 'Reports',
