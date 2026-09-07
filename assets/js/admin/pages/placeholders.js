@@ -67,19 +67,8 @@ window.ZB.adminPages = window.ZB.adminPages || {};
   /* Orders, and the single-order view, are built sections now. They live
      in pages/orders.js and pages/order-detail.js. */
 
-  ZB.adminPages.customers = stub({
-    title: 'Customers',
-    sub: 'Who is buying.',
-    phase: '8',
-    icon: 'users',
-    blurb: 'The customer list with the history that makes each entry worth ' +
-           'reading.',
-    bullets: [
-      'Search and filters',
-      'Order count and total spending',
-      'Account status and customer detail'
-    ]
-  });
+  /* Customers, and the single-customer view, are built sections now. They
+     live in pages/customers.js and pages/customer-detail.js. */
 
   ZB.adminPages.inventory = stub({
     title: 'Inventory',

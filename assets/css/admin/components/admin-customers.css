@@ -1,0 +1,130 @@
+/* =========================================================================
+   admin-customers.css — the people list and one person's record
+   -------------------------------------------------------------------------
+   Built almost entirely from what already exists: the toolbar, chips,
+   table, empty states and pager come from admin-products.css, the summary
+   tiles from admin-categories.css, and the definition lists, banner and
+   two-column record layout from admin-orders.css. What is here is the four
+   things a customer has that an order does not.
+
+   THE INITIALS BLOCK IS NOT AN AVATAR
+   There are no photographs and there is no account system, so a circular
+   portrait frame would be promising something that will never arrive. It
+   is drawn as a plain squared mark instead — enough to anchor the eye down
+   a column of names, honest about being a stand-in.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   NAME CELL
+   ------------------------------------------------------------------------- */
+
+.a-who {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.a-who__mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-sm);
+  background: var(--a-neutral-tint);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: .04em;
+  color: var(--c-muted);
+  text-transform: uppercase;
+}
+
+.a-who__body { display: flex; flex-direction: column; min-width: 0; }
+
+.a-table--customers { min-width: 52rem; }
+
+/* Never ordered, or not for a long time. Marked rather than left for the
+   reader to work out by subtracting a date from today — that is the
+   arithmetic the column exists to save them. */
+.a-quiet { color: var(--a-warning); }
+
+/* -------------------------------------------------------------------------
+   THE RECORD
+   ------------------------------------------------------------------------- */
+
+.a-person__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20rem;
+  gap: var(--sp-5);
+  align-items: start;
+}
+
+.a-person__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.a-table--history { min-width: 24rem; }
+
+/* The four figures above the record are labels-and-values, not headline
+   numbers — "3 weeks ago" does not want 28px. */
+.a-stat__value--sm { font-size: var(--fs-xl); }
+
+@media (max-width: 949px) {
+  .a-person__grid { grid-template-columns: minmax(0, 1fr); }
+  .a-person__side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 639px) {
+  .a-person__side { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* -------------------------------------------------------------------------
+   DEPARTMENT SHARE
+
+   A short list of proportions that sum to a whole, which is the one job a
+   bar is genuinely better at than a number: the reader compares lengths
+   without reading. The percentage is printed beside it anyway, because the
+   bar is decoration for anyone who cannot see it — hence aria-hidden on
+   the bar and the real value in text.
+   ------------------------------------------------------------------------- */
+
+.a-shares { margin: 0; padding: 0; list-style: none; }
+
+.a-share {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4.5rem 2.5rem;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 5px 0;
+  font-size: var(--a-fs-body);
+}
+
+.a-share__label {
+  color: var(--c-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.a-share__bar {
+  height: 6px;
+  border-radius: var(--a-r-pill);
+  background: var(--a-neutral-tint);
+  overflow: hidden;
+}
+
+.a-share__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--c-ink);
+}
+
+.a-share__value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--c-muted);
+}

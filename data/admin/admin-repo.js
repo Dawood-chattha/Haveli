@@ -686,14 +686,140 @@ window.ZB = window.ZB || {};
 
   /* -----------------------------------------------------------------------
      Customers
+
+     EVERY NUMBER HERE IS COUNTED FROM THE ORDERS
+     A customer's order count and lifetime spend are not stored beside them
+     and are never invented: admin-mock rolls them up from the same order
+     list the orders page shows, and everything derived below — average
+     order, when they last bought — is counted here from the same source.
+     Two numbers that are supposed to agree should be one number, or they
+     will drift, and a customer profile that disagrees with their own order
+     history is worse than no profile.
+
+     The consequence worth naming: cancelling an order in this session
+     changes what this section reports about that customer, because the
+     rollup is read through the order overlay rather than frozen at build
+     time. That is the correct behaviour and it is also the behaviour a
+     real backend would have.
+
+     BLOCKING IS A UI STATE HERE AND MUST NOT BE MISTAKEN FOR SECURITY
+     Marking an account blocked writes to the overlay below and changes
+     what this panel draws. It does not stop anyone doing anything: there
+     is no account system, no session, and no server to refuse a request.
+     When one exists, blocking has to be enforced there — a frontend flag
+     only ever decides what to render.
      ----------------------------------------------------------------------- */
+
+  var customerEdits = {};   /* id -> { status } */
+
+  /** Orders belonging to one customer, newest first, with edits applied. */
+  function ordersOf(customerId) {
+    return currentOrders().filter(function (order) {
+      return order.customerId === customerId;
+    });
+  }
+
+  /**
+   * One customer, with the figures recounted from their orders.
+   *
+   * admin-mock already rolls up `orders` and `spent` at build time, but
+   * that rollup cannot see this session's status changes — a cancelled
+   * order has to stop counting as spend the moment it is cancelled, on
+   * every screen at once. So the totals are counted here instead, and the
+   * build-time ones are left alone rather than being trusted twice.
+   */
+  function shapeCustomer(person) {
+    if (!person) return null;
+
+    var theirs = ordersOf(person.id);
+    var earned = theirs.filter(ZB.adminMock.isRevenue);
+
+    var spent = earned.reduce(function (sum, o) { return sum + o.total; }, 0);
+
+    var out = {};
+    Object.keys(person).forEach(function (key) { out[key] = person[key]; });
+
+    out.orders = theirs.length;
+    out.spent = spent;
+    /* Averaged over the orders that were actually earned. Dividing by every
+       order including the cancelled ones would quietly understate what this
+       customer is worth. */
+    out.average = earned.length ? Math.round(spent / earned.length) : 0;
+    out.cancelled = theirs.length - earned.length;
+
+    /* `daysAgo` counts back from today, so the smallest is the most
+        recent. Null when they have never ordered — which the UI says in
+        words rather than printing a misleading zero. */
+    out.lastOrderDaysAgo = theirs.length
+      ? theirs.reduce(function (min, o) { return Math.min(min, o.daysAgo); }, Infinity)
+      : null;
+
+    if (customerEdits[person.id]) {
+      Object.keys(customerEdits[person.id]).forEach(function (key) {
+        out[key] = customerEdits[person.id][key];
+      });
+    }
+
+    return out;
+  }
+
+  function currentCustomers() {
+    return ZB.adminMock.customers().map(shapeCustomer);
+  }
+
+  /* There is no meaningful natural order — the mock builds customers in id
+     order, and an id is not a join date. So unlike products and orders,
+     this section has a real default sort rather than a "leave it alone"
+     one: newest members first, which is the order a customer list is
+     normally read in. */
+  var CUSTOMER_SORTS = {
+    recent:        function (a, b) { return a.joinedDaysAgo - b.joinedDaysAgo; },
+    oldest:        function (a, b) { return b.joinedDaysAgo - a.joinedDaysAgo; },
+    'name-asc':    function (a, b) { return a.name.localeCompare(b.name); },
+    'name-desc':   function (a, b) { return b.name.localeCompare(a.name); },
+    'spent-desc':  function (a, b) { return b.spent - a.spent; },
+    'spent-asc':   function (a, b) { return a.spent - b.spent; },
+    'orders-desc': function (a, b) { return b.orders - a.orders; }
+  };
 
   Repo.customers = {
 
-    /** options: { search, status, page, perPage } */
+    sorts: [
+      { id: 'recent', label: 'Newest members' },
+      { id: 'oldest', label: 'Longest standing' },
+      { id: 'name-asc', label: 'Name A–Z' },
+      { id: 'name-desc', label: 'Name Z–A' },
+      { id: 'spent-desc', label: 'Highest spend' },
+      { id: 'spent-asc', label: 'Lowest spend' },
+      { id: 'orders-desc', label: 'Most orders' }
+    ],
+
+    facets: function () {
+      var rows = currentCustomers();
+
+      var statuses = {};
+      var cities = {};
+      rows.forEach(function (person) {
+        statuses[person.status] = person.status === 'active' ? 'Active' : 'Blocked';
+        cities[person.city] = person.city;
+      });
+
+      var toList = function (map) {
+        return Object.keys(map).sort(function (a, b) {
+          return map[a].localeCompare(map[b]);
+        }).map(function (id) { return { id: id, label: map[id] }; });
+      };
+
+      return Repo.defer({
+        statuses: toList(statuses),
+        cities: toList(cities)
+      });
+    },
+
+    /** options: { search, status, city, sort, page, perPage } */
     list: function (options) {
       options = options || {};
-      var rows = ZB.adminMock.customers();
+      var rows = currentCustomers();
 
       if (options.search) {
         var needle = String(options.search).toLowerCase();
@@ -708,6 +834,13 @@ window.ZB = window.ZB || {};
         rows = rows.filter(function (c) { return c.status === options.status; });
       }
 
+      if (options.city) {
+        rows = rows.filter(function (c) { return c.city === options.city; });
+      }
+
+      var compare = CUSTOMER_SORTS[options.sort] || CUSTOMER_SORTS.recent;
+      rows = rows.slice().sort(compare);
+
       var total = rows.length;
       var perPage = options.perPage || 20;
       var pages = Math.max(1, Math.ceil(total / perPage));
@@ -716,12 +849,55 @@ window.ZB = window.ZB || {};
 
       return Repo.defer({
         items: rows.slice(start, start + perPage),
-        total: total, page: page, pages: pages, perPage: perPage
+        total: total, page: page, pages: pages, perPage: perPage,
+        spent: rows.reduce(function (sum, c) { return sum + c.spent; }, 0)
       });
     },
 
     get: function (id) {
-      return Repo.defer(ZB.adminMock.customer(id));
+      return Repo.defer(shapeCustomer(ZB.adminMock.customer(id)));
+    },
+
+    /** One customer's order history, newest first. */
+    orders: function (id) {
+      return Repo.defer(ordersOf(id));
+    },
+
+    summary: function () {
+      var rows = currentCustomers();
+      var spent = rows.reduce(function (sum, c) { return sum + c.spent; }, 0);
+
+      return Repo.defer({
+        total: rows.length,
+        blocked: rows.filter(function (c) { return c.status !== 'active'; }).length,
+        /* Joined inside the last thirty days — the number an owner reads as
+           "is the shop still growing". */
+        joinedRecently: rows.filter(function (c) { return c.joinedDaysAgo < 30; }).length,
+        spent: spent,
+        /* Averaged across everyone, including those who have not bought,
+           because that is what "average customer value" means. */
+        average: rows.length ? Math.round(spent / rows.length) : 0
+      });
+    },
+
+    /* -- writes. In memory only, and not a security control. -- */
+
+    setStatus: function (id, status) {
+      var person = shapeCustomer(ZB.adminMock.customer(id));
+      if (!person) return Promise.reject({ message: 'That customer no longer exists.' });
+
+      if (status !== 'active' && status !== 'blocked') {
+        return Promise.reject({ message: 'Unknown account status.' });
+      }
+
+      customerEdits[id] = customerEdits[id] || {};
+      customerEdits[id].status = status;
+
+      return Repo.customers.get(id);
+    },
+
+    hasUnsavedEdits: function () {
+      return Object.keys(customerEdits).length > 0;
     }
   };
 

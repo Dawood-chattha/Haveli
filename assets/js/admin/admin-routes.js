@@ -43,6 +43,7 @@ window.ZB = window.ZB || {};
       .add('/admin/orders/:id', pages.orderDetail)
       .add('/admin/orders', pages.orders)
 
+      .add('/admin/customers/:id', pages.customerDetail)
       .add('/admin/customers', pages.customers)
       .add('/admin/inventory', pages.inventory)
       .add('/admin/banners', pages.banners)

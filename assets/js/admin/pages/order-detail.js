@@ -317,11 +317,13 @@ window.ZB.adminPages = window.ZB.adminPages || {};
           defRow('Email', row.customerEmail) +
           defRow('City', row.city) +
         '</dl>' +
-        /* The customers section is a later phase, so this links to what
-           exists today: every other order this person has placed. */
+        /* The customer's own record: their whole history, what they spend
+           and what they buy. It links by id rather than by searching the
+           order list for their email, so two people who share a name still
+           land on the right one. */
         '<a class="a-btn a-btn--ghost a-btn--block" href="' +
-           ui.href('/admin/orders?q=' + encodeURIComponent(row.customerEmail)) + '">' +
-          ui.icon('receipt') + 'Their other orders' +
+           ui.href('/admin/customers/' + encodeURIComponent(row.customerId)) + '">' +
+          ui.icon('users') + 'Customer record' +
         '</a>'
     });
   }
