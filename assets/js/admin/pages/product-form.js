@@ -45,108 +45,20 @@ window.ZB.adminPages = window.ZB.adminPages || {};
 
   /* -----------------------------------------------------------------------
      Field builders
+
+     Shared with every other form in the panel — this file used to carry its
+     own copies, and once the category dialog needed the same label / help /
+     error wiring, two copies was one too many. The prefix keeps this form's
+     ids ('pf-title') distinct from any other form on screen.
      ----------------------------------------------------------------------- */
 
-  function fieldWrap(name, label, control, help) {
-    var id = 'pf-' + name;
-    return '' +
-      '<div class="a-field" data-field="' + name + '">' +
-        '<label class="a-field__label" for="' + id + '">' + ui.esc(label) + '</label>' +
-        (help ? '<p class="a-field__help" id="' + id + '-help">' + ui.esc(help) + '</p>' : '') +
-        control +
-        '<p class="a-field__error" id="' + id + '-error" hidden></p>' +
-      '</div>';
-  }
+  var fields = ZB.adminFields.make('pf');
 
-  function textField(o) {
-    var id = 'pf-' + o.name;
-    var describedBy = id + '-error' + (o.help ? ' ' + id + '-help' : '');
+  /* Thin wrappers: everything below already calls setError by field name,
+     and the shared helper wants the root to search as well. */
+  function setError(name, message) { fields.setError(document, name, message); }
+  function clearErrors() { fields.clearErrors(document); }
 
-    var control = '<input class="a-input" id="' + id + '" name="' + o.name + '"' +
-      ' type="' + (o.type || 'text') + '"' +
-      (o.value !== undefined && o.value !== null ? ' value="' + ui.esc(o.value) + '"' : '') +
-      (o.min !== undefined ? ' min="' + o.min + '"' : '') +
-      (o.step ? ' step="' + o.step + '"' : '') +
-      (o.prefix ? '' : '') +
-      ' autocomplete="off" aria-describedby="' + describedBy + '">';
-
-    if (o.prefix) {
-      control = '<span class="a-input__group"><span class="a-input__prefix">' +
-                ui.esc(o.prefix) + '</span>' + control + '</span>';
-    }
-
-    return fieldWrap(o.name, o.label, control, o.help);
-  }
-
-  function textArea(o) {
-    var id = 'pf-' + o.name;
-    var describedBy = id + '-error' + (o.help ? ' ' + id + '-help' : '');
-
-    return fieldWrap(o.name, o.label,
-      '<textarea class="a-input a-input--area" id="' + id + '" name="' + o.name + '"' +
-                ' rows="5" aria-describedby="' + describedBy + '">' +
-        ui.esc(o.value || '') +
-      '</textarea>', o.help);
-  }
-
-  function selectField(o) {
-    var id = 'pf-' + o.name;
-    var options = o.options.map(function (item) {
-      return '<option value="' + ui.esc(item.id) + '"' +
-             (String(item.id) === String(o.value) ? ' selected' : '') + '>' +
-             ui.esc(item.label) + '</option>';
-    }).join('');
-
-    return fieldWrap(o.name, o.label,
-      '<span class="a-select a-select--block">' +
-        '<select class="a-select__input" id="' + id + '" name="' + o.name + '"' +
-                ' aria-describedby="' + id + '-error">' + options + '</select>' +
-        '<span class="a-select__arrow" aria-hidden="true">' + ui.icon('chevron') + '</span>' +
-      '</span>', o.help);
-  }
-
-  /**
-   * A set of chips backed by real checkboxes.
-   *
-   * The input stays in the accessibility tree and keeps every keyboard
-   * behaviour a checkbox has; only its appearance is replaced.
-   */
-  function chipSet(o) {
-    var boxes = o.options.map(function (value, i) {
-      var id = 'pf-' + o.name + '-' + i;
-      var on = (o.value || []).indexOf(value) > -1;
-
-      return '' +
-        '<label class="a-chipbox">' +
-          '<input type="checkbox" id="' + id + '" name="' + o.name + '"' +
-                ' value="' + ui.esc(value) + '"' + (on ? ' checked' : '') + '>' +
-          '<span class="a-chipbox__face">' + ui.esc(value) + '</span>' +
-        '</label>';
-    }).join('');
-
-    return '' +
-      '<fieldset class="a-field a-field--set" data-field="' + o.name + '">' +
-        '<legend class="a-field__label">' + ui.esc(o.label) + '</legend>' +
-        (o.help ? '<p class="a-field__help">' + ui.esc(o.help) + '</p>' : '') +
-        '<div class="a-chipset">' + boxes + '</div>' +
-        '<p class="a-field__error" id="pf-' + o.name + '-error" hidden></p>' +
-      '</fieldset>';
-  }
-
-  function toggleField(o) {
-    return '' +
-      '<div class="a-field a-field--inline">' +
-        '<label class="a-switch">' +
-          '<input type="checkbox" id="pf-' + o.name + '" name="' + o.name + '"' +
-                (o.value ? ' checked' : '') + '>' +
-          '<span class="a-switch__track" aria-hidden="true"><span class="a-switch__knob"></span></span>' +
-          '<span class="a-switch__text">' +
-            '<span class="a-switch__label">' + ui.esc(o.label) + '</span>' +
-            (o.help ? '<span class="a-switch__help">' + ui.esc(o.help) + '</span>' : '') +
-          '</span>' +
-        '</label>' +
-      '</div>';
-  }
 
   /* -----------------------------------------------------------------------
      Options drawn from the catalogue's own seed
@@ -191,22 +103,22 @@ window.ZB.adminPages = window.ZB.adminPages || {};
 
           '<section class="a-card a-form__main">' +
             '<div class="a-card__body">' +
-              textField({ name: 'title', label: 'Product name', value: d.title }) +
-              textArea({ name: 'description', label: 'Description', value: d.description,
+              fields.text({ name: 'title', label: 'Product name', value: d.title }) +
+              fields.area({ name: 'description', label: 'Description', value: d.description, rows: 5,
                          help: 'Shown on the product page in the store.' }) +
 
               '<div class="a-form__row">' +
-                textField({ name: 'price', label: 'Price', type: 'number', min: 0,
+                fields.text({ name: 'price', label: 'Price', type: 'number', min: 0,
                             step: '1', prefix: 'PKR', value: d.price }) +
-                textField({ name: 'compareAt', label: 'Sale price', type: 'number', min: 0,
+                fields.text({ name: 'compareAt', label: 'Sale price', type: 'number', min: 0,
                             step: '1', prefix: 'PKR', value: d.compareAt,
                             help: 'Leave empty if the product is not reduced.' }) +
               '</div>' +
 
               '<div class="a-form__row">' +
-                textField({ name: 'stock', label: 'Stock', type: 'number', min: 0,
+                fields.text({ name: 'stock', label: 'Stock', type: 'number', min: 0,
                             step: '1', value: d.stock }) +
-                textField({ name: 'sku', label: 'SKU', value: d.sku,
+                fields.text({ name: 'sku', label: 'SKU', value: d.sku,
                             help: 'Left empty, one is generated.' }) +
               '</div>' +
             '</div>' +
@@ -214,13 +126,13 @@ window.ZB.adminPages = window.ZB.adminPages || {};
 
           '<section class="a-card a-form__side">' +
             '<div class="a-card__body">' +
-              selectField({ name: 'dept', label: 'Department', value: d.dept,
+              fields.select({ name: 'dept', label: 'Department', value: d.dept,
                             options: departments() }) +
-              textField({ name: 'category', label: 'Category', value: d.category,
+              fields.text({ name: 'category', label: 'Category', value: d.category,
                           help: 'For example Ready To Wear, Polo, Fragrance.' }) +
-              selectField({ name: 'status', label: 'Status', value: d.status,
+              fields.select({ name: 'status', label: 'Status', value: d.status,
                             options: STATUSES }) +
-              toggleField({ name: 'featured', label: 'Featured product', value: d.featured,
+              fields.toggle({ name: 'featured', label: 'Featured product', value: d.featured,
                             help: 'Featured products are promoted on the homepage.' }) +
             '</div>' +
           '</section>' +
@@ -243,11 +155,11 @@ window.ZB.adminPages = window.ZB.adminPages || {};
           '<section class="a-card a-form__variants">' +
             '<div class="a-card__body">' +
               '<div id="pf-sizes">' +
-                chipSet({ name: 'sizes', label: 'Sizes', options: sizesFor(d.dept),
+                fields.chips({ name: 'sizes', label: 'Sizes', options: sizesFor(d.dept),
                           value: d.sizes }) +
               '</div>' +
               '<div id="pf-colours">' +
-                selectField({ name: 'colour', label: 'Colour', value: d.colour,
+                fields.select({ name: 'colour', label: 'Colour', value: d.colour,
                               options: [{ id: '', label: 'No colour' }].concat(
                                 coloursFor(d.dept).map(function (c) {
                                   return { id: c, label: c };
@@ -306,25 +218,6 @@ window.ZB.adminPages = window.ZB.adminPages || {};
           '</button>' +
         '</figure>';
     }).join('');
-  }
-
-  function setError(name, message) {
-    var group = document.querySelector('[data-field="' + name + '"]');
-    if (!group) return;
-
-    var input = group.querySelector('.a-input, .a-select__input');
-    var slot = group.querySelector('.a-field__error');
-
-    group.classList.toggle('is-invalid', !!message);
-    if (input) input.setAttribute('aria-invalid', message ? 'true' : 'false');
-    if (slot) { slot.textContent = message || ''; slot.hidden = !message; }
-  }
-
-  function clearErrors() {
-    Array.prototype.forEach.call(
-      document.querySelectorAll('.a-field'),
-      function (group) { setError(group.getAttribute('data-field'), ''); }
-    );
   }
 
   function collect() {
@@ -433,10 +326,10 @@ window.ZB.adminPages = window.ZB.adminPages || {};
         var sizesHost = document.getElementById('pf-sizes');
         var coloursHost = document.getElementById('pf-colours');
 
-        sizesHost.innerHTML = chipSet({
+        sizesHost.innerHTML = fields.chips({
           name: 'sizes', label: 'Sizes', options: sizesFor(dept.value), value: []
         });
-        coloursHost.innerHTML = selectField({
+        coloursHost.innerHTML = fields.select({
           name: 'colour', label: 'Colour', value: '',
           options: [{ id: '', label: 'No colour' }].concat(
             coloursFor(dept.value).map(function (c) { return { id: c, label: c }; }))

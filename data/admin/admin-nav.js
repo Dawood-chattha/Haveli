@@ -38,9 +38,10 @@ window.ZB = window.ZB || {};
   ];
 
   /* Shown in the sidebar's profile block. Invented placeholder identity —
-     there is no account behind it and nothing here is a credential. Once
-     Firebase Authentication is connected this comes from the signed-in
-     user's profile instead. */
+     there is no account behind it and nothing here is a credential. When an
+     authentication service is connected in admin-auth.js, this comes from
+     the signed-in user's profile instead. No service has been chosen yet,
+     and this file does not need to know which one it turns out to be. */
   ZB.adminUser = {
     name: 'Store Owner',
     email: 'owner@haveli.example',

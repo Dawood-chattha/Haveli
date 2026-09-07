@@ -33,7 +33,7 @@
    this file.
 
    WHAT IS NOT HERE YET
-   Orders, customers, coupons and banners arrive in their own phases. They
+   Coupons, banners and the settings record arrive in their own phases. They
    will be added as siblings of `products`, in the same shape. Nothing is
    stubbed out in advance, so a method that exists here always works.
 
@@ -657,6 +657,430 @@ window.ZB = window.ZB || {};
       }).length;
 
       return Repo.defer({ inventory: outOfStock, orders: waiting });
+    }
+  };
+
+  /* -----------------------------------------------------------------------
+     Categories
+
+     WHERE A CATEGORY COMES FROM
+     Not from a table of its own. The storefront's menu is ZB.navigation,
+     and that tree already *is* the category structure — three departments,
+     each holding categories, some of which hold sub-categories. Inventing a
+     second list here would let the panel and the shop disagree about what
+     the store sells, which is the one thing this screen must never do.
+
+     So this reads the same tree, flattens it into rows, and counts the
+     products behind each one through ZB.catalogue — the same call the
+     storefront's own category page makes. A count shown here is therefore
+     the count a shopper would actually land on.
+
+     WHAT AN EDIT CAN AND CANNOT DO, HONESTLY
+     A rename or a hide is held in the overlay below, exactly like a product
+     edit, and is gone on reload. It also does not reach the storefront:
+     the two are separate documents, and ZB.navigation is a file, not a
+     database. The UI says so rather than implying otherwise — and the
+     category's storefront URL is deliberately built from its original
+     `slug`, never from the edited name, so a renamed category still links
+     to the page that actually exists.
+
+     Adding a backend replaces the body of these methods. The navigation
+     tree becomes the seed for the first import and nothing above this line
+     changes.
+     ----------------------------------------------------------------------- */
+
+  var catEdited = {};   /* id -> changed fields */
+  var catRemoved = {};  /* id -> true */
+  var catAdded = [];    /* created this session, newest first */
+  var catNextId = 1;
+
+  /** Flatten ZB.navigation into rows, parents immediately before children. */
+  function navigationRows() {
+    var slug = ZB.ui.slug;
+    var rows = [];
+
+    (ZB.navigation || []).forEach(function (dept) {
+      dept.items.forEach(function (item) {
+        var itemSlug = slug(item.label);
+        var parentId = dept.id + '/' + itemSlug;
+        var children = item.children || [];
+
+        rows.push({
+          id: parentId,
+          label: item.label,
+          slug: itemSlug,
+          dept: dept.id,
+          deptLabel: dept.label,
+          parentId: null,
+          parentLabel: null,
+          level: 1,
+          childCount: children.length,
+          status: 'active',
+          source: 'navigation'
+        });
+
+        children.forEach(function (child) {
+          var childSlug = slug(child.label);
+          rows.push({
+            id: parentId + '/' + childSlug,
+            label: child.label,
+            slug: childSlug,
+            dept: dept.id,
+            deptLabel: dept.label,
+            parentId: parentId,
+            parentLabel: item.label,
+            level: 2,
+            childCount: 0,
+            status: 'active',
+            source: 'navigation'
+          });
+        });
+      });
+    });
+
+    return rows;
+  }
+
+  /**
+   * How many products sit behind a category.
+   *
+   * ZB.catalogue.byCategory already answers this for both shapes: a leaf
+   * returns its own products, and a category with children returns
+   * everything underneath it. Counting the children by hand here would be a
+   * second implementation of the same rule, free to drift from the one the
+   * shop uses.
+   */
+  function productCountFor(row) {
+    if (row.source !== 'navigation') return 0;
+    return ZB.catalogue.byCategory(row.dept, row.slug).length;
+  }
+
+  /**
+   * Where a newly added category goes in menu order.
+   *
+   * Not the front of the list, which is where the product overlay puts a
+   * new row and is right there — a product list has no natural order to
+   * violate. A category list does. Prepending put a brand-new sub-category
+   * one row ABOVE the parent it belongs to, indented, with the hairline
+   * that says "these belong together" pointing at the wrong row. The tree
+   * has to stay a tree, so an added row is spliced in where it actually
+   * belongs: after its parent's existing children, or at the end of its
+   * department for a top-level one.
+   *
+   * The page makes the new row findable by flashing it instead.
+   */
+  function spliceIntoTree(rows, row) {
+    var at = -1;
+
+    if (row.parentId) {
+      var parentAt = -1;
+      rows.forEach(function (other, i) {
+        if (other.id === row.parentId) parentAt = i;
+      });
+
+      if (parentAt > -1) {
+        at = parentAt + 1;
+        while (at < rows.length && rows[at].parentId === row.parentId) at++;
+      }
+    } else {
+      /* After everything already in this department. */
+      rows.forEach(function (other, i) {
+        if (other.dept === row.dept) at = i + 1;
+      });
+    }
+
+    if (at < 0) rows.push(row);
+    else rows.splice(at, 0, row);
+  }
+
+  /** The category tree as the admin currently sees it. */
+  function currentCategories() {
+    var rows = navigationRows();
+
+    /* Oldest first, so a category added under one added a moment earlier
+       finds its parent already in place. */
+    catAdded.slice().reverse().forEach(function (row) {
+      spliceIntoTree(rows, row);
+    });
+
+    var live = rows
+      .filter(function (row) { return !catRemoved[row.id]; })
+      .map(function (row) {
+        var merged = {};
+        Object.keys(row).forEach(function (key) { merged[key] = row[key]; });
+
+        if (catEdited[row.id]) {
+          Object.keys(catEdited[row.id]).forEach(function (key) {
+            merged[key] = catEdited[row.id][key];
+          });
+        }
+
+        merged.productCount = productCountFor(row);
+        /* Built from `slug`, not from the edited label — see the note
+           above. A row added in this session has no storefront page at
+           all, so it gets no link rather than a broken one. */
+        merged.storefrontPath = row.source === 'navigation'
+          ? '/category/' + row.dept + '/' + row.slug
+          : null;
+
+        return merged;
+      });
+
+    /* Recounted from what actually survives rather than carried over from
+       the navigation tree: deleting a sub-category has to change the
+       "3 sub-categories" line on its parent in the same breath, or the row
+       above contradicts the rows below it. */
+    var kids = {};
+    live.forEach(function (row) {
+      if (row.parentId) kids[row.parentId] = (kids[row.parentId] || 0) + 1;
+    });
+    live.forEach(function (row) { row.childCount = kids[row.id] || 0; });
+
+    return live;
+  }
+
+  /* 'tree' is the natural order — navigationRows() already emits parents
+     immediately before their own children, which is the order the menu
+     itself reads in. Every other sort breaks that adjacency, so the page
+     stops indenting when one is chosen rather than indenting rows whose
+     parent is now forty lines away. */
+  var CATEGORY_SORTS = {
+    'name-asc':      function (a, b) { return a.label.localeCompare(b.label); },
+    'name-desc':     function (a, b) { return b.label.localeCompare(a.label); },
+    'products-desc': function (a, b) { return b.productCount - a.productCount; },
+    'products-asc':  function (a, b) { return a.productCount - b.productCount; }
+  };
+
+  Repo.categories = {
+
+    sorts: [
+      { id: 'tree', label: 'Menu order' },
+      { id: 'name-asc', label: 'Name A–Z' },
+      { id: 'name-desc', label: 'Name Z–A' },
+      { id: 'products-desc', label: 'Most products' },
+      { id: 'products-asc', label: 'Fewest products' }
+    ],
+
+    /**
+     * The filter options, taken from the data itself so a control can never
+     * offer a value that would return nothing — the same rule the
+     * storefront's facets follow.
+     */
+    facets: function () {
+      var rows = currentCategories();
+
+      var depts = {};
+      var statuses = {};
+      var levels = {};
+
+      rows.forEach(function (row) {
+        depts[row.dept] = row.deptLabel;
+        statuses[row.status] = row.status === 'active' ? 'Visible' : 'Hidden';
+        levels[row.level] = row.level === 1 ? 'Top level' : 'Sub-category';
+      });
+
+      var toList = function (map, sortByLabel) {
+        var keys = Object.keys(map);
+        keys.sort(sortByLabel
+          ? function (a, b) { return map[a].localeCompare(map[b]); }
+          : function (a, b) { return Number(a) - Number(b); });
+        return keys.map(function (id) { return { id: id, label: map[id] }; });
+      };
+
+      return Repo.defer({
+        departments: toList(depts, true),
+        statuses: toList(statuses, true),
+        levels: toList(levels, false),
+        /* Every category that is allowed to be a parent, for the add form.
+           Only top-level rows qualify: the storefront menu is two deep and
+           a third level would have nowhere to render. */
+        parents: rows.filter(function (row) { return row.level === 1; })
+                     .map(function (row) {
+                       return { id: row.id, label: row.deptLabel + ' → ' + row.label,
+                                dept: row.dept };
+                     })
+      });
+    },
+
+    /**
+     * A page of categories.
+     * options: { search, dept, level, status, sort, page, perPage }
+     * resolves: { items, total, page, pages, perPage, tree }
+     *
+     * `tree` tells the page whether the rows are still in menu order and
+     * can therefore be indented.
+     */
+    list: function (options) {
+      options = options || {};
+      var rows = currentCategories();
+
+      if (options.search) {
+        var needle = String(options.search).toLowerCase();
+        rows = rows.filter(function (row) {
+          return row.label.toLowerCase().indexOf(needle) > -1 ||
+                 (row.parentLabel || '').toLowerCase().indexOf(needle) > -1 ||
+                 row.deptLabel.toLowerCase().indexOf(needle) > -1;
+        });
+      }
+
+      if (options.dept) {
+        rows = rows.filter(function (row) { return row.dept === options.dept; });
+      }
+
+      if (options.level) {
+        rows = rows.filter(function (row) {
+          return String(row.level) === String(options.level);
+        });
+      }
+
+      if (options.status) {
+        rows = rows.filter(function (row) { return row.status === options.status; });
+      }
+
+      var compare = CATEGORY_SORTS[options.sort];
+      if (compare) rows = rows.slice().sort(compare);
+
+      var total = rows.length;
+      var perPage = options.perPage || 20;
+      var pages = Math.max(1, Math.ceil(total / perPage));
+      var page = Math.min(Math.max(1, options.page || 1), pages);
+      var start = (page - 1) * perPage;
+
+      return Repo.defer({
+        items: rows.slice(start, start + perPage),
+        total: total,
+        page: page,
+        pages: pages,
+        perPage: perPage,
+        tree: !compare
+      });
+    },
+
+    get: function (id) {
+      var hit = currentCategories().filter(function (row) { return row.id === id; })[0];
+      return Repo.defer(hit || null);
+    },
+
+    /** Every category, unpaged — for the summary tiles above the list. */
+    summary: function () {
+      var rows = currentCategories();
+      var empty = rows.filter(function (row) { return row.productCount === 0; });
+
+      return Repo.defer({
+        total: rows.length,
+        topLevel: rows.filter(function (row) { return row.level === 1; }).length,
+        hidden: rows.filter(function (row) { return row.status !== 'active'; }).length,
+        empty: empty.length
+      });
+    },
+
+    /* -- writes. In memory only, exactly like products. -- */
+
+    create: function (data) {
+      var id = 'new-cat-' + (catNextId++);
+      var parent = data.parentId
+        ? currentCategories().filter(function (row) { return row.id === data.parentId; })[0]
+        : null;
+
+      var dept = parent ? parent.dept : data.dept;
+      var deptRow = (ZB.navigation || []).filter(function (d) { return d.id === dept; })[0];
+
+      var row = {
+        id: id,
+        label: data.label,
+        slug: ZB.ui.slug(data.label),
+        dept: dept,
+        deptLabel: deptRow ? deptRow.label : dept,
+        parentId: parent ? parent.id : null,
+        parentLabel: parent ? parent.label : null,
+        level: parent ? 2 : 1,
+        childCount: 0,
+        status: data.status || 'active',
+        source: 'new'
+      };
+
+      catAdded.unshift(row);
+      return Repo.defer(row);
+    },
+
+    update: function (id, data) {
+      var exists = currentCategories().some(function (row) { return row.id === id; });
+      if (!exists) {
+        return Promise.reject({ message: 'That category no longer exists.' });
+      }
+
+      var own = catAdded.filter(function (row) { return row.id === id; })[0];
+
+      if (own) {
+        Object.keys(data).forEach(function (key) { own[key] = data[key]; });
+        if (data.label) own.slug = ZB.ui.slug(data.label);
+      } else {
+        catEdited[id] = catEdited[id] || {};
+        Object.keys(data).forEach(function (key) { catEdited[id][key] = data[key]; });
+      }
+
+      return Repo.categories.get(id);
+    },
+
+    /**
+     * Remove a category, and with it anything filed underneath it.
+     *
+     * Leaving the children behind would put rows in the list whose parent
+     * is gone — orphans the reader cannot get back to and cannot explain.
+     * The count of what will go is shown in the dialog before this runs.
+     *
+     * Products are never touched. A category is a label on the menu; the
+     * products it held still exist and still belong to the department.
+     */
+    remove: function (id) {
+      var all = currentCategories();
+      var doomed = all.filter(function (row) {
+        return row.id === id || row.parentId === id;
+      });
+
+      var undo = { rows: [], removed: [], edits: {} };
+
+      doomed.forEach(function (row) {
+        var own = catAdded.filter(function (added) { return added.id === row.id; })[0];
+
+        if (own) {
+          undo.rows.push(own);
+          catAdded = catAdded.filter(function (added) { return added.id !== row.id; });
+        } else {
+          undo.removed.push(row.id);
+          catRemoved[row.id] = true;
+        }
+
+        if (catEdited[row.id]) {
+          undo.edits[row.id] = catEdited[row.id];
+          delete catEdited[row.id];
+        }
+      });
+
+      undo.count = doomed.length;
+      return Repo.defer(undo);
+    },
+
+    restore: function (undo) {
+      if (!undo) return Repo.defer(false);
+
+      (undo.rows || []).forEach(function (row) { catAdded.unshift(row); });
+      (undo.removed || []).forEach(function (id) { delete catRemoved[id]; });
+      Object.keys(undo.edits || {}).forEach(function (id) {
+        catEdited[id] = undo.edits[id];
+      });
+
+      return Repo.defer(true);
+    },
+
+    /** How many sub-categories a row would take with it. */
+    childrenOf: function (id) {
+      return currentCategories().filter(function (row) { return row.parentId === id; });
+    },
+
+    hasUnsavedEdits: function () {
+      return catAdded.length > 0 || Object.keys(catEdited).length > 0 ||
+             Object.keys(catRemoved).length > 0;
     }
   };
 

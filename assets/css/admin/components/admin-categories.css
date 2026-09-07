@@ -1,0 +1,150 @@
+/* =========================================================================
+   admin-categories.css — the category tree, and the summary strip above it
+   -------------------------------------------------------------------------
+   Almost everything this screen needs already exists: the toolbar, chips,
+   result bar, table, empty states and pager all come from
+   admin-products.css, which was written not to name products for exactly
+   this reason. What is left is the handful of things a tree needs that a
+   flat list does not.
+
+   THE INDENT IS A RULE, NOT A DECORATION
+   A sub-category is drawn one step in from its parent, and only while the
+   list is in menu order. Under any other sort the parent may be forty rows
+   or a page away, and an indent then claims a relationship the reader
+   cannot see on screen. The page adds .a-cell--child only when the repo
+   says the rows are still a tree; there is no CSS-only version of that
+   test, which is why it lives in one place rather than two.
+
+   The indent is also not the only marker. Colour and position alone would
+   leave the hierarchy invisible to anyone reading the table linearly, so
+   the Parent column carries the parent's name in words as well.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   SUMMARY STRIP
+
+   Four counts above the list. They reuse .a-stat from the dashboard rather
+   than restating it — the same component doing the same job in a second
+   place, which is the whole reason it was made a component.
+   ------------------------------------------------------------------------- */
+
+.a-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-5);
+}
+
+/* Shorter than a dashboard tile: there is no delta and no sparkline under
+   these, so the tile should not reserve the height for one. */
+.a-metric { min-height: 0; }
+.a-metric .a-stat__value { font-size: var(--fs-2xl); }
+
+/* Nothing to say yet. Dashes rather than zeros — a zero that turns into
+   240 a moment later was a wrong answer while it was on screen. */
+.a-metrics[aria-busy="true"] .a-stat__value { color: var(--c-faint); }
+
+@media (max-width: 899px) {
+  .a-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 479px) {
+  .a-metrics { grid-template-columns: 1fr; gap: var(--sp-3); }
+}
+
+/* -------------------------------------------------------------------------
+   THE TABLE
+   ------------------------------------------------------------------------- */
+
+.a-table--categories { min-width: 42rem; }
+
+/* The step in for a sub-category, with a hairline running down the gutter
+   so a run of siblings reads as one group rather than as four separate
+   indents that happen to line up. */
+.a-cell--child {
+  padding-left: calc(var(--sp-5) + var(--sp-6)) !important;
+  position: relative;
+}
+
+.a-cell--child::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--sp-5) + var(--sp-3));
+  top: 0;
+  bottom: 0;
+  border-left: var(--bw) solid var(--a-line);
+}
+
+.a-cell--muted { color: var(--c-muted); }
+
+/* A row that was just added, flashed once. It fades to nothing rather than
+   settling on a colour: a permanent "new" marker stops meaning anything by
+   the third addition, and leaves the table striped by history. */
+.a-table tbody tr.is-new { animation: aRowNew 2.4s var(--ease-out) both; }
+
+@keyframes aRowNew {
+  0%   { background: var(--a-success-tint); }
+  35%  { background: var(--a-success-tint); }
+  100% { background: transparent; }
+}
+
+/* -------------------------------------------------------------------------
+   PRODUCT COUNT
+
+   The count is the reason to open this screen, so it is a destination: the
+   number links to exactly those products. A zero is not a link, because
+   there is nothing on the other end — it is drawn as the warning it is.
+   ------------------------------------------------------------------------- */
+
+.a-count {
+  display: inline-block;
+  min-width: 2.5rem;
+  padding: 2px 7px;
+  border-radius: var(--a-r-control);
+  font-variant-numeric: tabular-nums;
+  color: var(--c-ink);
+  text-decoration: none;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+a.a-count:hover {
+  background: var(--a-neutral-tint);
+  text-decoration: underline;
+}
+
+a.a-count:focus-visible {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 1px;
+}
+
+/* Not red: an empty category is worth noticing, not worth alarm. The word
+   carries it as much as the colour does. */
+.a-count--zero {
+  color: var(--a-warning);
+  background: var(--a-warning-tint);
+  font-size: var(--fs-3xs);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+/* -------------------------------------------------------------------------
+   RESPONSIVE
+
+   The table scrolls inside its own card below its minimum width, which
+   admin-products.css already arranges. Dropping columns instead would hide
+   the Parent name, and that is the column carrying the hierarchy for
+   anyone the indent does not reach.
+   ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .a-count { transition: none; }
+
+  /* The flash still has to communicate, so it is held rather than removed:
+     a steady tint that clears on the next render, not an animation. */
+  .a-table tbody tr.is-new {
+    animation: none;
+    background: var(--a-success-tint);
+  }
+}

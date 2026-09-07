@@ -239,6 +239,7 @@
 .a-pill--shipped        { color: var(--a-info);    background: var(--a-info-tint); }
 
 .a-pill--draft,
+.a-pill--hidden,
 .a-pill--neutral        { color: var(--a-neutral); background: var(--a-neutral-tint); }
 
 /* -------------------------------------------------------------------------

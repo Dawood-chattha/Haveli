@@ -62,19 +62,7 @@ window.ZB.adminPages = window.ZB.adminPages || {};
   /* Products, and the add/edit form, are built sections now. They live in
      pages/products.js and pages/product-form.js. */
 
-  ZB.adminPages.categories = stub({
-    title: 'Categories',
-    sub: 'How the catalogue is organised.',
-    phase: '6',
-    icon: 'layers',
-    blurb: 'The category tree behind the storefront menu, with the count of ' +
-           'products sitting in each one.',
-    bullets: [
-      'List with product counts and status',
-      'Add, edit and delete',
-      'Search'
-    ]
-  });
+  /* Categories is a built section now, and lives in pages/categories.js. */
 
   ZB.adminPages.orders = stub({
     title: 'Orders',

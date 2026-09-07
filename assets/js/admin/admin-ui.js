@@ -145,7 +145,7 @@ window.ZB = window.ZB || {};
      * unexpected value from data cannot smuggle a class name into markup.
      */
     statusPill: function (kind, label) {
-      var known = ['active', 'draft', 'out-of-stock', 'low', 'pending',
+      var known = ['active', 'draft', 'hidden', 'out-of-stock', 'low', 'pending',
                    'processing', 'shipped', 'delivered', 'cancelled', 'neutral'];
       var safe = known.indexOf(kind) > -1 ? kind : 'neutral';
       return '<span class="a-pill a-pill--' + safe + '">' + AdminUI.esc(label) + '</span>';

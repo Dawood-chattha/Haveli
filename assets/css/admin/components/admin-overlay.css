@@ -62,6 +62,45 @@
   gap: var(--sp-2);
 }
 
+/* -------------------------------------------------------------------------
+   A FORM IN THE BOX
+
+   Wider than a confirm, because a confirm holds one sentence and this holds
+   labelled controls. And scrollable in its own right: on a short window the
+   fields must scroll while the buttons stay put, or the only way to reach
+   Save is to scroll a dialog that has already run off the bottom of the
+   screen. The box is capped at the viewport for the same reason.
+   ------------------------------------------------------------------------- */
+
+.a-modal__box--wide {
+  max-width: 32rem;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - var(--sp-8));
+}
+
+.a-modal__form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;      /* lets the fields, not the box, do the scrolling */
+}
+
+.a-modal__fields {
+  overflow-y: auto;
+  padding-block: 2px;   /* room for a focus ring on the first and last field */
+  margin-bottom: var(--sp-5);
+}
+
+/* A value the reader may not change. Drawn flat rather than as a disabled
+   input: a greyed-out control invites clicking and then refuses, which
+   reads as a fault. */
+.a-readonly {
+  margin: 0;
+  padding: 9px 0 0;
+  font-size: var(--a-fs-body);
+  color: var(--c-body);
+}
+
 @keyframes aScrimIn { from { opacity: 0; } to { opacity: 1; } }
 
 @keyframes aModalIn {

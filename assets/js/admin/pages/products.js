@@ -34,7 +34,7 @@ window.ZB.adminPages = window.ZB.adminPages || {};
   var ui = ZB.adminUI;
   var PER_PAGE = 12;
 
-  var state = { q: '', dept: '', status: '', sort: 'newest', page: 1 };
+  var state = { q: '', dept: '', category: '', status: '', sort: 'newest', page: 1 };
   var facets = null;
   var lastResult = null;
 
@@ -47,6 +47,12 @@ window.ZB.adminPages = window.ZB.adminPages || {};
     state = {
       q: query.q || '',
       dept: query.dept || '',
+      /* Arrives by link from the category list rather than from a control
+         here. There is no category select: the catalogue has over a hundred
+         of them, and a select that long is a worse way in than the screen
+         that already lists them with their counts. It still gets a chip, so
+         it is visible and removable like every other filter. */
+      category: query.category || '',
       status: query.status || '',
       sort: query.sort || 'newest',
       page: Math.max(1, parseInt(query.page, 10) || 1)
@@ -57,6 +63,7 @@ window.ZB.adminPages = window.ZB.adminPages || {};
     var parts = [];
     if (state.q) parts.push('q=' + encodeURIComponent(state.q));
     if (state.dept) parts.push('dept=' + encodeURIComponent(state.dept));
+    if (state.category) parts.push('category=' + encodeURIComponent(state.category));
     if (state.status) parts.push('status=' + encodeURIComponent(state.status));
     if (state.sort && state.sort !== 'newest') parts.push('sort=' + state.sort);
     if (state.page > 1) parts.push('page=' + state.page);
@@ -66,7 +73,7 @@ window.ZB.adminPages = window.ZB.adminPages || {};
   }
 
   function hasFilters() {
-    return !!(state.q || state.dept || state.status);
+    return !!(state.q || state.dept || state.category || state.status);
   }
 
   /* -----------------------------------------------------------------------
@@ -150,6 +157,11 @@ window.ZB.adminPages = window.ZB.adminPages || {};
         if (!document.body.contains(body)) return;
         facets = result;
         paintSelects();
+        /* The chips are drawn by load(), which may well have finished
+           first — and without the facets it can only label a filter with
+           its raw slug ("summer-pret"). Repainting them here is what turns
+           that into the name the reader chose. */
+        paintChips();
       });
 
       load();
@@ -190,7 +202,8 @@ window.ZB.adminPages = window.ZB.adminPages || {};
         }
 
         if (e.target.closest('[data-clear-all]')) {
-          state.q = ''; state.dept = ''; state.status = ''; state.page = 1;
+          state.q = ''; state.dept = ''; state.category = '';
+          state.status = ''; state.page = 1;
           search.value = '';
           writeState();
           load();
@@ -231,6 +244,7 @@ window.ZB.adminPages = window.ZB.adminPages || {};
     ZB.repo.products.list({
       search: state.q,
       dept: state.dept,
+      category: state.category,
       status: state.status,
       sort: state.sort,
       page: state.page,
@@ -307,6 +321,12 @@ window.ZB.adminPages = window.ZB.adminPages || {};
     }
     if (state.dept) {
       chips.push({ key: 'dept', label: labelFor(facets && facets.departments, state.dept) });
+    }
+    if (state.category) {
+      chips.push({
+        key: 'category',
+        label: 'In ' + labelFor(facets && facets.categories, state.category)
+      });
     }
     if (state.status) {
       chips.push({ key: 'status', label: labelFor(facets && facets.statuses, state.status) });
