@@ -64,20 +64,8 @@ window.ZB.adminPages = window.ZB.adminPages || {};
 
   /* Categories is a built section now, and lives in pages/categories.js. */
 
-  ZB.adminPages.orders = stub({
-    title: 'Orders',
-    sub: 'What customers have bought.',
-    phase: '7',
-    icon: 'receipt',
-    blurb: 'Every order, its payment state and where it has reached, plus a ' +
-           'full detail view.',
-    bullets: [
-      'Order ID, customer, date, items and total',
-      'Payment status and order status',
-      'Pending, Processing, Shipped, Delivered, Cancelled',
-      'Order detail view'
-    ]
-  });
+  /* Orders, and the single-order view, are built sections now. They live
+     in pages/orders.js and pages/order-detail.js. */
 
   ZB.adminPages.customers = stub({
     title: 'Customers',

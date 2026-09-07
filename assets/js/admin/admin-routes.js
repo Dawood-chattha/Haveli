@@ -38,7 +38,11 @@ window.ZB = window.ZB || {};
       .add('/admin/products', pages.products)
 
       .add('/admin/categories', pages.categories)
+
+      /* The detail view before the list, same convention as products. */
+      .add('/admin/orders/:id', pages.orderDetail)
       .add('/admin/orders', pages.orders)
+
       .add('/admin/customers', pages.customers)
       .add('/admin/inventory', pages.inventory)
       .add('/admin/banners', pages.banners)

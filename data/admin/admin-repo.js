@@ -378,28 +378,172 @@ window.ZB = window.ZB || {};
              Object.keys(removed).length > 0;
     }
   };
-
   /* -----------------------------------------------------------------------
      Orders
+
+     STATUS CHANGES LIVE IN MEMORY, LIKE EVERY OTHER WRITE
+     Marking an order shipped is the one thing an owner does on this screen
+     every day, so the panel has to be able to do it — but there is nothing
+     to save to. The change goes into the overlay below and is gone on
+     reload, and the screen says so.
+
+     The overlay is also where the seam is. With a backend, `orderEdits`
+     goes and updateStatus() becomes the call that writes it; the pages do
+     not change, because none of them reaches past these methods.
+
+     WHAT THE STATUS FLOW ALLOWS, AND WHY IT IS HERE AND NOT IN THE PAGE
+     An order moves forward: pending, processing, shipped, delivered. It can
+     be cancelled while it has not yet shipped. Delivered and cancelled are
+     final. Putting that rule in the page would mean writing it again on
+     every screen that offers the action — the list and the detail view
+     already both do — and two copies of a rule is one copy too many.
      ----------------------------------------------------------------------- */
+
+  var orderEdits = {};   /* id -> { status, statusLabel, payment, ... } */
+
+  /**
+   * What an order may become next.
+   *
+   * Returns [] for a finished order, which is how both screens know to
+   * offer nothing rather than to offer something that will be refused.
+   */
+  var NEXT_STATUS = {
+    pending:    ['processing', 'cancelled'],
+    processing: ['shipped', 'cancelled'],
+    shipped:    ['delivered'],
+    delivered:  [],
+    cancelled:  []
+  };
+
+  /* The order the stages happen in, for the progress strip. Cancelled is
+     not a stage — it is a way of leaving the sequence — so it is absent
+     here and drawn separately. */
+  var STATUS_FLOW = ['pending', 'processing', 'shipped', 'delivered'];
+
+  function orderLabel(id) {
+    var hit = ZB.adminSeed.statuses.filter(function (s) { return s.id === id; })[0];
+    return hit ? hit.label : id;
+  }
+
+  function paymentLabel(id) {
+    var hit = ZB.adminSeed.payments.filter(function (p) { return p.id === id; })[0];
+    return hit ? hit.label : id;
+  }
+
+  /** One order with any changes made this session applied on top. */
+  function withEdits(order) {
+    if (!orderEdits[order.id]) return order;
+
+    var merged = {};
+    Object.keys(order).forEach(function (key) { merged[key] = order[key]; });
+    Object.keys(orderEdits[order.id]).forEach(function (key) {
+      merged[key] = orderEdits[order.id][key];
+    });
+    return merged;
+  }
+
+  function currentOrders() {
+    return ZB.adminMock.orders().map(withEdits);
+  }
+
+  var ORDER_SORTS = {
+    oldest:      function (a, b) { return b.daysAgo - a.daysAgo; },
+    'total-desc': function (a, b) { return b.total - a.total; },
+    'total-asc':  function (a, b) { return a.total - b.total; },
+    'items-desc': function (a, b) { return b.itemCount - a.itemCount; }
+  };
 
   Repo.orders = {
 
-    /** options: { search, status, payment, page, perPage } */
+    /* 'newest' is absent for the same reason 'newest' is absent from the
+       product sorts: it means "leave the natural order alone", and the mock
+       already emits orders newest first. */
+    sorts: [
+      { id: 'newest', label: 'Newest first' },
+      { id: 'oldest', label: 'Oldest first' },
+      { id: 'total-desc', label: 'Highest value' },
+      { id: 'total-asc', label: 'Lowest value' },
+      { id: 'items-desc', label: 'Most items' }
+    ],
+
+    /** The windows the date filter offers. `days` of 0 means everything. */
+    ranges: [
+      { id: '7', label: 'Last 7 days', days: 7 },
+      { id: '30', label: 'Last 30 days', days: 30 },
+      { id: '90', label: 'Last 90 days', days: 90 }
+    ],
+
+    statusFlow: STATUS_FLOW,
+
+    /** What this order may be moved to, as [{ id, label }]. */
+    nextStatuses: function (status) {
+      return (NEXT_STATUS[status] || []).map(function (id) {
+        return { id: id, label: orderLabel(id) };
+      });
+    },
+
+    facets: function () {
+      var rows = currentOrders();
+
+      var statuses = {};
+      var payments = {};
+      rows.forEach(function (order) {
+        statuses[order.status] = orderLabel(order.status);
+        payments[order.payment] = paymentLabel(order.payment);
+      });
+
+      /* Kept in the seed's own order rather than alphabetised: Pending,
+         Processing, Shipped, Delivered is a sequence, and sorting it by
+         name would scramble it into something nobody can scan. */
+      var inSeedOrder = function (seedList, present) {
+        return seedList.filter(function (item) { return present[item.id]; })
+                       .map(function (item) {
+                         return { id: item.id, label: item.label };
+                       });
+      };
+
+      var statusList = inSeedOrder(ZB.adminSeed.statuses, statuses);
+
+      /* "Needs action" is not a status an order has — it is the question an
+         owner opens this screen with, and the answer spans two of them.
+         Offering it here rather than making the reader select Pending, read
+         the list, then select Processing and read it again is the whole
+         point of a filter. It sits first because it is what the screen is
+         most often opened for. */
+      if (statuses.pending || statuses.processing) {
+        statusList.unshift({ id: 'waiting', label: 'Needs action' });
+      }
+
+      return Repo.defer({
+        statuses: statusList,
+        payments: inSeedOrder(ZB.adminSeed.payments, payments),
+        ranges: Repo.orders.ranges
+      });
+    },
+
+    /** options: { search, status, payment, range, sort, page, perPage } */
     list: function (options) {
       options = options || {};
-      var rows = ZB.adminMock.orders();
+      var rows = currentOrders();
 
       if (options.search) {
         var needle = String(options.search).toLowerCase();
         rows = rows.filter(function (order) {
           return order.ref.toLowerCase().indexOf(needle) > -1 ||
                  order.customerName.toLowerCase().indexOf(needle) > -1 ||
-                 order.customerEmail.toLowerCase().indexOf(needle) > -1;
+                 order.customerEmail.toLowerCase().indexOf(needle) > -1 ||
+                 order.city.toLowerCase().indexOf(needle) > -1;
         });
       }
 
-      if (options.status) {
+      if (options.status === 'waiting') {
+        /* The pseudo-status from facets(). Kept here rather than in the
+           page so the tile, the select and any future link all mean the
+           same thing by it. */
+        rows = rows.filter(function (o) {
+          return o.status === 'pending' || o.status === 'processing';
+        });
+      } else if (options.status) {
         rows = rows.filter(function (o) { return o.status === options.status; });
       }
 
@@ -407,26 +551,136 @@ window.ZB = window.ZB || {};
         rows = rows.filter(function (o) { return o.payment === options.payment; });
       }
 
+      if (options.range) {
+        var days = parseInt(options.range, 10);
+        if (days > 0) {
+          rows = rows.filter(function (o) { return o.daysAgo < days; });
+        }
+      }
+
+      var compare = ORDER_SORTS[options.sort];
+      if (compare) rows = rows.slice().sort(compare);
+
       var total = rows.length;
       var perPage = options.perPage || 20;
       var pages = Math.max(1, Math.ceil(total / perPage));
       var page = Math.min(Math.max(1, options.page || 1), pages);
       var start = (page - 1) * perPage;
 
+      /* Revenue for the filtered set, not just for the page on screen —
+         "of 214 orders" above a table is only half an answer when the
+         question is how much they came to. Cancelled orders are excluded,
+         the same rule the dashboard uses. */
+      var revenue = rows.reduce(function (sum, order) {
+        return ZB.adminMock.isRevenue(order) ? sum + order.total : sum;
+      }, 0);
+
       return Repo.defer({
         items: rows.slice(start, start + perPage),
-        total: total, page: page, pages: pages, perPage: perPage
+        total: total, page: page, pages: pages, perPage: perPage,
+        revenue: revenue
       });
     },
 
     get: function (id) {
-      var hit = ZB.adminMock.orders().filter(function (o) { return o.id === id; })[0];
+      var hit = currentOrders().filter(function (o) { return o.id === id; })[0];
       return Repo.defer(hit || null);
     },
 
     /** The newest few, for the dashboard. Already sorted newest first. */
     recent: function (limit) {
-      return Repo.defer(ZB.adminMock.orders().slice(0, limit || 6));
+      return Repo.defer(currentOrders().slice(0, limit || 6));
+    },
+
+    /** The counts behind the status filter, for the strip above the list. */
+    summary: function () {
+      var rows = currentOrders();
+      var counts = {};
+
+      rows.forEach(function (order) {
+        counts[order.status] = (counts[order.status] || 0) + 1;
+      });
+
+      return Repo.defer({
+        total: rows.length,
+        counts: counts,
+        /* The two an owner opens this screen to act on. */
+        waiting: (counts.pending || 0) + (counts.processing || 0),
+        unpaid: rows.filter(function (o) { return o.payment === 'unpaid'; }).length,
+        revenue: rows.reduce(function (sum, o) {
+          return ZB.adminMock.isRevenue(o) ? sum + o.total : sum;
+        }, 0)
+      });
+    },
+
+    /* -- writes. In memory only. -- */
+
+    /**
+     * Move an order to a new status.
+     *
+     * Rejects a move the flow does not allow rather than quietly applying
+     * it: a UI bug that offers the wrong button should surface here, not
+     * become a delivered order that was never shipped.
+     */
+    updateStatus: function (id, status) {
+      var order = currentOrders().filter(function (o) { return o.id === id; })[0];
+      if (!order) return Promise.reject({ message: 'That order no longer exists.' });
+
+      var allowed = (NEXT_STATUS[order.status] || []).indexOf(status) > -1;
+      if (!allowed) {
+        return Promise.reject({
+          message: 'An order that is ' + orderLabel(order.status).toLowerCase() +
+                   ' cannot be moved to ' + orderLabel(status).toLowerCase() + '.'
+        });
+      }
+
+      var change = { status: status, statusLabel: orderLabel(status) };
+
+      /* Cancelling settles the money too. Leaving payment on "Paid" beside
+         a cancelled order states something the shop would have to answer
+         for, and the mock's own revenue rule already treats a cancelled
+         order as no longer earned. */
+      if (status === 'cancelled' && order.payment === 'paid') {
+        change.payment = 'refunded';
+        change.paymentLabel = paymentLabel('refunded');
+      }
+
+      orderEdits[id] = orderEdits[id] || {};
+      Object.keys(change).forEach(function (key) {
+        orderEdits[id][key] = change[key];
+      });
+
+      return Repo.orders.get(id);
+    },
+
+    /** Mark an unpaid order paid — the other thing that happens by hand. */
+    markPaid: function (id) {
+      var order = currentOrders().filter(function (o) { return o.id === id; })[0];
+      if (!order) return Promise.reject({ message: 'That order no longer exists.' });
+
+      if (order.payment === 'paid') return Repo.defer(order);
+
+      orderEdits[id] = orderEdits[id] || {};
+      orderEdits[id].payment = 'paid';
+      orderEdits[id].paymentLabel = paymentLabel('paid');
+
+      return Repo.orders.get(id);
+    },
+
+    /** Undo support: put an order back exactly as it was. */
+    restore: function (id, previous) {
+      if (!previous) return Repo.defer(false);
+
+      orderEdits[id] = orderEdits[id] || {};
+      Object.keys(previous).forEach(function (key) {
+        orderEdits[id][key] = previous[key];
+      });
+
+      return Repo.defer(true);
+    },
+
+    hasUnsavedEdits: function () {
+      return Object.keys(orderEdits).length > 0;
     }
   };
 

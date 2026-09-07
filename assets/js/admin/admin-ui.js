@@ -89,7 +89,20 @@ window.ZB = window.ZB || {};
 
     collapse: '<path d="M20.5 4.5v15"/><path d="M3.5 12h12"/><path d="m9 6.5-5.5 5.5L9 17.5"/>',
 
-    clock:   '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/>'
+    clock:   '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/>',
+
+    truck:   '<path d="M3 6.5h10v10H3z"/><path d="M13 9.5h4l3 3v4h-7z"/>' +
+             '<circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/>',
+
+    pin:     '<path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Z"/>' +
+             '<circle cx="12" cy="10" r="2.6"/>',
+
+    card:    '<rect x="3" y="5.5" width="18" height="13" rx="2"/>' +
+             '<path d="M3 10h18"/><path d="M7 14.5h3"/>',
+
+    check:   '<path d="m5 12.5 4.5 4.5L19 7"/>',
+
+    back:    '<path d="M20 12H4"/><path d="m10 6-6 6 6 6"/>'
   };
 
   var AdminUI = {
@@ -98,6 +111,36 @@ window.ZB = window.ZB || {};
     esc: function (value) { return ZB.ui.esc(value); },
     href: function (path) { return ZB.ui.href(path); },
     money: function (n) { return ZB.ui.money(n); },
+
+    /* -------------------------------------------------------------------
+       DATES
+
+       Written out rather than numeric. "07/09/26" is a different day
+       either side of the Atlantic and this shop ships to neither; "7 Sep
+       2026" cannot be read two ways. The `ago` line beside it is what
+       actually gets read on a busy screen — "2 days ago" answers "is this
+       urgent" without the reader doing arithmetic — so both are shown,
+       the exact date as the value and the relative one as its meta line.
+       ------------------------------------------------------------------- */
+
+    date: function (value) {
+      var d = value instanceof Date ? value : new Date(value);
+      if (isNaN(d.getTime())) return '';
+
+      var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
+    },
+
+    /** "Today", "Yesterday", "5 days ago", "3 weeks ago". */
+    ago: function (days) {
+      var n = Math.max(0, Math.round(days));
+      if (n === 0) return 'Today';
+      if (n === 1) return 'Yesterday';
+      if (n < 14) return n + ' days ago';
+      if (n < 60) return Math.round(n / 7) + ' weeks ago';
+      return Math.round(n / 30) + ' months ago';
+    },
 
     /**
      * An inline icon. An unknown name returns nothing rather than throwing,

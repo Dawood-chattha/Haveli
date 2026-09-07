@@ -1,0 +1,350 @@
+/* =========================================================================
+   admin-orders.css — the order queue and the single-order view
+   -------------------------------------------------------------------------
+   The list reuses the toolbar, chips, result bar, table, empty states and
+   pager from admin-products.css, and the summary tiles from
+   admin-categories.css. What is here is the two things orders have that
+   nothing else does: tiles that are also filters, and a record view built
+   from a progress strip and a set of definition lists.
+
+   WHY THE PROGRESS STRIP IS NOT A PROGRESS BAR
+   A bar implies a proportion — half shipped means nothing. These are four
+   named stages with a position among them, so they are drawn as steps: a
+   dot per stage, a connector between them, and a tick on the ones behind.
+   The current stage is marked three ways over — a filled dot, a heavier
+   label, and aria-current="step" — because "where is this order" is the
+   question the page exists to answer and it must not rest on colour.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   TILES THAT FILTER
+
+   A number an owner cannot act on is a number they have to act on
+   somewhere else. Three of the four tiles are buttons that apply their own
+   filter; the fourth is a total with no subset behind it, so it stays a
+   plain tile rather than becoming a button that does nothing.
+   ------------------------------------------------------------------------- */
+
+.a-metrics--filters { align-items: stretch; }
+
+.a-metric--button {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  border: var(--bw) solid var(--a-line);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.a-metric--button:hover {
+  border-color: var(--c-ink);
+  transform: translateY(-1px);
+}
+
+.a-metric--button:focus-visible {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 2px;
+}
+
+/* The tile in force. Inverted rather than merely tinted: it is the only
+   one of the four that is currently doing something, and at a glance that
+   difference has to be unmistakable. */
+.a-metric--button[aria-pressed="true"] {
+  background: var(--c-ink);
+  border-color: var(--c-ink);
+}
+
+.a-metric--button[aria-pressed="true"] .a-stat__label { color: rgb(255 255 255 / .68); }
+.a-metric--button[aria-pressed="true"] .a-stat__value { color: #fff; }
+
+/* -------------------------------------------------------------------------
+   THE LIST
+   ------------------------------------------------------------------------- */
+
+.a-table--orders { min-width: 54rem; }
+
+.a-cell--date { white-space: nowrap; }
+
+/* The one routine action in the row. Given the accent so it reads as the
+   thing to press, while the danger action stays out of the table entirely
+   — a destructive button a hand's width from the one pressed every day is
+   an accident waiting for a distracted afternoon. */
+.a-iconbtn--go { color: var(--c-ink); }
+.a-iconbtn--go:hover { background: var(--a-success-tint); color: var(--a-success); }
+
+/* -------------------------------------------------------------------------
+   THE RECORD
+
+   Items take the width because they are the substance; the three side
+   cards are the context around them. Below 950px the side moves under the
+   items rather than squeezing beside them — three cards in a 240px column
+   is a column of ellipses.
+   ------------------------------------------------------------------------- */
+
+.a-order__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20rem;
+  gap: var(--sp-5);
+  align-items: start;
+}
+
+.a-order__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.a-table--lines { min-width: 26rem; }
+
+@media (max-width: 949px) {
+  .a-order__grid { grid-template-columns: minmax(0, 1fr); }
+  .a-order__side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 639px) {
+  .a-order__side { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* -------------------------------------------------------------------------
+   PROGRESS STEPS
+   ------------------------------------------------------------------------- */
+
+.a-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 0 0 var(--sp-5);
+  padding: var(--sp-5) var(--sp-5) var(--sp-4);
+  list-style: none;
+  background: var(--a-surface);
+  border-radius: var(--a-r-card);
+  box-shadow: var(--a-shadow-card, 0 1px 2px rgb(var(--c-ink-rgb) / .06));
+}
+
+.a-steps__step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-right: var(--sp-3);
+}
+
+/* The connector, drawn from each dot to the next rather than as a bar
+   behind the row — so it stops at the last step instead of running off
+   the end of it. */
+/* Not --a-line. That token is 10% ink, which is right for a border that
+   encloses something — the step dots use it and read fine, because a closed
+   circle accumulates its own weight. A single 2px rule 235px long at the
+   same value all but disappears, and this one is load-bearing: it is what
+   makes four dots read as one sequence rather than as four separate marks.
+   So the connector gets its own, heavier value. */
+.a-steps__step::after {
+  content: "";
+  position: absolute;
+  left: 22px;
+  right: 0;
+  top: 10px;
+  border-top: 2px solid rgb(var(--c-ink-rgb) / .22);
+}
+
+.a-steps__step:last-child::after { display: none; }
+
+/* A stage that is behind us gets a solid connector as well as a solid dot;
+   the line is what makes the run of completed stages read as one. */
+.a-steps__step.is-done::after { border-top-color: var(--c-ink); }
+
+.a-steps__dot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--a-line);
+  border-radius: 50%;
+  background: var(--a-surface);
+  color: #fff;
+}
+
+.a-steps__dot .a-icon { width: 12px; height: 12px; stroke-width: 2.6; }
+
+.a-steps__step.is-done .a-steps__dot {
+  background: var(--c-ink);
+  border-color: var(--c-ink);
+}
+
+/* The stage the order is at: a ring, so it reads as "here" rather than as
+   "finished". */
+.a-steps__step.is-here .a-steps__dot {
+  border-color: var(--c-ink);
+  box-shadow: inset 0 0 0 3px var(--a-surface), inset 0 0 0 9px var(--c-ink);
+}
+
+.a-steps__label {
+  font-size: var(--a-fs-ui);
+  color: var(--c-muted);
+}
+
+.a-steps__step.is-done .a-steps__label { color: var(--c-body); }
+
+.a-steps__step.is-here .a-steps__label {
+  color: var(--c-ink);
+  font-weight: var(--fw-medium);
+}
+
+.a-steps__meta {
+  font-size: var(--fs-3xs);
+  color: var(--c-faint);
+}
+
+@media (max-width: 639px) {
+  /* Stacked, with the connector running down the side instead of across. */
+  .a-steps { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
+
+  .a-steps__step {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    grid-template-areas: "dot label" "dot meta";
+    column-gap: var(--sp-3);
+    padding-right: 0;
+  }
+
+  .a-steps__dot { grid-area: dot; }
+  .a-steps__label { grid-area: label; }
+  .a-steps__meta { grid-area: meta; }
+
+  .a-steps__step::after {
+    left: 10px;
+    right: auto;
+    top: 22px;
+    bottom: calc(var(--sp-3) * -1);
+    border-top: 0;
+    border-left: 2px solid rgb(var(--c-ink-rgb) / .22);
+  }
+
+  .a-steps__step.is-done::after { border-left-color: var(--c-ink); }
+}
+
+/* -------------------------------------------------------------------------
+   CANCELLED BANNER
+
+   Not a half-drawn progress strip. Cancelling is leaving the sequence, not
+   a stage inside it, and a strip stuck at "Processing" with a red tint
+   would be describing a state the order is no longer in.
+   ------------------------------------------------------------------------- */
+
+.a-order__banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
+  padding: var(--sp-4) var(--sp-5);
+  border-radius: var(--a-r-card);
+  font-size: var(--a-fs-ui);
+  line-height: var(--lh-relaxed);
+}
+
+.a-order__banner--cancelled {
+  background: var(--a-danger-tint);
+  color: var(--a-danger);
+}
+
+.a-order__banner strong { color: inherit; font-weight: var(--fw-medium); }
+
+.a-order__banner-icon { display: grid; place-items: center; flex: none; }
+.a-order__banner-icon .a-icon { width: 18px; height: 18px; }
+
+/* -------------------------------------------------------------------------
+   DEFINITION LISTS
+
+   A record is a set of term-and-value pairs, so it is marked up as one.
+   The value takes the right-hand edge and is allowed to wrap; the term
+   never is, because a wrapped label beside a wrapped value stops being
+   readable as a pair.
+   ------------------------------------------------------------------------- */
+
+.a-deflist { margin: 0; }
+
+.a-deflist__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: 6px 0;
+  font-size: var(--a-fs-body);
+}
+
+.a-deflist__row + .a-deflist__row { border-top: var(--bw) solid var(--a-line-soft); }
+
+.a-deflist dt {
+  flex: none;
+  color: var(--c-muted);
+  white-space: nowrap;
+}
+
+.a-deflist dd {
+  margin: 0;
+  min-width: 0;
+  text-align: right;
+  color: var(--c-ink);
+  overflow-wrap: anywhere;   /* an email must wrap rather than widen the card */
+}
+
+.a-deflist__row--total {
+  margin-top: 2px;
+  padding-top: var(--sp-3);
+  border-top: var(--bw) solid var(--a-line) !important;
+  font-size: var(--fs-md);
+}
+
+.a-deflist__row--total dt { color: var(--c-ink); }
+.a-deflist__row--total dd { font-weight: var(--fw-medium); font-variant-numeric: tabular-nums; }
+
+/* -------------------------------------------------------------------------
+   SIDE-CARD BITS
+   ------------------------------------------------------------------------- */
+
+.a-order__who {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-md);
+  color: var(--c-ink);
+}
+
+.a-order__pay {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+
+.a-order__pay-method { font-size: var(--fs-xs); color: var(--c-muted); }
+
+.a-order__note {
+  margin: var(--sp-4) 0 0;
+  font-size: var(--fs-3xs);
+  line-height: var(--lh-relaxed);
+  color: var(--c-faint);
+}
+
+/* A button that fills its card. Used only in the side column, where the
+   card is already the width of the decision. */
+.a-btn--block {
+  display: flex;
+  width: 100%;
+  margin-top: var(--sp-4);
+  justify-content: center;
+}
+
+/* -------------------------------------------------------------------------
+   REDUCED MOTION
+   ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .a-metric--button { transition: none; }
+  .a-metric--button:hover { transform: none; }
+}
