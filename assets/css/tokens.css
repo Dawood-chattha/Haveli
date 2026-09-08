@@ -50,6 +50,15 @@
   --c-badge-ink: #ffffff;
   --c-badge-fill: rgb(0 0 0 / .38);
 
+  /* The storefront had no failure colour, because until Phase 3 no form on
+     it could fail — nothing was submitted anywhere. Sign-in and register now
+     can, and "could not sign in" set in the same muted grey as a hint reads
+     as a hint.
+
+     It is the admin panel's --a-danger, so that the two halves of the site
+     agree about what wrong looks like rather than drifting to two reds. */
+  --c-danger: #a32619;
+
   /* ---- Semantic button roles ---- */
   --btn-primary-bg: var(--c-ink);
   --btn-primary-fg: #ffffff;

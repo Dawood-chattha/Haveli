@@ -175,11 +175,14 @@ window.ZB.adminPages = window.ZB.adminPages || {};
               '<span class="auth__spinner" aria-hidden="true"></span>' +
             '</button>' +
 
+            /* This said the opposite until Phase 3: that no password was
+               checked and anyone with the address could open the panel. That
+               was true and had to be said, because a build that looks
+               protected and is not is worse than one that is plainly open.
+               It is no longer true, so it no longer says it. */
             '<p class="auth__note">' +
-              '<strong>This form does not sign anyone in.</strong> There is no ' +
-              'authentication in this build and the panel is not protected — ' +
-              'anyone with the address can open it. No password is checked, ' +
-              'sent or stored.' +
+              'Your password is checked on the server, and access to this ' +
+              'panel depends on the account — not on knowing this address.' +
             '</p>' +
 
             '<a class="auth__back" href="/" data-full-load>Back to the store</a>' +

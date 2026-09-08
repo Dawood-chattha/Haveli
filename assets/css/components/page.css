@@ -305,6 +305,14 @@
   color: var(--c-muted);
 }
 
+/* A refused sign-in. Colour carries the meaning here but is not carrying it
+   alone: the message says what went wrong in words, and the element switches
+   to role="alert" so a screen reader is told as well. */
+.account__note.is-error {
+  color: var(--c-danger);
+  font-weight: var(--fw-medium);
+}
+
 /* -------------------------------------------------------------------------
    PANEL LINK ROW — routes out of a drawer into a full page
    ------------------------------------------------------------------------- */

@@ -1,37 +1,49 @@
 /* =========================================================================
-   admin-auth.js — the authentication seam
+   admin-auth.js — the authentication seam, now connected
    -------------------------------------------------------------------------
-   THERE IS NO AUTHENTICATION IN THIS BUILD.
+   This module was written in the UI-only build as the one place a real
+   service would later be attached. This is that attachment, and it is worth
+   noting what it did NOT require: the sign-in form, its field validation, its
+   loading state, its caps-lock hint, its error plumbing and its markup are
+   untouched. Only the bodies of three methods changed.
 
-   This module exists so that there is one place, and only one place, where
-   a real service is connected later. The sign-in page talks to it and to
-   nothing else, so connecting an auth provider means rewriting the bodies
-   of these three methods — not touching the form, its validation, its
-   loading state or its error handling.
+   WHAT CHANGED
 
-   WHAT IT DOES TODAY
-   `signIn` checks that the input is well formed and then resolves. It does
-   not verify anyone, because there is nothing to verify against. Every
-   screen that uses it says so plainly to the viewer.
+     signIn        was: check the shape of the input and resolve
+                   now: POST /api/auth/login, which verifies the password,
+                        reads the account's role from the database, and puts
+                        the session in an HttpOnly cookie
 
-   WHAT IT MUST NEVER DO
-   It must never contain a password, an API key, a token, or a list of
-   accounts — not even for testing. A credential compared in frontend code
-   is a credential published to everyone who opens the page. If a demo
-   account is ever wanted, it belongs on a server.
+     signOut       was: forget a variable
+                   now: POST /api/auth/logout, which revokes the session
+                        upstream and clears the cookies
 
-   WHY A FRONTEND CHECK IS NOT SECURITY
-   Whatever is added here later, it only decides what this page draws.
-   Anyone can open the console and set a variable, or request data directly.
-   Real protection has to be enforced where the data lives — permission
-   rules or an authorising server that checks the caller's identity and role
-   on every read and write. Visiting /admin must never be what makes someone
-   an administrator.
+     currentUser   was: a value held in memory
+                   now: what the server last reported, via ZB.auth
 
-   THE SHAPE A REAL IMPLEMENTATION KEEPS
-     signIn(email, password, remember) -> Promise, rejects with { message }
-     signOut()                         -> Promise
-     currentUser()                     -> the signed-in user, or null
+     isProtected   was: false, and the sign-in screen said so plainly
+                   now: true
+
+   WHAT DID NOT CHANGE
+   `validate` is exactly as it was. It is a hint that helps someone catch a
+   typo before a round trip — it never was, and still is not, a gate. The only
+   authority on whether an address and password are right is the server.
+
+   WHY THERE IS STILL NO CREDENTIAL IN THIS FILE
+   The old header promised there would never be a password, an API key, a
+   token or a list of accounts here, and connecting a real service has not
+   changed that. There is no key in this file because the session is in a
+   cookie the page cannot read, and no password because the form's value goes
+   straight into a request and is never stored.
+
+   AND WHY A FRONTEND CHECK IS STILL NOT SECURITY
+   `isProtected` returning true means the panel now redirects a signed-out
+   visitor to the sign-in screen. That is a courtesy, not a lock. Anyone can
+   set a variable in the console and watch the panel render; what they will
+   see is a panel with nothing in it, because every admin endpoint re-checks
+   the role in the database and Row Level Security refuses the rows underneath
+   that. Visiting /admin has never made anyone an administrator and still
+   does not.
    ========================================================================= */
 
 window.ZB = window.ZB || {};
@@ -50,17 +62,13 @@ window.ZB = window.ZB || {};
 
   var Auth = {
 
-    /* Mirrors ZB.repo.latency — a sign-in that answered instantly would let
-       the loading state go untested, and it is the state most likely to be
-       wrong when a real network is behind it. */
-    latency: 900,
-
     /**
      * Field-level checks, returned as a map of field name to message.
      * An empty map means the form may be submitted.
      *
-     * Kept here rather than in the page because the rules belong to
-     * authentication, and a real provider will replace or extend them.
+     * Unchanged from the UI-only build. It belongs to the form, not to the
+     * service, and a real provider replaces what happens after it rather than
+     * what it does.
      */
     validate: function (email, password) {
       var errors = {};
@@ -77,63 +85,73 @@ window.ZB = window.ZB || {};
     },
 
     /**
-     * Sign in. Resolves with a user object, or rejects with { message }.
+     * Sign in. Resolves with the user, or rejects with { message, fields }.
      *
-     * `remember` is accepted and ignored. It maps to how long a real
-     * provider keeps the session — a choice that belongs to the provider,
-     * and there is nothing to persist without one. Nothing about the
-     * attempt is written to storage: no address, no flag, and above all no
-     * password.
+     * The local check runs first purely to save a round trip on an obviously
+     * incomplete form. It is not a gate: an empty password that got past it
+     * would be refused by the server, which is where the decision is made.
+     *
+     * A SIGNED-IN CUSTOMER IS NOT AN ERROR HERE
+     * Anyone with an account can sign in at this screen — it is the same
+     * endpoint the storefront uses, because two authentication paths would
+     * mean two places for a flaw. What a customer cannot do is get past this
+     * screen: the panel checks `isAdmin` and every endpoint behind it checks
+     * the database. They are told plainly rather than left at a form that
+     * appears to fail.
+     *
+     * `remember` is accepted and ignored, as before. How long a session lasts
+     * is decided by the server's cookie, not by a checkbox that the browser
+     * could change.
      */
     signIn: function (email, password, remember) {
-      return new Promise(function (resolve, reject) {
-        window.setTimeout(function () {
-          var errors = Auth.validate(email, password);
+      var errors = Auth.validate(email, password);
 
-          if (Object.keys(errors).length) {
-            reject({ message: 'Check the details above and try again.', fields: errors });
-            return;
-          }
+      if (Object.keys(errors).length) {
+        return Promise.reject({
+          message: 'Check the details above and try again.',
+          fields: errors
+        });
+      }
 
-          /* No verification happens. The address is echoed back so the
-             panel has something to show, and is held in memory only — it
-             is gone on refresh, which is the honest behaviour when there
-             is no session behind it. */
-          Auth.user = {
-            email: email,
-            name: ZB.adminUser ? ZB.adminUser.name : 'Store Owner',
-            role: ZB.adminUser ? ZB.adminUser.role : 'Owner'
-          };
-
-          resolve(Auth.user);
-        }, Auth.latency);
+      return ZB.auth.signIn(email, password).then(function (user) {
+        if (!user.isAdmin) {
+          /* Signed in, but not here. The session is left in place — they are
+             a legitimate customer and may use the shop — and the panel simply
+             does not open. */
+          return Promise.reject({
+            message: 'That account does not have access to the owner panel.'
+          });
+        }
+        return user;
       });
     },
 
     signOut: function () {
-      Auth.user = null;
-      return Promise.resolve();
+      return ZB.auth.signOut();
     },
 
+    /** The signed-in user, or null. Reported by the server, not remembered
+        here — see the header. */
     currentUser: function () {
-      return Auth.user || null;
+      return ZB.auth.user || null;
     },
-
-    /* Held in memory on purpose. See signIn. */
-    user: null,
 
     /**
      * Whether the panel should be treated as protected.
      *
-     * It answers false, and the panel is therefore open to anyone who knows
-     * the address. This is stated on the sign-in screen rather than hidden,
-     * because a build that looks protected and is not is worse than one
-     * that is plainly open.
+     * True now. The sign-in screen no longer tells viewers the panel is open,
+     * because it is not.
      */
     isProtected: function () {
-      return false;
+      return true;
     }
   };
+
+  /* Kept as a property for the sake of anything that read it, and derived
+     rather than stored so it cannot disagree with ZB.auth. */
+  Object.defineProperty(Auth, 'user', {
+    get: function () { return ZB.auth ? ZB.auth.user : null; }
+  });
 
   ZB.adminAuth = Auth;
 

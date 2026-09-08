@@ -251,6 +251,11 @@
 <script src="assets/js/router.js"></script>
 <script src="assets/js/ui.js"></script>
 
+<!-- Asks the server who this visitor is, once, at boot. The session lives in
+     a cookie the page cannot read, so this is the only way to know. Nothing
+     here holds a token; see assets/js/auth.js. -->
+<script src="assets/js/auth.js"></script>
+
 <!-- Mock data -->
 <script src="data/navigation.js"></script>
 <script src="data/hero.js"></script>

@@ -68,14 +68,41 @@ for (const table of TABLES) {
    2. The publishable key can reach nothing
    ------------------------------------------------------------------------- */
 
-console.log('\n2. RLS is closed — the browser key must reach NOTHING');
+/* WHAT THE BROWSER KEY MAY SEE CHANGED IN PHASE 3, AND THIS FILE HAD TO
+   CHANGE WITH IT.
+ *
+ * In Phase 2 the answer was "nothing": RLS was on and no policy existed, so
+ * every table refused everyone. This checked exactly that, and it was right.
+ *
+ * Phase 3 wrote the policies, and a shop that shows nobody its products is
+ * not a shop. Four tables are now deliberately public. Leaving this file as
+ * it was would have reported that opening as a failure — and, worse, the
+ * temptation on seeing a red line is to close the thing that turned red,
+ * which here would mean closing the catalogue.
+ *
+ * So the list is split. Both halves are asserted: the public tables must be
+ * readable, and the private ones must not be. A test that only checked the
+ * second half would pass with the shop broken. */
 
-for (const table of TABLES) {
+const PUBLIC_TABLES = ['categories', 'products', 'product_images', 'banners'];
+const PRIVATE_TABLES = TABLES.filter((t) => !PUBLIC_TABLES.includes(t));
+
+console.log('\n2a. the catalogue is public — a stranger can browse the shop');
+
+for (const table of PUBLIC_TABLES) {
+  const { error } = await anon.from(table).select('*').limit(1);
+  if (error) fail(table + ' is NOT readable by the public key — the storefront would be empty');
+  else pass(table.padEnd(15) + 'readable');
+}
+
+console.log('\n2b. everything else is closed to the browser key');
+
+for (const table of PRIVATE_TABLES) {
   const { data, error } = await anon.from(table).select('*').limit(1);
 
   /* Two acceptable shapes for "denied": an explicit permission error, or a
-     silent empty result. Postgres returns the latter for a select with no
-     policy, which is why the row count is checked and not only the error. */
+     silent empty result. Postgres returns the latter for a select no policy
+     admits, which is why the row count is checked and not only the error. */
   if (error) pass(table.padEnd(15) + 'refused (' + (error.code || 'error') + ')');
   else if (Array.isArray(data) && data.length === 0) pass(table.padEnd(15) + 'returned nothing');
   else fail(table + ' RETURNED DATA TO THE PUBLIC KEY — RLS is not protecting it');

@@ -62,10 +62,71 @@ window.ZB = window.ZB || {};
     ZB.router.start(document.getElementById('admin-app'));
   }
 
+  /* -----------------------------------------------------------------------
+     THE ROUTE GUARD — WHICH IS NOT THE SECURITY
+
+     This decides what the panel draws. It does not decide what anyone may
+     read, and it is important to be exact about the difference.
+
+     Everything in this file was downloaded by the visitor and runs on their
+     machine. They can pause it, edit it, or set ZB.auth.user to whatever
+     they like from the console, and this guard will let them through. What
+     they arrive at is a panel with nothing in it: every request it makes is
+     answered by an endpoint that re-reads the role from the database, and
+     underneath that, Row Level Security refuses the rows to anyone whose
+     account is not an admin. Two locks, neither of them here.
+
+     So this exists for the ordinary case — someone signed out, or a customer
+     who followed a link — who should meet a sign-in screen rather than a
+     dashboard full of failed requests. It is a signpost, not a lock.
+     ----------------------------------------------------------------------- */
+
+  var LOGIN = '/admin/login';
+
+  function guard(path) {
+    var onLogin = path === LOGIN;
+
+    if (!ZB.auth.isAdmin()) {
+      /* `replace` rather than a push: a redirect the visitor did not ask for
+         should not become a step in their history that Back returns to. */
+      if (!onLogin) ZB.router.navigate(LOGIN, { replace: true });
+      return;
+    }
+
+    /* Already signed in and looking at the sign-in screen — there is nothing
+       to do there. */
+    if (onLogin) ZB.router.navigate('/admin', { replace: true });
+  }
+
+  function start() {
+    /* The first answer is awaited before the router runs, so the panel does
+       not paint a dashboard and then snatch it away. A visitor who is signed
+       in sees the dashboard; one who is not sees the sign-in screen; nobody
+       sees both. */
+    ZB.auth.load().then(function () {
+      boot();
+      guard(window.location.pathname);
+
+      /* The event's `detail.path` is the matched route pattern, so an order
+         detail arrives as '/admin/orders/:id'. The guard needs the address
+         the visitor is actually at, which is the location. */
+      document.addEventListener('zb:navigated', function () {
+        guard(window.location.pathname);
+      });
+
+      /* Signing out has to move the panel, and signing in has to let it
+         open. Subscribing means neither the sign-in form nor the sign-out
+         button has to know about routing. */
+      ZB.auth.subscribe(function () {
+        guard(window.location.pathname);
+      });
+    });
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
+    document.addEventListener('DOMContentLoaded', start);
   } else {
-    boot();
+    start();
   }
 
 }(window.ZB));

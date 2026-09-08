@@ -670,14 +670,21 @@ window.ZB = window.ZB || {};
        ------------------------------------------------------------------- */
 
     /**
-     * There is no session to end, so this only returns to the login screen.
+     * End the session, then return to the sign-in screen.
      *
-     * It is written as its own method because that is where the real thing
-     * will go: sign out through whatever auth service is chosen, then
-     * navigate. Nothing else in the panel should have to change.
+     * This was a bare navigate in the UI-only build, with a note saying the
+     * real thing would go here. This is it, and nothing else in the panel
+     * changed — which is what the note was for.
+     *
+     * The navigation is not written here: signing out clears ZB.auth.user,
+     * the route guard in admin-routes.js is subscribed to that, and it moves
+     * the panel. Navigating here as well would race it.
+     *
+     * `signOut` clears the local user even when revoking upstream fails, so
+     * there is no path where this leaves someone looking signed in.
      */
     logout: function () {
-      ZB.router.navigate('/admin/login');
+      ZB.adminAuth.signOut();
     },
 
     /* -------------------------------------------------------------------

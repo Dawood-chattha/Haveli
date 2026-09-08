@@ -87,6 +87,11 @@
 <script src="assets/js/router.js"></script>
 <script src="assets/js/ui.js"></script>
 
+<!-- Shared with the storefront: one session, one place that asks about it.
+     admin-auth.js below delegates to this rather than holding a second
+     idea of who is signed in. -->
+<script src="assets/js/auth.js"></script>
+
 <!-- Catalogue. The panel manages the same products the shop sells, so it
      reads the same source rather than inventing a second one. -->
 <script src="data/navigation.js"></script>
