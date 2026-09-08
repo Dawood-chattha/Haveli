@@ -4,6 +4,6 @@
   "rewrites": [
     { "source": "/admin", "destination": "/admin/index.html" },
     { "source": "/admin/(.*)", "destination": "/admin/index.html" },
-    { "source": "/((?!assets/|data/|dev/|admin/|favicon\\.ico).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|assets/|data/|dev/|admin/|favicon\\.ico).*)", "destination": "/index.html" }
   ]
 }
