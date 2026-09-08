@@ -9,6 +9,11 @@
   "scripts": {
     "dev": "vercel dev --listen 3000",
     "check": "node scripts/check-syntax.mjs",
+    "seed": "node --env-file=.env.local scripts/seed.mjs",
+    "seed:demo": "node --env-file=.env.local scripts/seed.mjs --demo",
+    "seed:demo:remove": "node --env-file=.env.local scripts/seed.mjs --remove-demo",
+    "seed:dry": "node scripts/seed.mjs --dry",
+    "verify:db": "node --env-file=.env.local scripts/verify-db.mjs",
     "static": "powershell -ExecutionPolicy Bypass -File dev/serve.ps1"
   },
   "dependencies": {

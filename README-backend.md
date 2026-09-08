@@ -58,6 +58,35 @@ Vercel account and will ask you to sign in and link the folder the first time.
 If you would rather not link a Vercel project yet, `npm run check` below
 verifies everything that can be verified without one.
 
+### The database
+
+`db/schema.sql` is applied once, by hand, in the Supabase SQL editor — DDL
+cannot travel over the REST API, so there is no script for it. It is written to
+be re-runnable: applying it again repairs rather than fails.
+
+```bash
+npm run seed              # categories only — the shop's real structure
+npm run seed:demo         # + 560 placeholder products, images, banners
+npm run seed:demo:remove  # removes exactly those, nothing else
+npm run seed:dry          # shape every row and check it, write nothing
+npm run verify:db         # prove the schema, RLS and constraints are real
+```
+
+**`seed` and `seed:demo` are not the same thing, and the difference matters.**
+The products the site displays today are placeholders built to design the
+interface against; the shop's real products are entered by its owner through
+the admin panel. Loading several hundred invented products into a live database
+would hand that owner a catalogue to empty by hand before they could trade.
+
+Demo rows exist so Phase 4 can be tested against something — an empty catalogue
+proves nothing about whether the UI is correctly connected. Every demo row's id
+is derived from its name, so `seed:demo:remove` deletes precisely the rows the
+script created and cannot touch a product added through the panel.
+
+Orders, customers, carts, addresses, coupons and payments are never seeded in
+either mode. Those record things that actually happened, and inventing them
+would put figures on the reports screen that someone might believe.
+
 ### The checks
 
 ```bash
