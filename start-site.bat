@@ -81,25 +81,57 @@ if not errorlevel 1 (
 )
 
 echo Starting the local server...
-REM `cmd /k` rather than `cmd /c "... & pause"`: the quoting in that form is
-REM parsed by the outer shell before cmd sees it, and the command silently
-REM never ran. /k keeps the window open on its own, so a startup error stays
-REM on screen instead of flashing past.
-start "HAVELI dev server - close this window to stop" cmd /k "%NODE%" --env-file=.env.local dev\server.mjs
+REM  LAUNCHING NODE TOOK THREE TRIES; HERE IS WHY THIS ONE.
+REM
+REM  Node lives at C:\Program Files\nodejs\node.exe, and that space is the
+REM  whole difficulty. `start "title" cmd /c "node ... & pause"` had its
+REM  quoting eaten by the outer shell and never ran at all. `cmd /k "%NODE%"
+REM  args` fared no better: cmd strips the quotes around the first token in
+REM  its own way, so the path broke at "Program", the window closed instantly,
+REM  and this script reported that port 3000 was busy - which it was not.
+REM
+REM  PowerShell's Start-Process takes the executable and its arguments as
+REM  separate values, so there is no line for a shell to re-parse and no
+REM  quoting to get wrong. It also gives the server its own console window,
+REM  which is what the user closes to stop the site.
+powershell -NoProfile -Command "Start-Process -FilePath '%NODE%' -ArgumentList '--env-file=.env.local','dev\server.mjs' -WorkingDirectory '%CD%'"
 
-REM Wait until the port actually answers rather than guessing a delay. A
-REM fixed pause is both slower than it needs to be and still too short when
-REM the previous listener has not released the port yet.
-powershell -NoProfile -Command "for ($i=0; $i -lt 30; $i++) { try { $null = Invoke-WebRequest -Uri '%URL%' -UseBasicParsing -TimeoutSec 1; exit 0 } catch { Start-Sleep -Milliseconds 500 } }; exit 1"
+REM  Wait until the port actually answers rather than guessing a delay. A
+REM  fixed pause is both slower than it needs to be and still too short when
+REM  the previous listener has not released the port yet.
+REM
+REM  This was one long PowerShell one-liner holding its own retry loop, and it
+REM  reported failure while the server was in fact up and answering. Rather
+REM  than work out which part of a line with nested quotes, semicolons and
+REM  two exit codes was misbehaving, it is now an ordinary batch loop calling
+REM  the same :probe this file already used above. Fewer languages in one
+REM  line, and the retry is visible.
 
-if errorlevel 1 (
-    echo.
-    echo The server did not come up. Check the server window for the reason -
-    echo the usual one is that port 3000 is still held by an earlier run.
-    echo.
-    pause
-    exit /b 1
-)
+set /a TRIES=0
+
+:wait
+call :probe
+if not errorlevel 1 goto :open
+
+set /a TRIES+=1
+if %TRIES% GEQ 20 goto :failed
+
+REM `timeout` is a Windows command, so this costs no new process launch of
+REM anything heavier. /nobreak stops a stray keypress cutting it short.
+timeout /t 1 /nobreak >nul
+goto :wait
+
+:failed
+echo.
+echo The server did not come up.
+echo.
+echo A second window should have opened with the reason in it. If it
+echo closed too fast, run this by hand to see the error:
+echo.
+echo    node --env-file=.env.local dev\server.mjs
+echo.
+pause
+exit /b 1
 
 :open
 echo Opening %URL%
