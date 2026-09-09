@@ -21,6 +21,11 @@ window.ZB = window.ZB || {};
       .add('/product/:id', pages.product)
       .add('/search', pages.search)
       .add('/cart', pages.cart)
+      .add('/checkout', pages.checkout)
+      /* By reference rather than by id: a reference is what the
+         confirmation shows, what an email would quote and what somebody
+         reads out over the phone. */
+      .add('/order/:ref', pages.order)
       .add('/wishlist', pages.wishlist)
       .add('/account', pages.account)
       .add('/stores', pages.stores)

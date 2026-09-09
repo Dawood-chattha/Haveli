@@ -298,7 +298,7 @@ window.ZB.adminPages = window.ZB.adminPages || {};
     var tally = {};
     var total = 0;
 
-    orders.filter(ZB.adminMock.isRevenue).forEach(function (order) {
+    orders.filter(ZB.repo.orders.isRevenue).forEach(function (order) {
       order.items.forEach(function (line) {
         var product = ZB.catalogue.byId(line.id);
         if (!product) return;

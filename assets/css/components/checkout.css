@@ -1,0 +1,271 @@
+/* =========================================================================
+   checkout.css — the checkout form, and an order afterwards
+   -------------------------------------------------------------------------
+   Deliberately the cart's layout, one page further on: the same two-column
+   grid, the same summary panel on the right, the same hairlines. Somebody
+   arriving here from the cart should feel they moved forward rather than
+   into a different shop.
+
+   Every value is a token. There is no colour, spacing or radius invented in
+   this file — which is what keeps the checkout looking like the rest of the
+   site the day any of them change.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   THE CHECKOUT
+   ------------------------------------------------------------------------- */
+
+.checkout {
+  display: grid;
+  grid-template-columns: 1fr 22rem;
+  gap: var(--sp-10);
+  align-items: start;
+}
+
+.checkout__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.checkout__form-title,
+.checkout__summary-title {
+  margin: 0;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--c-ink);
+}
+
+/* Space above every heading except the first, so the form reads as sections
+   without needing a rule between them. */
+.checkout__form-title + * { margin-top: 0; }
+.checkout__form-title:not(:first-child) { margin-top: var(--sp-4); }
+
+.checkout__pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+}
+
+/* "optional", beside a label rather than inside the field. A placeholder
+   saying "optional" disappears the moment somebody types, which is exactly
+   when they might want to check. */
+.field-label__hint {
+  color: var(--c-faint);
+  font-weight: var(--fw-regular);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.field--area {
+  resize: vertical;
+  min-height: 4.5rem;
+  font-family: inherit;
+}
+
+/* The one payment method there is. Stated as a fact rather than offered as
+   a choice of one, which reads as a control that does not work. */
+.checkout__method {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: var(--sp-4);
+  border: var(--bw) solid var(--c-line);
+  border-radius: var(--r-sm);
+  background: var(--c-stone-tint);
+}
+.checkout__method strong { color: var(--c-ink); font-size: var(--fs-sm); }
+.checkout__method span { color: var(--c-muted); font-size: var(--fs-xs); }
+
+/* Colour is not carrying this alone: the element is role="alert", so it is
+   announced, and the text says what is wrong in words. */
+.checkout__error {
+  margin: 0;
+  color: var(--c-danger);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+
+.checkout__warning {
+  grid-column: 1 / -1;
+  margin: 0 0 var(--sp-6);
+  padding: var(--sp-3) var(--sp-4);
+  border-left: 2px solid var(--c-danger);
+  background: var(--c-paper-alt);
+  color: var(--c-body);
+  font-size: var(--fs-xs);
+}
+
+/* -------------------------------------------------------------------------
+   THE SUMMARY — the cart's panel, carried forward
+   ------------------------------------------------------------------------- */
+
+.checkout__summary {
+  padding: var(--sp-5);
+  border: var(--bw) solid var(--c-line);
+  border-radius: var(--r-sm);
+  background: var(--c-paper-alt);
+
+  /* It follows down a long form. The offset clears the sticky header. */
+  position: sticky;
+  top: var(--sp-20);
+}
+
+.checkout__lines {
+  margin: var(--sp-4) 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--c-line);
+}
+
+.checkout__line {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  gap: var(--sp-3);
+  align-items: center;
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--c-line);
+}
+
+.checkout__thumb {
+  width: 48px;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: var(--r-sm);
+  background: var(--c-paper-alt);
+}
+
+.checkout__line-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.checkout__line-title {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--c-ink);
+}
+
+.checkout__line-meta { font-size: var(--fs-3xs); color: var(--c-muted); }
+.checkout__line-price { font-size: var(--fs-xs); color: var(--c-ink); white-space: nowrap; }
+
+.checkout__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--sp-4);
+  padding: var(--sp-2) 0;
+  font-size: var(--fs-xs);
+  color: var(--c-muted);
+}
+.checkout__row strong { color: var(--c-ink); font-size: var(--fs-sm); }
+
+.checkout__row--total {
+  margin-top: var(--sp-2);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--c-line);
+}
+.checkout__row--total span { color: var(--c-ink); font-weight: var(--fw-medium); }
+.checkout__row--total strong { font-size: var(--fs-lg); }
+
+.checkout__note {
+  margin: var(--sp-3) 0 0;
+  font-size: var(--fs-3xs);
+  line-height: 1.5;
+  color: var(--c-muted);
+}
+
+/* -------------------------------------------------------------------------
+   AN ORDER
+   ------------------------------------------------------------------------- */
+
+.order__head {
+  padding-bottom: var(--sp-6);
+  margin-bottom: var(--sp-8);
+  border-bottom: 1px solid var(--c-line);
+}
+
+.order__eyebrow {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-2xs);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+}
+
+.order__ref {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-medium);
+  letter-spacing: .04em;
+  color: var(--c-ink);
+}
+
+.order__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: var(--sp-4) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--c-muted);
+}
+
+/* A word, not a colour. Which status an order is in is read, not inferred
+   from a shade — so there is one pill style rather than five. */
+.order__pill {
+  padding: 3px var(--sp-3);
+  border: var(--bw) solid var(--c-line);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-3xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--c-ink);
+  background: var(--c-paper);
+}
+
+.order__body {
+  display: grid;
+  grid-template-columns: 1fr 18rem;
+  gap: var(--sp-10);
+  align-items: start;
+}
+
+.order__aside {
+  padding: var(--sp-5);
+  border: var(--bw) solid var(--c-line);
+  border-radius: var(--r-sm);
+  background: var(--c-paper-alt);
+}
+
+.order__address {
+  margin: var(--sp-4) 0 var(--sp-5);
+  font-size: var(--fs-xs);
+  line-height: 1.7;
+  color: var(--c-body);
+}
+
+/* -------------------------------------------------------------------------
+   NARROW
+   The summary stops being a column beside the form and becomes the thing
+   above the button, which is the order it is read in on a phone.
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 989px) {
+  .checkout,
+  .order__body {
+    grid-template-columns: 1fr;
+    gap: var(--sp-8);
+  }
+
+  .checkout__summary { position: static; }
+
+  /* Before the form: what is being bought, then where it goes. */
+  .checkout__summary { order: -1; }
+  .checkout__warning { order: -2; }
+}
+
+@media (max-width: 560px) {
+  .checkout__pair { grid-template-columns: 1fr; }
+}

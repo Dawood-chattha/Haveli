@@ -347,3 +347,51 @@
     transition: none;
   }
 }
+
+/* -------------------------------------------------------------------------
+   ACCOUNT — the orders this person has placed
+
+   A list rather than cards. Somebody looking here is looking for one order,
+   usually the most recent, and a reference they can click is the shortest
+   path to it.
+   ------------------------------------------------------------------------- */
+
+.account__heading {
+  margin: var(--sp-4) 0 0;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--c-ink);
+}
+
+.account__orders {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--c-line);
+}
+
+.account__order {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--sp-3);
+  align-items: baseline;
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--c-line);
+}
+
+.account__order-ref {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: .04em;
+  color: var(--c-ink);
+}
+
+.account__order-meta { font-size: var(--fs-3xs); color: var(--c-muted); }
+.account__order-total { font-size: var(--fs-xs); color: var(--c-ink); white-space: nowrap; }
+
+@media (max-width: 560px) {
+  .account__order { grid-template-columns: 1fr auto; }
+  .account__order-meta { grid-column: 1 / -1; }
+}

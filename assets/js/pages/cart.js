@@ -1,8 +1,9 @@
 /* =========================================================================
    pages/cart.js — cart page
    -------------------------------------------------------------------------
-   Reads and writes ZB.store, which keeps the cart in localStorage. Nothing
-   is submitted anywhere: checkout is a UI flow only.
+   Reads and writes ZB.store, which keeps the cart in localStorage. The cart
+   stays in the browser; it becomes an order at /checkout, where the server
+   prices it and writes it to the database.
    ========================================================================= */
 
 window.ZB = window.ZB || {};
@@ -72,9 +73,8 @@ window.ZB.pages = window.ZB.pages || {};
           '<ul class="cart__list">' + rows + '</ul>' +
           '<aside class="cart__summary">' +
             '<div class="cart__row"><span>Subtotal</span><strong>' + ui.money(ZB.store.cartTotal()) + '</strong></div>' +
-            '<p class="cart__note">Shipping and taxes are calculated at checkout.</p>' +
+            '<p class="cart__note">Delivery is calculated at checkout.</p>' +
             '<button class="btn btn--primary btn--block" type="button" data-checkout>Checkout</button>' +
-            '<p class="cart__note">This is a front-end demonstration — no order is placed.</p>' +
           '</aside>' +
         '</div>';
     },
@@ -88,7 +88,7 @@ window.ZB.pages = window.ZB.pages || {};
         var line = e.target.closest('.cart-line');
 
         if (e.target.closest('[data-checkout]')) {
-          window.alert('Checkout is a UI flow only in this build.');
+          ZB.router.navigate('/checkout');
           return;
         }
         if (!line) return;

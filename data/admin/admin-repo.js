@@ -684,104 +684,60 @@ window.ZB = window.ZB || {};
       return Object.keys(edited).length > 0;
     }
   };
+
   /* -----------------------------------------------------------------------
      Orders
 
-     STATUS CHANGES LIVE IN MEMORY, LIKE EVERY OTHER WRITE
-     Marking an order shipped is the one thing an owner does on this screen
-     every day, so the panel has to be able to do it — but there is nothing
-     to save to. The change goes into the overlay below and is gone on
-     reload, and the screen says so.
+     THE ONE SECTION THAT NEVER WRITES A NEW ROW
+     There is no create() here and no endpoint behind one. An order records
+     something that happened — a customer chose things and asked for them —
+     and a panel that could invent one could invent revenue, which the
+     reports screen would then report. Orders arrive from the checkout, and
+     from nowhere else.
 
-     The overlay is also where the seam is. With a backend, `orderEdits`
-     goes and updateStatus() becomes the call that writes it; the pages do
-     not change, because none of them reaches past these methods.
-
-     WHAT THE STATUS FLOW ALLOWS, AND WHY IT IS HERE AND NOT IN THE PAGE
-     An order moves forward: pending, processing, shipped, delivered. It can
-     be cancelled while it has not yet shipped. Delivered and cancelled are
-     final. Putting that rule in the page would mean writing it again on
-     every screen that offers the action — the list and the detail view
-     already both do — and two copies of a rule is one copy too many.
+     STATUS CHANGES CAN MOVE STOCK
+     Cancelling an order gives every line back to the shelf and gives the
+     coupon back its use; reopening one takes them again, and fails if the
+     stock has since gone. That is several writes that have to agree, so it
+     happens inside public.set_order_status in one transaction rather than
+     as a field update from here. See db/checkout.sql.
      ----------------------------------------------------------------------- */
 
-  var orderEdits = {};   /* id -> { status, statusLabel, payment, ... } */
+  var STATUS_LABELS = {
+    pending: 'Pending', processing: 'Processing', shipped: 'Shipped',
+    delivered: 'Delivered', cancelled: 'Cancelled'
+  };
 
-  /**
-   * What an order may become next.
+  var PAYMENT_LABELS = { paid: 'Paid', unpaid: 'Unpaid', refunded: 'Refunded' };
+
+  function orderLabel(id) { return STATUS_LABELS[id] || id; }
+
+  /* Which statuses an order may be moved to from the one it is in.
    *
-   * Returns [] for a finished order, which is how both screens know to
-   * offer nothing rather than to offer something that will be refused.
-   */
+   * The flow forward, plus cancelling from anywhere it has not already
+   * shipped. Delivered is the end: an order that arrived cannot become
+   * pending again, and offering that would be offering to rewrite what
+   * happened. Cancelled is reopened by choosing a status again, which the
+   * database allows and which puts the stock back where it was. */
   var NEXT_STATUS = {
-    pending:    ['processing', 'cancelled'],
+    pending: ['processing', 'cancelled'],
     processing: ['shipped', 'cancelled'],
-    shipped:    ['delivered'],
-    delivered:  [],
-    cancelled:  []
+    shipped: ['delivered'],
+    delivered: [],
+    cancelled: ['pending']
   };
 
-  /* The order the stages happen in, for the progress strip. Cancelled is
-     not a stage — it is a way of leaving the sequence — so it is absent
-     here and drawn separately. */
   var STATUS_FLOW = ['pending', 'processing', 'shipped', 'delivered'];
-
-  function orderLabel(id) {
-    var hit = ZB.adminSeed.statuses.filter(function (s) { return s.id === id; })[0];
-    return hit ? hit.label : id;
-  }
-
-  function paymentLabel(id) {
-    var hit = ZB.adminSeed.payments.filter(function (p) { return p.id === id; })[0];
-    return hit ? hit.label : id;
-  }
-
-  /**
-   * One order with any changes made this session applied on top.
-   *
-   * Always a copy, for the reason spelled out over currentRows(): handing
-   * back the mock's own object lets a caller change the store without
-   * going through a write method, and makes a value read a moment ago
-   * change under whoever is holding it.
-   */
-  function withEdits(order) {
-    var merged = {};
-    Object.keys(order).forEach(function (key) { merged[key] = order[key]; });
-
-    if (orderEdits[order.id]) {
-      Object.keys(orderEdits[order.id]).forEach(function (key) {
-        merged[key] = orderEdits[order.id][key];
-      });
-    }
-
-    return merged;
-  }
-
-  function currentOrders() {
-    return ZB.adminMock.orders().map(withEdits);
-  }
-
-  var ORDER_SORTS = {
-    oldest:      function (a, b) { return b.daysAgo - a.daysAgo; },
-    'total-desc': function (a, b) { return b.total - a.total; },
-    'total-asc':  function (a, b) { return a.total - b.total; },
-    'items-desc': function (a, b) { return b.itemCount - a.itemCount; }
-  };
 
   Repo.orders = {
 
-    /* 'newest' is absent for the same reason 'newest' is absent from the
-       product sorts: it means "leave the natural order alone", and the mock
-       already emits orders newest first. */
     sorts: [
       { id: 'newest', label: 'Newest first' },
       { id: 'oldest', label: 'Oldest first' },
       { id: 'total-desc', label: 'Highest value' },
-      { id: 'total-asc', label: 'Lowest value' },
-      { id: 'items-desc', label: 'Most items' }
+      { id: 'total-asc', label: 'Lowest value' }
     ],
 
-    /** The windows the date filter offers. `days` of 0 means everything. */
     ranges: [
       { id: '7', label: 'Last 7 days', days: 7 },
       { id: '30', label: 'Last 30 days', days: 30 },
@@ -797,41 +753,26 @@ window.ZB = window.ZB || {};
       });
     },
 
+    /**
+     * The filter options.
+     *
+     * Fixed lists rather than whatever the current orders happen to use.
+     * The old version derived them from the rows, which was right when the
+     * rows were generated and every status was represented; against a real
+     * shop it means a filter disappears the moment nothing is in that state
+     * — so "Cancelled" would vanish exactly when somebody wanted to check
+     * whether anything had been cancelled.
+     */
     facets: function () {
-      var rows = currentOrders();
-
-      var statuses = {};
-      var payments = {};
-      rows.forEach(function (order) {
-        statuses[order.status] = orderLabel(order.status);
-        payments[order.payment] = paymentLabel(order.payment);
-      });
-
-      /* Kept in the seed's own order rather than alphabetised: Pending,
-         Processing, Shipped, Delivered is a sequence, and sorting it by
-         name would scramble it into something nobody can scan. */
-      var inSeedOrder = function (seedList, present) {
-        return seedList.filter(function (item) { return present[item.id]; })
-                       .map(function (item) {
-                         return { id: item.id, label: item.label };
-                       });
+      var list = function (map, order) {
+        return order.map(function (id) { return { id: id, label: map[id] }; });
       };
 
-      var statusList = inSeedOrder(ZB.adminSeed.statuses, statuses);
-
-      /* "Needs action" is not a status an order has — it is the question an
-         owner opens this screen with, and the answer spans two of them.
-         Offering it here rather than making the reader select Pending, read
-         the list, then select Processing and read it again is the whole
-         point of a filter. It sits first because it is what the screen is
-         most often opened for. */
-      if (statuses.pending || statuses.processing) {
-        statusList.unshift({ id: 'waiting', label: 'Needs action' });
-      }
-
-      return Repo.defer({
-        statuses: statusList,
-        payments: inSeedOrder(ZB.adminSeed.payments, payments),
+      return Promise.resolve({
+        statuses: [{ id: 'waiting', label: 'Needs action' }].concat(
+          list(STATUS_LABELS, ['pending', 'processing', 'shipped',
+                               'delivered', 'cancelled'])),
+        payments: list(PAYMENT_LABELS, ['paid', 'unpaid', 'refunded']),
         ranges: Repo.orders.ranges
       });
     },
@@ -839,269 +780,154 @@ window.ZB = window.ZB || {};
     /** options: { search, status, payment, range, sort, page, perPage } */
     list: function (options) {
       options = options || {};
-      var rows = currentOrders();
 
-      if (options.search) {
-        var needle = String(options.search).toLowerCase();
-        rows = rows.filter(function (order) {
-          return order.ref.toLowerCase().indexOf(needle) > -1 ||
-                 order.customerName.toLowerCase().indexOf(needle) > -1 ||
-                 order.customerEmail.toLowerCase().indexOf(needle) > -1 ||
-                 order.city.toLowerCase().indexOf(needle) > -1;
-        });
-      }
-
-      if (options.status === 'waiting') {
-        /* The pseudo-status from facets(). Kept here rather than in the
-           page so the tile, the select and any future link all mean the
-           same thing by it. */
-        rows = rows.filter(function (o) {
-          return o.status === 'pending' || o.status === 'processing';
-        });
-      } else if (options.status) {
-        rows = rows.filter(function (o) { return o.status === options.status; });
-      }
-
-      if (options.payment) {
-        rows = rows.filter(function (o) { return o.payment === options.payment; });
-      }
-
-      if (options.range) {
-        var days = parseInt(options.range, 10);
-        if (days > 0) {
-          rows = rows.filter(function (o) { return o.daysAgo < days; });
-        }
-      }
-
-      var compare = ORDER_SORTS[options.sort];
-      if (compare) rows = rows.slice().sort(compare);
-
-      var total = rows.length;
-      var perPage = options.perPage || 20;
-      var pages = Math.max(1, Math.ceil(total / perPage));
-      var page = Math.min(Math.max(1, options.page || 1), pages);
-      var start = (page - 1) * perPage;
-
-      /* Revenue for the filtered set, not just for the page on screen —
-         "of 214 orders" above a table is only half an answer when the
-         question is how much they came to. Cancelled orders are excluded,
-         the same rule the dashboard uses. */
-      var revenue = rows.reduce(function (sum, order) {
-        return ZB.adminMock.isRevenue(order) ? sum + order.total : sum;
-      }, 0);
-
-      return Repo.defer({
-        items: rows.slice(start, start + perPage),
-        total: total, page: page, pages: pages, perPage: perPage,
-        revenue: revenue
-      });
+      return Api.get(Api.query('/api/admin/orders', {
+        search: options.search,
+        status: options.status,
+        payment: options.payment,
+        range: options.range,
+        sort: options.sort,
+        page: options.page,
+        perPage: options.perPage
+      }));
     },
 
     get: function (id) {
-      var hit = currentOrders().filter(function (o) { return o.id === id; })[0];
-      return Repo.defer(hit || null);
+      return Api.get('/api/admin/orders/' + encodeURIComponent(id))
+        .then(function (data) { return data.order; })
+        .catch(function (err) {
+          if (err.status === 404) return null;
+          throw err;
+        });
     },
 
-    /** The newest few, for the dashboard. Already sorted newest first. */
+    /** The newest few, for the dashboard. */
     recent: function (limit) {
-      return Repo.defer(currentOrders().slice(0, limit || 6));
+      return Repo.orders.list({ perPage: limit || 6, sort: 'newest' })
+        .then(function (result) { return result.items; });
     },
 
     /** The counts behind the status filter, for the strip above the list. */
     summary: function () {
-      var rows = currentOrders();
-      var counts = {};
-
-      rows.forEach(function (order) {
-        counts[order.status] = (counts[order.status] || 0) + 1;
-      });
-
-      return Repo.defer({
-        total: rows.length,
-        counts: counts,
-        /* The two an owner opens this screen to act on. */
-        waiting: (counts.pending || 0) + (counts.processing || 0),
-        unpaid: rows.filter(function (o) { return o.payment === 'unpaid'; }).length,
-        revenue: rows.reduce(function (sum, o) {
-          return ZB.adminMock.isRevenue(o) ? sum + o.total : sum;
-        }, 0)
-      });
+      return Api.get('/api/admin/orders/summary');
     },
 
-    /* -- writes. In memory only. -- */
+    /* -- writes -- */
 
     /**
      * Move an order to a new status.
      *
-     * Rejects a move the flow does not allow rather than quietly applying
-     * it: a UI bug that offers the wrong button should surface here, not
-     * become a delivered order that was never shipped.
+     * The flow is checked here before the request goes, so a UI bug that
+     * offers the wrong button surfaces as a refusal rather than as a
+     * delivered order that was never shipped. The database does not enforce
+     * the flow — it enforces the five statuses — so this is the only place
+     * that rule lives, and it is a rule about how this shop works rather
+     * than about what the data may be.
      */
     updateStatus: function (id, status) {
-      var order = currentOrders().filter(function (o) { return o.id === id; })[0];
-      if (!order) return Promise.reject({ message: 'That order no longer exists.' });
+      return Repo.orders.get(id).then(function (order) {
+        if (!order) throw new Error('That order no longer exists.');
 
-      var allowed = (NEXT_STATUS[order.status] || []).indexOf(status) > -1;
-      if (!allowed) {
-        return Promise.reject({
-          message: 'An order that is ' + orderLabel(order.status).toLowerCase() +
-                   ' cannot be moved to ' + orderLabel(status).toLowerCase() + '.'
-        });
-      }
+        if ((NEXT_STATUS[order.status] || []).indexOf(status) === -1) {
+          throw new Error('An order that is ' + orderLabel(order.status).toLowerCase() +
+                          ' cannot be moved to ' + orderLabel(status).toLowerCase() + '.');
+        }
 
-      var change = { status: status, statusLabel: orderLabel(status) };
+        var body = { status: status };
 
-      /* Cancelling settles the money too. Leaving payment on "Paid" beside
-         a cancelled order states something the shop would have to answer
-         for, and the mock's own revenue rule already treats a cancelled
-         order as no longer earned. */
-      if (status === 'cancelled' && order.payment === 'paid') {
-        change.payment = 'refunded';
-        change.paymentLabel = paymentLabel('refunded');
-      }
+        /* Cancelling settles the money too. Leaving payment on "Paid"
+           beside a cancelled order states something the shop would have to
+           answer for, and every revenue figure already treats a cancelled
+           order as not earned. */
+        if (status === 'cancelled' && order.payment === 'paid') body.payment = 'refunded';
 
-      orderEdits[id] = orderEdits[id] || {};
-      Object.keys(change).forEach(function (key) {
-        orderEdits[id][key] = change[key];
-      });
-
-      return Repo.orders.get(id);
+        return Api.send('PATCH', '/api/admin/orders/' + encodeURIComponent(id), body);
+      }).then(function (result) { return result.order; });
     },
 
     /** Mark an unpaid order paid — the other thing that happens by hand. */
     markPaid: function (id) {
-      var order = currentOrders().filter(function (o) { return o.id === id; })[0];
-      if (!order) return Promise.reject({ message: 'That order no longer exists.' });
-
-      if (order.payment === 'paid') return Repo.defer(order);
-
-      orderEdits[id] = orderEdits[id] || {};
-      orderEdits[id].payment = 'paid';
-      orderEdits[id].paymentLabel = paymentLabel('paid');
-
-      return Repo.orders.get(id);
+      return Api.send('PATCH', '/api/admin/orders/' + encodeURIComponent(id),
+                      { payment: 'paid' })
+        .then(function (result) { return result.order; });
     },
 
-    /** Undo support: put an order back exactly as it was. */
+    /**
+     * Undo: put an order back as it was.
+     *
+     * `previous` is what the screen captured before the change — the same
+     * token it always passed. Only the two fields that can be changed are
+     * put back, because they are the only two that moved.
+     */
     restore: function (id, previous) {
-      if (!previous) return Repo.defer(false);
+      if (!previous) return Promise.resolve(false);
 
-      orderEdits[id] = orderEdits[id] || {};
-      Object.keys(previous).forEach(function (key) {
-        orderEdits[id][key] = previous[key];
-      });
+      var body = {};
+      if (previous.status) body.status = previous.status;
+      if (previous.payment) body.payment = previous.payment;
 
-      return Repo.defer(true);
+      if (!Object.keys(body).length) return Promise.resolve(false);
+
+      return Api.send('PATCH', '/api/admin/orders/' + encodeURIComponent(id), body)
+        .then(function () { return true; });
     },
 
+    /**
+     * Whether an order counts as money the shop took.
+     *
+     * One line, in one place, because it is the rule that decides every
+     * revenue figure on every screen — the dashboard's, the orders
+     * screen's, a customer's lifetime spend, the reports. It also has to
+     * agree with public.customer_stats in db/schema.sql, which excludes
+     * cancelled orders in SQL for the same reason.
+     */
+    isRevenue: function (order) {
+      return !!order && order.status !== 'cancelled';
+    },
+
+    /** Always false: every change above reaches the database. */
     hasUnsavedEdits: function () {
-      return Object.keys(orderEdits).length > 0;
+      return false;
     }
   };
 
   /* -----------------------------------------------------------------------
      Customers
 
-     EVERY NUMBER HERE IS COUNTED FROM THE ORDERS
-     A customer's order count and lifetime spend are not stored beside them
-     and are never invented: admin-mock rolls them up from the same order
-     list the orders page shows, and everything derived below — average
-     order, when they last bought — is counted here from the same source.
-     Two numbers that are supposed to agree should be one number, or they
-     will drift, and a customer profile that disagrees with their own order
-     history is worse than no profile.
+     COUNTED, NEVER CARRIED
+     A customer's order count and lifetime spend are not columns on their
+     row. They are counted from the orders by the customer_stats view, and
+     db/schema.sql explains why at length: a total stored beside somebody is
+     correct until an order is cancelled and something forgets to adjust it,
+     and from then on it is quietly wrong.
 
-     The consequence worth naming: cancelling an order in this session
-     changes what this section reports about that customer, because the
-     rollup is read through the order overlay rather than frozen at build
-     time. That is the correct behaviour and it is also the behaviour a
-     real backend would have.
-
-     BLOCKING IS A UI STATE HERE AND MUST NOT BE MISTAKEN FOR SECURITY
-     Marking an account blocked writes to the overlay below and changes
-     what this panel draws. It does not stop anyone doing anything: there
-     is no account system, no session, and no server to refuse a request.
-     When one exists, blocking has to be enforced there — a frontend flag
-     only ever decides what to render.
+     BLOCKING IS THE ONLY WRITE
+     Not the name, not the email, not the role. A customer's own details are
+     theirs to correct; making somebody an administrator is not customer
+     management and is not offered here at all.
      ----------------------------------------------------------------------- */
 
-  var customerEdits = {};   /* id -> { status } */
+  /* The page asks for the tiles and for the filter options, and both are
+     answered by the same endpoint — so it is fetched once and shared. The
+     cache lasts until something is written, which is what forget() is for. */
+  var customerSummary = null;
 
-  /** Orders belonging to one customer, newest first, with edits applied. */
-  function ordersOf(customerId) {
-    return currentOrders().filter(function (order) {
-      return order.customerId === customerId;
-    });
-  }
-
-  /**
-   * One customer, with the figures recounted from their orders.
-   *
-   * admin-mock already rolls up `orders` and `spent` at build time, but
-   * that rollup cannot see this session's status changes — a cancelled
-   * order has to stop counting as spend the moment it is cancelled, on
-   * every screen at once. So the totals are counted here instead, and the
-   * build-time ones are left alone rather than being trusted twice.
-   */
-  function shapeCustomer(person) {
-    if (!person) return null;
-
-    var theirs = ordersOf(person.id);
-    var earned = theirs.filter(ZB.adminMock.isRevenue);
-
-    var spent = earned.reduce(function (sum, o) { return sum + o.total; }, 0);
-
-    var out = {};
-    Object.keys(person).forEach(function (key) { out[key] = person[key]; });
-
-    out.orders = theirs.length;
-    out.spent = spent;
-    /* Averaged over the orders that were actually earned. Dividing by every
-       order including the cancelled ones would quietly understate what this
-       customer is worth. */
-    out.average = earned.length ? Math.round(spent / earned.length) : 0;
-    out.cancelled = theirs.length - earned.length;
-
-    /* `daysAgo` counts back from today, so the smallest is the most
-        recent. Null when they have never ordered — which the UI says in
-        words rather than printing a misleading zero. */
-    out.lastOrderDaysAgo = theirs.length
-      ? theirs.reduce(function (min, o) { return Math.min(min, o.daysAgo); }, Infinity)
-      : null;
-
-    if (customerEdits[person.id]) {
-      Object.keys(customerEdits[person.id]).forEach(function (key) {
-        out[key] = customerEdits[person.id][key];
+  function summaryOfCustomers() {
+    if (!customerSummary) {
+      customerSummary = Api.get('/api/admin/customers/summary').catch(function (err) {
+        customerSummary = null;
+        throw err;
       });
     }
 
-    return out;
+    return customerSummary;
   }
-
-  function currentCustomers() {
-    return ZB.adminMock.customers().map(shapeCustomer);
-  }
-
-  /* There is no meaningful natural order — the mock builds customers in id
-     order, and an id is not a join date. So unlike products and orders,
-     this section has a real default sort rather than a "leave it alone"
-     one: newest members first, which is the order a customer list is
-     normally read in. */
-  var CUSTOMER_SORTS = {
-    recent:        function (a, b) { return a.joinedDaysAgo - b.joinedDaysAgo; },
-    oldest:        function (a, b) { return b.joinedDaysAgo - a.joinedDaysAgo; },
-    'name-asc':    function (a, b) { return a.name.localeCompare(b.name); },
-    'name-desc':   function (a, b) { return b.name.localeCompare(a.name); },
-    'spent-desc':  function (a, b) { return b.spent - a.spent; },
-    'spent-asc':   function (a, b) { return a.spent - b.spent; },
-    'orders-desc': function (a, b) { return b.orders - a.orders; }
-  };
 
   Repo.customers = {
 
     sorts: [
-      { id: 'recent', label: 'Newest members' },
-      { id: 'oldest', label: 'Longest standing' },
+      { id: 'recent', label: 'Newest first' },
+      { id: 'oldest', label: 'Oldest first' },
       { id: 'name-asc', label: 'Name A–Z' },
       { id: 'name-desc', label: 'Name Z–A' },
       { id: 'spent-desc', label: 'Highest spend' },
@@ -1109,316 +935,167 @@ window.ZB = window.ZB || {};
       { id: 'orders-desc', label: 'Most orders' }
     ],
 
+    /**
+     * The filter options.
+     *
+     * The two account states are fixed, for the same reason the order
+     * statuses are: a filter that disappears when nothing matches it is a
+     * filter nobody can use to check that nothing matches it.
+     *
+     * The cities are not fixed — they are wherever this shop has actually
+     * delivered — and they come from the summary endpoint, which is where
+     * the same list is derived for the column beside them.
+     */
     facets: function () {
-      var rows = currentCustomers();
-
-      var statuses = {};
-      var cities = {};
-      rows.forEach(function (person) {
-        statuses[person.status] = person.status === 'active' ? 'Active' : 'Blocked';
-        cities[person.city] = person.city;
-      });
-
-      var toList = function (map) {
-        return Object.keys(map).sort(function (a, b) {
-          return map[a].localeCompare(map[b]);
-        }).map(function (id) { return { id: id, label: map[id] }; });
-      };
-
-      return Repo.defer({
-        statuses: toList(statuses),
-        cities: toList(cities)
+      return summaryOfCustomers().then(function (data) {
+        return {
+          statuses: [
+            { id: 'active', label: 'Active' },
+            { id: 'blocked', label: 'Blocked' }
+          ],
+          cities: data.cities || []
+        };
       });
     },
 
     /** options: { search, status, city, sort, page, perPage } */
     list: function (options) {
       options = options || {};
-      var rows = currentCustomers();
 
-      if (options.search) {
-        var needle = String(options.search).toLowerCase();
-        rows = rows.filter(function (person) {
-          return person.name.toLowerCase().indexOf(needle) > -1 ||
-                 person.email.toLowerCase().indexOf(needle) > -1 ||
-                 person.city.toLowerCase().indexOf(needle) > -1;
-        });
-      }
-
-      if (options.status) {
-        rows = rows.filter(function (c) { return c.status === options.status; });
-      }
-
-      if (options.city) {
-        rows = rows.filter(function (c) { return c.city === options.city; });
-      }
-
-      var compare = CUSTOMER_SORTS[options.sort] || CUSTOMER_SORTS.recent;
-      rows = rows.slice().sort(compare);
-
-      var total = rows.length;
-      var perPage = options.perPage || 20;
-      var pages = Math.max(1, Math.ceil(total / perPage));
-      var page = Math.min(Math.max(1, options.page || 1), pages);
-      var start = (page - 1) * perPage;
-
-      return Repo.defer({
-        items: rows.slice(start, start + perPage),
-        total: total, page: page, pages: pages, perPage: perPage,
-        spent: rows.reduce(function (sum, c) { return sum + c.spent; }, 0)
-      });
+      return Api.get(Api.query('/api/admin/customers', {
+        search: options.search,
+        status: options.status,
+        city: options.city,
+        sort: options.sort,
+        page: options.page,
+        perPage: options.perPage
+      }));
     },
 
     get: function (id) {
-      return Repo.defer(shapeCustomer(ZB.adminMock.customer(id)));
+      return Api.get('/api/admin/customers/' + encodeURIComponent(id))
+        .then(function (data) { return data.customer; })
+        .catch(function (err) {
+          if (err.status === 404) return null;
+          throw err;
+        });
     },
 
-    /** One customer's order history, newest first. */
+    /** The orders this person has placed, newest first. */
     orders: function (id) {
-      return Repo.defer(ordersOf(id));
+      return Api.get('/api/admin/customers/' + encodeURIComponent(id))
+        .then(function (data) { return data.orders; })
+        .catch(function (err) {
+          if (err.status === 404) return [];
+          throw err;
+        });
     },
 
+    /**
+     * The four tiles above the list, counted over everyone rather than over
+     * the page on screen. See api/admin/customers/summary.js.
+     */
     summary: function () {
-      var rows = currentCustomers();
-      var spent = rows.reduce(function (sum, c) { return sum + c.spent; }, 0);
-
-      return Repo.defer({
-        total: rows.length,
-        blocked: rows.filter(function (c) { return c.status !== 'active'; }).length,
-        /* Joined inside the last thirty days — the number an owner reads as
-           "is the shop still growing". */
-        joinedRecently: rows.filter(function (c) { return c.joinedDaysAgo < 30; }).length,
-        spent: spent,
-        /* Averaged across everyone, including those who have not bought,
-           because that is what "average customer value" means. */
-        average: rows.length ? Math.round(spent / rows.length) : 0
-      });
+      return summaryOfCustomers();
     },
-
-    /* -- writes. In memory only, and not a security control. -- */
 
     setStatus: function (id, status) {
-      var person = shapeCustomer(ZB.adminMock.customer(id));
-      if (!person) return Promise.reject({ message: 'That customer no longer exists.' });
-
-      if (status !== 'active' && status !== 'blocked') {
-        return Promise.reject({ message: 'Unknown account status.' });
-      }
-
-      customerEdits[id] = customerEdits[id] || {};
-      customerEdits[id].status = status;
-
-      return Repo.customers.get(id);
+      return Api.send('PATCH', '/api/admin/customers/' + encodeURIComponent(id),
+                      { status: status })
+        .then(function (result) {
+          /* The blocked count above the list has just changed. */
+          customerSummary = null;
+          return result.customer;
+        });
     },
 
+    /** Always false: every change above reaches the database. */
     hasUnsavedEdits: function () {
-      return Object.keys(customerEdits).length > 0;
+      return false;
     }
   };
 
   /* -----------------------------------------------------------------------
      Metrics
 
-     Every figure below is counted from the same order list the orders page
-     shows, so a total on the dashboard and a row on another screen can
-     never disagree. Cancelled orders are never revenue.
+     ONE REQUEST, FIVE ANSWERS
+     The dashboard asks five questions about the same orders. Asked
+     separately they would fetch the same rows five times and could each be
+     computed from a slightly different window — a chart and a headline
+     disagreeing about the same fortnight. /api/admin/metrics counts them
+     once, next to the data, and this caches the answer per window so
+     opening the dashboard is one round trip.
      ----------------------------------------------------------------------- */
 
-  /**
-   * Orders inside the last `days` days, newest first.
-   *
-   * Through currentOrders(), never the raw mock. Reading the mock directly
-   * would leave the dashboard describing orders as they were generated
-   * rather than as they now stand: cancel an order on the orders screen
-   * and the customer's spend would drop while the dashboard's revenue did
-   * not, which is two screens disagreeing about the same afternoon.
-   */
-  function ordersWithin(days) {
-    return currentOrders().filter(function (o) { return o.daysAgo < days; });
-  }
+  var metricsCache = {};
 
-  function revenueOf(list) {
-    return list.reduce(function (sum, o) {
-      return ZB.adminMock.isRevenue(o) ? sum + o.total : sum;
-    }, 0);
-  }
+  function metricsFor(days) {
+    days = days || 30;
 
-  /**
-   * Percentage change from the previous equal-length period.
-   * Returns null when there is nothing to compare against, so the tile can
-   * omit the delta rather than print a meaningless 0% or an infinity.
-   */
-  function changePct(current, previous) {
-    if (!previous) return null;
-    return ((current - previous) / previous) * 100;
+    if (!metricsCache[days]) {
+      metricsCache[days] = Api.get(Api.query('/api/admin/metrics', { days: days }))
+        .catch(function (err) {
+          /* A failure must not be remembered as the answer. */
+          delete metricsCache[days];
+          throw err;
+        });
+    }
+
+    return metricsCache[days];
   }
 
   Repo.metrics = {
 
-    /**
-     * The headline numbers, each with its change against the period before.
-     * `days` is the window the dashboard is currently showing.
-     */
+    /** Throw away what is cached — after a status change, say. */
+    forget: function () { metricsCache = {}; },
+
     summary: function (days) {
-      days = days || 30;
-
-      var all = currentOrders();
-      var current = ordersWithin(days);
-      var previous = all.filter(function (o) {
-        return o.daysAgo >= days && o.daysAgo < days * 2;
-      });
-
-      var currentRevenue = revenueOf(current);
-      var previousRevenue = revenueOf(previous);
-
-      var people = ZB.adminMock.customers();
-      var newPeople = people.filter(function (p) { return p.joinedDaysAgo < days; }).length;
-      var previousPeople = people.filter(function (p) {
-        return p.joinedDaysAgo >= days && p.joinedDaysAgo < days * 2;
-      }).length;
-
-      var products = ZB.catalogue.all();
-
-      return Repo.defer({
-        days: days,
-
-        sales: {
-          value: currentRevenue,
-          change: changePct(currentRevenue, previousRevenue)
-        },
-        orders: {
-          value: current.length,
-          change: changePct(current.length, previous.length)
-        },
-        products: {
-          value: products.length,
-          /* The catalogue is fixed in this build, so there is no honest
-             change to report against it. */
-          change: null
-        },
-        customers: {
-          value: people.length,
-          change: changePct(newPeople, previousPeople)
-        },
-
-        pendingOrders: all.filter(function (o) {
-          return o.status === 'pending' || o.status === 'processing';
-        }).length,
-
-        /* Out of stock, not running low. The dashboard tile that reads this
-           says "Products out of stock" and means it; the running-low
-           threshold is a different question and belongs to the inventory
-           screen, which asks it. A field called lowStock holding a count of
-           products at zero is the sort of name that eventually gets used
-           for what it says rather than what it is. */
-        outOfStock: products.filter(function (p) { return !p.inStock; }).length
-      });
+      return metricsFor(days).then(function (data) { return data.summary; });
     },
 
     /**
      * Daily revenue, oldest first — the sales overview line.
-     * Every day in the window appears, including the quiet ones, so the
-     * line's shape is the real shape and not a compressed one.
+     *
+     * The server sends how many days ago each bucket is; the date is worked
+     * out here, in the reader's own timezone, because that is whose "today"
+     * the labels are about.
      */
     salesSeries: function (days) {
-      days = days || 30;
+      return metricsFor(days).then(function (data) {
+        var today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-      var buckets = [];
-      var byDay = {};
-      var today = new Date();
-      today.setHours(0, 0, 0, 0);
+        return data.series.map(function (bucket) {
+          var date = new Date(today.getTime());
+          date.setDate(date.getDate() - bucket.daysAgo);
 
-      for (var d = days - 1; d >= 0; d--) {
-        var date = new Date(today.getTime());
-        date.setDate(date.getDate() - d);
-        var bucket = { date: date, daysAgo: d, value: 0, orders: 0 };
-        byDay[d] = bucket;
-        buckets.push(bucket);
-      }
-
-      ordersWithin(days).forEach(function (order) {
-        var bucket = byDay[order.daysAgo];
-        if (!bucket) return;
-        bucket.orders += 1;
-        if (ZB.adminMock.isRevenue(order)) bucket.value += order.total;
+          return {
+            date: date,
+            daysAgo: bucket.daysAgo,
+            value: bucket.value,
+            orders: bucket.orders
+          };
+        });
       });
-
-      return Repo.defer(buckets);
     },
 
-    /** Best sellers by revenue within the window. */
     topProducts: function (days, limit) {
-      var totals = {};
-
-      ordersWithin(days || 30).forEach(function (order) {
-        if (!ZB.adminMock.isRevenue(order)) return;
-        order.items.forEach(function (line) {
-          var row = totals[line.id] || (totals[line.id] = {
-            id: line.id, title: line.title, image: line.image,
-            units: 0, revenue: 0
-          });
-          row.units += line.qty;
-          row.revenue += line.price * line.qty;
-        });
+      return metricsFor(days).then(function (data) {
+        return data.topProducts.slice(0, limit || 5);
       });
-
-      var rows = Object.keys(totals).map(function (id) { return totals[id]; });
-      rows.sort(function (a, b) { return b.revenue - a.revenue; });
-
-      return Repo.defer(rows.slice(0, limit || 5));
     },
 
-    /**
-     * The activity strip.
-     *
-     * Built from records that exist rather than from invented sentences,
-     * so every line refers to something another screen can show.
-     */
     activity: function (limit) {
-      var out = [];
-      var recent = currentOrders().slice(0, 12);
-
-      recent.forEach(function (order) {
-        if (order.status === 'shipped') {
-          out.push({
-            kind: 'shipped', icon: 'box', daysAgo: order.daysAgo,
-            text: 'Order ' + order.ref + ' was marked shipped'
-          });
-        } else {
-          out.push({
-            kind: 'order', icon: 'receipt', daysAgo: order.daysAgo,
-            text: 'New order ' + order.ref + ' from ' + order.customerName
-          });
-        }
+      return metricsFor(30).then(function (data) {
+        return data.activity.slice(0, limit || 6);
       });
-
-      ZB.catalogue.all().filter(function (p) { return !p.inStock; })
-        .slice(0, 2)
-        .forEach(function (product) {
-          out.push({
-            kind: 'stock', icon: 'archive', daysAgo: 0,
-            text: product.title + ' is out of stock'
-          });
-        });
-
-      out.sort(function (a, b) { return a.daysAgo - b.daysAgo; });
-      return Repo.defer(out.slice(0, limit || 6));
     },
 
     /** The small counters beside the sidebar items. */
     navBadges: function () {
-      var outOfStock = ZB.catalogue.all().filter(function (p) {
-        return !p.inStock;
-      }).length;
-
-      var waiting = currentOrders().filter(function (o) {
-        return o.status === 'pending' || o.status === 'processing';
-      }).length;
-
-      return Repo.defer({ inventory: outOfStock, orders: waiting });
+      return metricsFor(30).then(function (data) { return data.badges; });
     }
   };
-
   /* -----------------------------------------------------------------------
      Categories
 
@@ -2544,10 +2221,10 @@ window.ZB = window.ZB || {};
      minutes. Nothing here is a second copy of a dashboard tile.
 
      EVERY FIGURE IS COUNTED FROM THE ORDERS THE PANEL ALREADY SHOWS
-     Through currentOrders(), which is the order list with this session's
-     status changes applied. That matters more here than anywhere else: a
-     report is exactly where somebody would notice that cancelling an order
-     on one screen did not change the total on another.
+     From the same endpoint the orders screen reads, so a report is counted
+     from exactly the rows that screen shows. That matters more here than
+     anywhere else: a report is where somebody would notice that cancelling
+     an order on one screen had not changed the total on another.
 
      THE HISTORY HAS AN EDGE AND THE REPORT SAYS SO
      There are ninety days of orders and no more. A period that reaches
@@ -2556,8 +2233,84 @@ window.ZB = window.ZB || {};
      saying so, is worse than one that refuses the question.
      ----------------------------------------------------------------------- */
 
+  /* -----------------------------------------------------------------------
+     WHERE A REPORT'S ORDERS COME FROM
+
+     A report is composition and comparison over a period: shares, splits,
+     the same figure against the period before it. Every one of those needs
+     the whole period at once, which is why this loads a snapshot rather
+     than paging — there is no first page of a percentage.
+
+     The snapshot is taken once and reused for every figure on the screen,
+     so the total at the top and the breakdown beneath it are counted from
+     the same rows. Repo.reports.forget() throws it away.
+     ----------------------------------------------------------------------- */
+
+  var reportOrderCache = null;
+  var reportCustomerCache = null;
+  var reportLoad = null;
+
+  /* Where a report stops being something to read and becomes an export.
+     Reached only by a shop with a great many orders, and the answer then is
+     to count in the database, not to raise this. */
+  var REPORT_MAX = 5000;
+
+  /** Every page of something, up to a limit, as one array. */
+  function loadAll(path, cap) {
+    var out = [];
+
+    var next = function (page) {
+      return Api.get(Api.query(path, { page: page, perPage: 100 }))
+        .then(function (result) {
+          out = out.concat(result.items || []);
+
+          if (out.length >= cap) return out.slice(0, cap);
+          if (page >= result.pages) return out;
+
+          return next(page + 1);
+        });
+    };
+
+    return next(1);
+  }
+
+  function loadReportData() {
+    if (!reportLoad) {
+      reportLoad = Promise.all([
+        loadAll('/api/admin/orders', REPORT_MAX),
+        loadAll('/api/admin/customers', REPORT_MAX)
+      ]).then(function (both) {
+        reportOrderCache = both[0];
+        reportCustomerCache = both[1];
+      }).catch(function (err) {
+        /* Not remembered as the answer: the next attempt is a fresh one. */
+        reportLoad = null;
+        throw err;
+      });
+    }
+
+    return reportLoad;
+  }
+
+  function reportOrders() { return reportOrderCache || []; }
+  function reportCustomers() { return reportCustomerCache || []; }
+
+  /**
+   * How far back the orders actually go.
+   *
+   * A report asking for "this year" against three weeks of trading is
+   * clamped to three weeks, and the screen says so. The old version read a
+   * fixed ninety from the generator's own settings, which was true of
+   * generated orders and is not true of a real shop's.
+   */
   function historyDays() {
-    return (ZB.adminSeed && ZB.adminSeed.days) || 90;
+    var oldest = 0;
+
+    reportOrders().forEach(function (order) {
+      if (order.daysAgo > oldest) oldest = order.daysAgo;
+    });
+
+    return oldest + 1;
   }
 
   function midnightToday() {
@@ -2587,7 +2340,7 @@ window.ZB = window.ZB || {};
   }
 
   function ordersIn(range) {
-    return currentOrders().filter(function (order) {
+    return reportOrders().filter(function (order) {
       return order.daysAgo <= range.oldest && order.daysAgo >= range.newest;
     });
   }
@@ -2705,7 +2458,7 @@ window.ZB = window.ZB || {};
     var revenue = revenueIn(all);
     var units = unitsIn(all);
 
-    var people = ZB.adminMock.customers().filter(function (person) {
+    var people = reportCustomers().filter(function (person) {
       return person.joinedDaysAgo <= range.oldest &&
              person.joinedDaysAgo >= range.newest;
     });
@@ -2950,7 +2703,7 @@ window.ZB = window.ZB || {};
       var inRange = ordersIn(range);
 
       var earlier = {};
-      currentOrders().forEach(function (order) {
+      reportOrders().forEach(function (order) {
         if (order.daysAgo > range.oldest) earlier[order.customerId] = true;
       });
 
@@ -2975,7 +2728,7 @@ window.ZB = window.ZB || {};
       rows.sort(function (a, b) { return b.spent - a.spent; });
       rows.forEach(function (row) { row.share = shareOf(row.spent, revenue); });
 
-      var people = ZB.adminMock.customers();
+      var people = reportCustomers();
       var joined = people.filter(function (person) {
         return person.joinedDaysAgo <= range.oldest &&
                person.joinedDaysAgo >= range.newest;
@@ -3000,6 +2753,42 @@ window.ZB = window.ZB || {};
         top: rows.slice(0, limit || 8)
       });
     }
+  };
+
+  /* -----------------------------------------------------------------------
+     EVERY REPORT WAITS FOR ITS DATA
+
+     The five methods above were written against an array that was simply
+     there — the generated orders, in memory, from the moment the page
+     loaded. They are now counted from a snapshot that arrives over the
+     network, and the arithmetic inside them did not need to change for
+     that: it needed to happen later.
+
+     So each one is wrapped once, here, rather than each having a `.then`
+     threaded through it. Which methods are wrapped is listed rather than
+     inferred: `presets`, `resolve` and `toDateInput` answer from the
+     calendar rather than from the orders, the page calls them while
+     building its controls, and turning them into promises would have
+     broken that for no reason.
+     ----------------------------------------------------------------------- */
+
+  ['overview', 'series', 'breakdown', 'products', 'customers'].forEach(function (name) {
+    var counted = Repo.reports[name];
+
+    Repo.reports[name] = function () {
+      var args = arguments;
+
+      return loadReportData().then(function () {
+        return counted.apply(Repo.reports, args);
+      });
+    };
+  });
+
+  /** Throw the snapshot away — after a status change on another screen. */
+  Repo.reports.forget = function () {
+    reportOrderCache = null;
+    reportCustomerCache = null;
+    reportLoad = null;
   };
 
   /* -----------------------------------------------------------------------

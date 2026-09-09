@@ -44,19 +44,24 @@ window.ZB.adminPages = window.ZB.adminPages || {};
 
     title: 'Order',
 
-    crumbs: function (params) {
+    /* THE ADDRESS IS THE ORDER'S ID, WHICH IS NOT WHAT IT IS CALLED
+     *
+     * These both used to print params.id, because the generated orders used
+     * their reference as their id and the two were the same string. In the
+     * database they are not: the id is a uuid and the reference is
+     * HAV-2609-01020, which is the one a person reads out over the phone.
+     * So the heading waits for the order and paintHead fills it in. */
+    crumbs: function () {
       return [
         { label: 'Orders', path: '/admin/orders' },
-        { label: (params && params.id) || 'Order' }
+        { label: 'Order' }
       ];
     },
 
-    render: function (params) {
-      var ref = (params && params.id) || '';
-
+    render: function () {
       return '' +
         ui.pageHead({
-          title: 'Order ' + ref,
+          title: 'Order',
           sub: 'Loading…',
           actions:
             '<a class="a-btn a-btn--ghost" href="' + ui.href('/admin/orders') + '">' +
@@ -136,6 +141,13 @@ window.ZB.adminPages = window.ZB.adminPages || {};
   }
 
   function paintHead(row) {
+    /* The reference, now that there is one to show. */
+    var title = document.querySelector('.a-page-head__title');
+    if (title) title.textContent = 'Order ' + row.ref;
+
+    var crumb = document.querySelector('#admin-crumbs .a-crumbs__item:last-child [aria-current]');
+    if (crumb) crumb.textContent = row.ref;
+
     var sub = document.querySelector('.a-page-head__sub');
     if (sub) {
       sub.textContent = 'Placed ' + ui.date(row.date) + ' · ' + ui.ago(row.daysAgo);
@@ -338,8 +350,8 @@ window.ZB.adminPages = window.ZB.adminPages || {};
           defRow('Placed', ui.date(row.date)) +
         '</dl>' +
         '<p class="a-order__note">' +
-          'This build has no database. Anything changed here is held in this ' +
-          'tab and is lost when the page reloads.' +
+          'A status change here is saved to the database and is what the ' +
+          'customer sees on their account.' +
         '</p>'
     });
   }
@@ -444,7 +456,10 @@ window.ZB.adminPages = window.ZB.adminPages || {};
     if (order.payment === 'paid') {
       body += ' Its payment is marked refunded at the same time.';
     }
-    body += ' This build has no database, so the change lasts until reload.';
+    /* The stock is the part an owner will not have thought about, and it is
+       the part that matters: a cancelled order whose items never came back
+       is stock the shop cannot sell and cannot explain. */
+    body += ' Everything in it goes back into stock.';
 
     ZB.adminModal.confirm({
       title: 'Cancel this order?',

@@ -107,7 +107,24 @@ function storefrontProduct(row, labels) {
   var parent = category.parent || null;
 
   return {
+    /* The slug, because every route, link and saved cart line in the
+       storefront is built from it and always has been. */
     id: row.slug,
+
+    /* The row's own id, which is what an order line points at.
+     *
+     * A cart is a list of slugs in localStorage, and place_order files an
+     * order line against products.id — so something has to bridge the two,
+     * and this is the honest place: the catalogue already knows both. The
+     * alternative was letting the checkout send slugs and having the
+     * database look them up, which works until a slug changes and a cart
+     * saved last week orders the wrong thing.
+     *
+     * There is nothing to protect here. A uuid identifies a public product
+     * in a public catalogue; what may be done with it is decided by the
+     * policies, not by whether it is known. */
+    productId: row.id,
+
     title: row.title,
 
     dept: row.dept,
@@ -304,13 +321,215 @@ function navigationTree(rows) {
   });
 }
 
+/* -------------------------------------------------------------------------
+   Orders
+
+   The panel's order screens were built against generated orders, and those
+   carried both a value and its label — `status: 'shipped'` next to
+   `statusLabel: 'Shipped'`. The database stores only the value, because a
+   label is a word in one language and belongs in the interface. So the
+   labels are reproduced here, from the same list admin-seed.js used, and
+   the screens are handed the pair they already read.
+   ------------------------------------------------------------------------- */
+
+var ORDER_SELECT =
+  'id, ref, user_id, status, payment_status, method, subtotal, discount,' +
+  ' shipping, total, coupon_code, address, note, created_at,' +
+  ' order_items ( id, product_id, title, image, price, qty, size ),' +
+  ' profiles:user_id ( id, name, email, phone )';
+
+var STATUS_LABELS = {
+  pending: 'Pending',
+  processing: 'Processing',
+  shipped: 'Shipped',
+  delivered: 'Delivered',
+  cancelled: 'Cancelled'
+};
+
+var PAYMENT_LABELS = {
+  paid: 'Paid',
+  unpaid: 'Unpaid',
+  refunded: 'Refunded'
+};
+
+/* The panel shows a method in words. The database stores the four values the
+   schema allows, and this is the only place the two meet. */
+var METHOD_LABELS = {
+  cod: 'Cash on delivery',
+  card: 'Card',
+  bank: 'Bank transfer',
+  wallet: 'Wallet'
+};
+
+function orderLines(row) {
+  var lines = (row && row.order_items) || [];
+
+  return lines.map(function (line) {
+    return {
+      /* The product's id, because that is what the panel links to. It is
+         null for a product that has since been deleted outright — the line
+         keeps its own title and price, which is the point of storing them
+         on the line rather than joining to the product. */
+      id: line.product_id,
+      title: line.title,
+      image: line.image,
+      price: line.price,
+      qty: line.qty,
+      size: line.size || null
+    };
+  });
+}
+
+/**
+ * An order as the admin panel's list and detail screens know it.
+ *
+ * `address` is the snapshot stored with the order, not the customer's
+ * current address — where it actually went, which is what a delivery
+ * question is about.
+ */
+function adminOrder(row) {
+  var person = row.profiles || {};
+  var lines = orderLines(row);
+  var address = row.address || {};
+
+  return {
+    id: row.id,
+    ref: row.ref,
+
+    /* An ISO string rather than a Date. It crosses JSON either way, and a
+       string is what the screens format; a Date would arrive as a string
+       and be used as if it were not. */
+    date: row.created_at,
+    daysAgo: daysSince(row.created_at),
+
+    /* Null for an order whose account was deleted. The order stays — it
+       happened — and the address snapshot still says who it went to. */
+    customerId: person.id || null,
+    customerName: person.name || address.name || 'Deleted account',
+    customerEmail: person.email || null,
+    city: address.city || null,
+
+    items: lines,
+    itemCount: lines.reduce(function (sum, l) { return sum + l.qty; }, 0),
+
+    subtotal: row.subtotal,
+    discount: row.discount,
+    shipping: row.shipping,
+    total: row.total,
+    couponCode: row.coupon_code || null,
+
+    status: row.status,
+    statusLabel: STATUS_LABELS[row.status] || row.status,
+
+    /* The panel calls this `payment`; the column is payment_status. */
+    payment: row.payment_status,
+    paymentLabel: PAYMENT_LABELS[row.payment_status] || row.payment_status,
+
+    method: METHOD_LABELS[row.method] || row.method,
+    methodId: row.method,
+
+    address: address,
+    note: row.note || null
+  };
+}
+
+/**
+ * An order as its own customer sees it, on the account page.
+ *
+ * Deliberately narrower than the admin's. There is no customer id, no
+ * email and no note here — the person reading it is the customer, and the
+ * account page is not a place to hand back a copy of what the shop knows
+ * about them.
+ */
+function customerOrder(row) {
+  var lines = orderLines(row);
+
+  return {
+    id: row.id,
+    ref: row.ref,
+    date: row.created_at,
+    daysAgo: daysSince(row.created_at),
+
+    items: lines,
+    itemCount: lines.reduce(function (sum, l) { return sum + l.qty; }, 0),
+
+    subtotal: row.subtotal,
+    discount: row.discount,
+    shipping: row.shipping,
+    total: row.total,
+    couponCode: row.coupon_code || null,
+
+    status: row.status,
+    statusLabel: STATUS_LABELS[row.status] || row.status,
+    payment: row.payment_status,
+    paymentLabel: PAYMENT_LABELS[row.payment_status] || row.payment_status,
+    method: METHOD_LABELS[row.method] || row.method,
+
+    address: row.address || {}
+  };
+}
+
+/* -------------------------------------------------------------------------
+   Customers
+   ------------------------------------------------------------------------- */
+
+var CUSTOMER_SELECT = 'id, name, email, phone, role, blocked, created_at';
+
+/**
+ * A customer row for the panel.
+ *
+ * `orders` and `spent` come from the customer_stats view rather than from
+ * columns, and the schema says why at length: a total kept on the row is
+ * correct until an order is cancelled and something forgets to adjust it.
+ * Cancelled orders are excluded from both, which is what the panel's list
+ * has always shown.
+ *
+ * `city` is the city of their most recent order, because that is the only
+ * place this database keeps one — an address belongs to a delivery, not to
+ * a person.
+ */
+function adminCustomer(row, stats, city) {
+  var counted = stats || {};
+
+  return {
+    id: row.id,
+    name: row.name || '—',
+    email: row.email || null,
+    phone: row.phone || null,
+    city: city || null,
+    joinedDaysAgo: daysSince(row.created_at),
+    joined: row.created_at,
+
+    /* The panel's word for it. `blocked` is the column; a blocked account
+       can sign in and can do nothing, which is what the screen explains. */
+    status: row.blocked ? 'blocked' : 'active',
+    role: row.role,
+
+    orders: Number(counted.orders || 0),
+    spent: Number(counted.spent || 0),
+    lastOrderAt: counted.last_order_at || null
+  };
+}
+
 module.exports = {
   PRODUCT_SELECT: PRODUCT_SELECT,
   CATEGORY_SELECT: CATEGORY_SELECT,
+  ORDER_SELECT: ORDER_SELECT,
+  CUSTOMER_SELECT: CUSTOMER_SELECT,
+
   storefrontProduct: storefrontProduct,
   adminProduct: adminProduct,
   adminCategory: adminCategory,
   navigationTree: navigationTree,
+
+  adminOrder: adminOrder,
+  customerOrder: customerOrder,
+  adminCustomer: adminCustomer,
+
+  STATUS_LABELS: STATUS_LABELS,
+  PAYMENT_LABELS: PAYMENT_LABELS,
+  METHOD_LABELS: METHOD_LABELS,
+
   imagesOf: imagesOf,
   daysSince: daysSince
 };

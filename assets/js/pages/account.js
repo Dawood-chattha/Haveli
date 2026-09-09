@@ -94,6 +94,60 @@ window.ZB.pages = window.ZB.pages || {};
          have answered.
          ------------------------------------------------------------------- */
 
+      /**
+       * The orders this account has placed.
+       *
+       * Fetched rather than rendered from anything held here, and fetched
+       * as the caller: /api/account/orders has no user parameter, because
+       * the policy in db/policies.sql supplies the condition. There is no
+       * way for this page to ask for somebody else's.
+       */
+      function showOrders(host) {
+        fetch('/api/account/orders', {
+          headers: { Accept: 'application/json' },
+          credentials: 'same-origin'
+        }).then(function (res) {
+          return res.ok ? res.json() : null;
+        }).then(function (payload) {
+          if (!document.body.contains(host)) return;
+
+          var orders = payload && payload.ok && payload.data
+            ? payload.data.orders
+            : null;
+
+          if (!orders) {
+            host.innerHTML = '<p class="account__note">Your orders could not be loaded.</p>';
+            return;
+          }
+
+          if (!orders.length) {
+            host.innerHTML = '<p class="account__note">You have not ordered anything yet.</p>';
+            return;
+          }
+
+          host.innerHTML =
+            '<ul class="account__orders">' +
+              orders.map(function (order) {
+                return '' +
+                  '<li class="account__order">' +
+                    '<a class="account__order-ref" href="' +
+                       ui.href('/order/' + encodeURIComponent(order.ref)) + '">' +
+                      ui.esc(order.ref) +
+                    '</a>' +
+                    '<span class="account__order-meta">' +
+                      order.itemCount + (order.itemCount === 1 ? ' item' : ' items') +
+                      ' · ' + ui.esc(order.statusLabel) +
+                    '</span>' +
+                    '<span class="account__order-total">' + ui.money(order.total) + '</span>' +
+                  '</li>';
+              }).join('') +
+            '</ul>';
+        }).catch(function () {
+          if (!document.body.contains(host)) return;
+          host.innerHTML = '<p class="account__note">Your orders could not be loaded.</p>';
+        });
+      }
+
       function showSignedIn(user) {
         root.innerHTML = '' +
           '<div class="account__form">' +
@@ -101,9 +155,15 @@ window.ZB.pages = window.ZB.pages || {};
               'Signed in as <strong>' + ui.esc(user.email) + '</strong>' +
               (user.name ? ' — ' + ui.esc(user.name) : '') +
             '</p>' +
+
+            '<h2 class="account__heading">Your orders</h2>' +
+            '<div id="account-orders">' + ui.pending('your orders') + '</div>' +
+
             '<a class="btn btn--primary btn--block" href="/wishlist">Your wishlist</a>' +
             '<button class="btn btn--block" type="button" data-signout>Sign out</button>' +
           '</div>';
+
+        showOrders(document.getElementById('account-orders'));
 
         root.querySelector('[data-signout]').addEventListener('click', function (e) {
           var button = e.currentTarget;

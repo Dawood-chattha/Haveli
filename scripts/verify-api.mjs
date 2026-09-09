@@ -97,6 +97,8 @@ const people = {
 const madeUsers = [];
 const madeCategories = [];
 const madeProducts = [];
+const madeOrders = [];
+const madeCoupons = [];
 
 try {
   /* Nothing below means anything if the server is not the one being tested. */
@@ -597,6 +599,388 @@ try {
 
   await expectStatus('signing out', 200, 'POST', '/api/auth/logout', browser);
 
+  /* =====================================================================
+     8. Checkout
+     ---------------------------------------------------------------------
+     The most consequential thing in this file. Everything below is about
+     one question: can a browser decide what it pays?
+     ===================================================================== */
+
+  console.log('\n8. CHECKOUT — the server prices it, or nobody does');
+
+  /* Two products with prices and stock this file chose, so every figure
+     below can be checked by hand rather than by repeating the server's own
+     arithmetic back at it. */
+  const cheap = (await call('POST', '/api/admin/products', {
+    token: owner.token,
+    body: { title: 'Verify Cheap ' + stamp, categoryId: categoryA.id,
+            price: 1200, stock: 5, status: 'active' }
+  })).body.data.product;
+
+  const pricey = (await call('POST', '/api/admin/products', {
+    token: owner.token,
+    body: { title: 'Verify Pricey ' + stamp, categoryId: categoryA.id,
+            price: 6000, stock: 2, status: 'active' }
+  })).body.data.product;
+
+  madeProducts.push(cheap.id, pricey.id);
+
+  const address = {
+    name: 'Verify Buyer', phone: '03001234567',
+    line1: '1 Test Street', city: 'Karachi'
+  };
+
+  const buy = (items, extra) => Object.assign({ items: items }, address, extra || {});
+
+  await expectStatus('a signed-out visitor cannot check out', 401, 'POST', '/api/checkout',
+                     { body: buy([{ productId: cheap.id, qty: 1 }]) });
+
+  await expectStatus('an empty cart', 400, 'POST', '/api/checkout',
+                     { token: shopper.token, body: buy([]) });
+
+  await expectStatus('an order with no address', 400, 'POST', '/api/checkout',
+                     { token: shopper.token,
+                       body: { items: [{ productId: cheap.id, qty: 1 }] } });
+
+  /* --- the ordinary case ------------------------------------------------ */
+
+  const placed = await expectStatus('a customer places an order', 200, 'POST',
+                                    '/api/checkout', {
+    token: shopper.token,
+    body: buy([{ productId: cheap.id, qty: 2 }])
+  });
+
+  const order = placed.body.data && placed.body.data.order;
+  if (order) madeOrders.push(order.id);
+
+  check('the order has a reference', /^HAV-\d{4}-\d{5}$/.test((order && order.ref) || ''),
+        'ref was ' + (order && order.ref));
+  check('THE SUBTOTAL IS THE SHOP PRICE TIMES THE QUANTITY',
+        order.subtotal === 2400, 'subtotal was ' + order.subtotal);
+  check('delivery was charged, because the order is under the free threshold',
+        order.shipping === 250, 'shipping was ' + order.shipping);
+  check('and the total adds up', order.total === 2650, 'total was ' + order.total);
+  check('it starts pending and unpaid',
+        order.status === 'pending' && order.payment === 'unpaid');
+  check('cash on delivery', order.method === 'Cash on delivery', order.method);
+  check('the line kept the price it was sold at',
+        order.items.length === 1 && order.items[0].price === 1200 && order.items[0].qty === 2);
+
+  {
+    const { data } = await admin.from('products').select('stock').eq('id', cheap.id).single();
+    check('THE STOCK CAME DOWN', data.stock === 3, 'stock is ' + data.stock);
+  }
+
+  /* --- the whole point -------------------------------------------------- */
+
+  const forged = await expectStatus('an order that tries to name its own prices',
+                                    200, 'POST', '/api/checkout', {
+    token: shopper.token,
+    body: buy([{ productId: cheap.id, qty: 1, price: 1, total: 1 }],
+              { price: 1, subtotal: 1, discount: 99999, shipping: 0, total: 1 })
+  });
+
+  const forgedOrder = forged.body.data && forged.body.data.order;
+  if (forgedOrder) madeOrders.push(forgedOrder.id);
+
+  check('EVERY FIGURE IT SENT WAS IGNORED',
+        forgedOrder.subtotal === 1200 && forgedOrder.discount === 0 &&
+        forgedOrder.shipping === 250 && forgedOrder.total === 1450,
+        JSON.stringify({ subtotal: forgedOrder.subtotal, discount: forgedOrder.discount,
+                         shipping: forgedOrder.shipping, total: forgedOrder.total }));
+
+  /* --- shipping ---------------------------------------------------------- */
+
+  const bigger = await expectStatus('an order over the free-delivery threshold',
+                                    200, 'POST', '/api/checkout', {
+    token: shopper.token,
+    body: buy([{ productId: pricey.id, qty: 1 }])
+  });
+
+  const bigOrder = bigger.body.data.order;
+  madeOrders.push(bigOrder.id);
+
+  check('delivery is free above the threshold',
+        bigOrder.shipping === 0 && bigOrder.total === 6000,
+        JSON.stringify({ shipping: bigOrder.shipping, total: bigOrder.total }));
+
+  /* --- what cannot be bought --------------------------------------------- */
+
+  /* Five, not ninety-nine. A quantity above the per-line cap is refused by
+     validation as a 400 before the database is asked anything — a real rule,
+     but a different one, and using it here meant this check passed without
+     ever reaching the stock. Only one of the two remains, so five is more
+     than there is. */
+  await expectStatus('more than there is', 409, 'POST', '/api/checkout',
+                     { token: shopper.token, body: buy([{ productId: pricey.id, qty: 5 }]) });
+
+  await expectStatus('a quantity beyond what one line may hold', 400, 'POST', '/api/checkout',
+                     { token: shopper.token, body: buy([{ productId: cheap.id, qty: 99 }]) });
+
+  await expectStatus('a product that does not exist', 409, 'POST', '/api/checkout',
+                     { token: shopper.token, body: buy([{ productId: randomUUID(), qty: 1 }]) });
+
+  {
+    await admin.from('products').update({ status: 'draft' }).eq('id', cheap.id);
+
+    await expectStatus('a product that is not on sale', 409, 'POST', '/api/checkout',
+                       { token: shopper.token, body: buy([{ productId: cheap.id, qty: 1 }]) });
+
+    await admin.from('products').update({ status: 'active' }).eq('id', cheap.id);
+  }
+
+  await expectStatus('a quantity of zero', 400, 'POST', '/api/checkout',
+                     { token: shopper.token, body: buy([{ productId: cheap.id, qty: 0 }]) });
+
+  /* --- coupons ----------------------------------------------------------- */
+
+  const couponCode = 'VERIFY' + stamp;
+
+  await admin.from('coupons').insert({
+    code: couponCode, type: 'percent', value: 20, min_spend: 0
+  });
+  madeCoupons.push(couponCode);
+
+  const discounted = await expectStatus('a coupon is applied', 200, 'POST',
+                                        '/api/checkout', {
+    token: shopper.token,
+    body: buy([{ productId: pricey.id, qty: 1 }], { coupon: couponCode })
+  });
+
+  const couponOrder = discounted.body.data.order;
+  madeOrders.push(couponOrder.id);
+
+  check('the discount is 20% of the subtotal',
+        couponOrder.subtotal === 6000 && couponOrder.discount === 1200,
+        JSON.stringify({ subtotal: couponOrder.subtotal, discount: couponOrder.discount }));
+  check('DELIVERY IS DECIDED ON WHAT IS ACTUALLY PAID',
+        couponOrder.shipping === 250 && couponOrder.total === 5050,
+        'a 6,000 order discounted to 4,800 falls below the free threshold: ' +
+        JSON.stringify({ shipping: couponOrder.shipping, total: couponOrder.total }));
+
+  {
+    const { data } = await admin.from('coupons').select('used_count')
+      .eq('code', couponCode).single();
+    check('the coupon counted its use', data.used_count === 1, 'used ' + data.used_count);
+  }
+
+  await expectStatus('a code nobody issued', 400, 'POST', '/api/checkout',
+                     { token: shopper.token,
+                       body: buy([{ productId: cheap.id, qty: 1 }],
+                                 { coupon: 'NOPE' + stamp }) });
+
+  {
+    const expired = 'EXPIRED' + stamp;
+    await admin.from('coupons').insert({
+      code: expired, type: 'fixed', value: 500,
+      expires_at: new Date(Date.now() - 86400000).toISOString()
+    });
+    madeCoupons.push(expired);
+
+    await expectStatus('a code that has expired', 400, 'POST', '/api/checkout',
+                       { token: shopper.token,
+                         body: buy([{ productId: cheap.id, qty: 1 }], { coupon: expired }) });
+  }
+
+  {
+    const rich = 'MINSPEND' + stamp;
+    await admin.from('coupons').insert({
+      code: rich, type: 'fixed', value: 500, min_spend: 100000
+    });
+    madeCoupons.push(rich);
+
+    await expectStatus('a code that needs a bigger order', 400, 'POST', '/api/checkout',
+                       { token: shopper.token,
+                         body: buy([{ productId: cheap.id, qty: 1 }], { coupon: rich }) });
+  }
+
+  /* =====================================================================
+     9. Who may see an order
+     ===================================================================== */
+
+  console.log('\n9. AN ORDER BELONGS TO ITS CUSTOMER, AND TO THE SHOP');
+
+  {
+    const mine = await call('GET', '/api/account/orders', shopper);
+    check('the customer sees their own orders',
+          mine.body.data.orders.some(function (o) { return o.id === order.id; }));
+
+    const one = await call('GET', '/api/account/orders?ref=' +
+                           encodeURIComponent(order.ref), shopper);
+    check('and can fetch one by reference', one.body.data.order.id === order.id);
+  }
+
+  {
+    /* The owner is an administrator, and this is the customer endpoint —
+       the policy scopes it to the caller's own rows whoever they are. */
+    const theirs = await call('GET', '/api/account/orders?ref=' +
+                              encodeURIComponent(order.ref), { token: people.owner.token });
+
+    check('SOMEBODY ELSE CANNOT READ IT THROUGH THE ACCOUNT ENDPOINT',
+          theirs.status === 404, 'got ' + theirs.status);
+  }
+
+  await expectStatus('a signed-out visitor sees no orders', 401, 'GET', '/api/account/orders');
+
+  {
+    const seen = await call('GET', '/api/admin/orders?search=' +
+                            encodeURIComponent(order.ref), owner);
+    check('the shop sees it', seen.body.data.total === 1 &&
+          seen.body.data.items[0].ref === order.ref);
+    check('with the customer on it',
+          seen.body.data.items[0].customerName === 'Verify Buyer',
+          seen.body.data.items[0].customerName);
+  }
+
+  await expectStatus('a customer cannot read the order list', 403, 'GET',
+                     '/api/admin/orders', shopper);
+
+  {
+    const sum = await call('GET', '/api/admin/orders/summary', owner);
+    /* Four were placed above: the ordinary one, the one that tried to name
+       its own prices, the one over the free-delivery threshold, and the one
+       with a coupon. */
+    check('the summary counts the orders just placed',
+          sum.body.data.total >= 4 && sum.body.data.waiting >= 4,
+          JSON.stringify(sum.body.data));
+  }
+
+  /* =====================================================================
+     10. Cancelling, and the stock that comes back with it
+     ===================================================================== */
+
+  console.log('\n10. CANCELLING — the shelf gets its stock back');
+
+  {
+    const before = (await admin.from('products').select('stock')
+      .eq('id', pricey.id).single()).data.stock;
+
+    await expectStatus('the shop cancels an order', 200, 'PATCH',
+                       '/api/admin/orders/' + couponOrder.id,
+                       { token: owner.token, body: { status: 'cancelled' } });
+
+    const after = (await admin.from('products').select('stock')
+      .eq('id', pricey.id).single()).data.stock;
+
+    check('THE STOCK WENT BACK ON THE SHELF', after === before + 1,
+          before + ' -> ' + after);
+
+    const coupon = (await admin.from('coupons').select('used_count')
+      .eq('code', couponCode).single()).data;
+    check('and the coupon may be used again', coupon.used_count === 0,
+          'used ' + coupon.used_count);
+  }
+
+  {
+    /* Reopening takes the stock again. It is there, so this succeeds; the
+       case where it is not is what the function raises HV001 for. */
+    await expectStatus('the shop reopens it', 200, 'PATCH',
+                       '/api/admin/orders/' + couponOrder.id,
+                       { token: owner.token, body: { status: 'pending' } });
+
+    const coupon = (await admin.from('coupons').select('used_count')
+      .eq('code', couponCode).single()).data;
+    check('the coupon is spent again', coupon.used_count === 1,
+          'used ' + coupon.used_count);
+  }
+
+  await expectStatus('a status the database does not have', 400, 'PATCH',
+                     '/api/admin/orders/' + order.id,
+                     { token: owner.token, body: { status: 'nonsense' } });
+
+  await expectStatus('the shop marks one paid', 200, 'PATCH',
+                     '/api/admin/orders/' + order.id,
+                     { token: owner.token, body: { payment: 'paid' } });
+
+  {
+    const read = await call('GET', '/api/admin/orders/' + order.id, owner);
+    check('and it reads back as paid', read.body.data.order.payment === 'paid');
+  }
+
+  await expectStatus('a customer cannot change an order', 403, 'PATCH',
+                     '/api/admin/orders/' + order.id,
+                     { token: shopper.token, body: { status: 'delivered' } });
+
+  {
+    const { data } = await admin.from('orders').select('status').eq('id', order.id).single();
+    check('and the order did not move', data.status === 'pending', data.status);
+  }
+
+  /* =====================================================================
+     11. Customers, now that one has bought something
+     ===================================================================== */
+
+  console.log('\n11. THE CUSTOMER LIST');
+
+  {
+    const found = await call('GET', '/api/admin/customers?search=' +
+                             encodeURIComponent(people.shopper.email), owner);
+
+    check('the buyer is in the list', found.body.data.total === 1,
+          'total ' + found.body.data.total);
+
+    const row = found.body.data.items[0];
+    check('COUNTED FROM THE ORDERS, NOT STORED ON THE ROW',
+          row.orders >= 3 && row.spent > 0,
+          JSON.stringify({ orders: row.orders, spent: row.spent }));
+    check('with the city of their latest delivery', row.city === 'Karachi', row.city);
+  }
+
+  {
+    const sum = await call('GET', '/api/admin/customers/summary', owner);
+    check('the summary offers Karachi as a filter',
+          (sum.body.data.cities || []).some(function (c) { return c.id === 'Karachi'; }),
+          JSON.stringify(sum.body.data.cities));
+  }
+
+  {
+    const blocked = await expectStatus('the shop blocks a customer', 200, 'PATCH',
+                                       '/api/admin/customers/' + people.shopper.id,
+                                       { token: owner.token, body: { status: 'blocked' } });
+
+    check('the account reads as blocked', blocked.body.data.customer.status === 'blocked');
+
+    await expectStatus('A BLOCKED CUSTOMER CANNOT ORDER', 403, 'POST', '/api/checkout',
+                       { token: shopper.token, body: buy([{ productId: cheap.id, qty: 1 }]) });
+
+    await expectStatus('and is let back in', 200, 'PATCH',
+                       '/api/admin/customers/' + people.shopper.id,
+                       { token: owner.token, body: { status: 'active' } });
+  }
+
+  await expectStatus('an administrator is not blocked from this screen', 403, 'PATCH',
+                     '/api/admin/customers/' + people.owner.id,
+                     { token: owner.token, body: { status: 'blocked' } });
+
+  /* =====================================================================
+     12. The dashboard
+     ===================================================================== */
+
+  console.log('\n12. THE DASHBOARD — counted, not invented');
+
+  {
+    const metrics = await expectStatus('GET /api/admin/metrics', 200, 'GET',
+                                       '/api/admin/metrics?days=30', owner);
+
+    const data = metrics.body.data;
+
+    check('it counts the orders just placed', data.summary.orders.value >= 4,
+          'orders ' + data.summary.orders.value);
+    check('and their revenue', data.summary.sales.value > 0,
+          'sales ' + data.summary.sales.value);
+    check('the sales line has one bucket per day',
+          data.series.length === 30, 'buckets ' + data.series.length);
+    check('the best sellers name real products',
+          data.topProducts.length > 0 && data.topProducts[0].revenue > 0,
+          JSON.stringify(data.topProducts[0]));
+    check('the badges agree with the order summary',
+          typeof data.badges.orders === 'number' &&
+          typeof data.badges.inventory === 'number');
+  }
+
+  await expectStatus('a customer cannot read the dashboard', 403, 'GET',
+                     '/api/admin/metrics', shopper);
+
 } catch (err) {
   fail('the run stopped: ' + err.message);
 } finally {
@@ -604,6 +988,15 @@ try {
 
   /* By id, every time. A cleanup that matched on a name pattern could reach
      a row the shop owner had added. */
+  /* Orders first: an order line points at a product, so a product cannot
+     go while one still does. */
+  for (const id of madeOrders) {
+    await admin.from('order_items').delete().eq('order_id', id);
+    await admin.from('orders').delete().eq('id', id);
+  }
+  for (const code of madeCoupons) {
+    await admin.from('coupons').delete().eq('code', code);
+  }
   for (const id of madeProducts) {
     await admin.from('product_images').delete().eq('product_id', id);
     await admin.from('products').delete().eq('id', id);
