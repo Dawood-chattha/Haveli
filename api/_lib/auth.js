@@ -59,16 +59,23 @@ var log = require('./log');
  * without one. Neither is trusted — both end up at the same verification.
  */
 function bearerToken(req) {
-  return Cookies.accessToken(req) || db.bearerToken(req);
+  /* One implementation, in supabase.js, so that the token this file
+     verifies is always the token the database client will carry. They were
+     two, and they disagreed about cookies — see the note there. */
+  return db.bearerToken(req);
 }
 
 /**
  * The verified user behind this request, with their role, or null.
  *
- * Returns null for every failure — no token, malformed, expired, bad
- * signature, unreachable auth service. An endpoint's decision is the same in
- * all of them, and telling them apart in a response would help someone
- * probing for valid tokens.
+ * Null means the caller is not authenticated, and it means that for every
+ * reason a caller could be responsible for — no token, malformed, expired,
+ * revoked, signed by something else. They are not told which: the difference
+ * is of no use to anyone holding a real token and of some use to anyone
+ * guessing at one.
+ *
+ * A service that could not answer is not one of those reasons, and this
+ * throws a 503 for it instead. See the note at the call below.
  */
 async function currentUser(req) {
   var token = bearerToken(req);
@@ -76,17 +83,40 @@ async function currentUser(req) {
 
   var client = db.asUser({ headers: { authorization: 'Bearer ' + token } });
 
+  /* AN OUTAGE IS NOT A LOGOUT
+   *
+   * Everything below separates "this token is no good" from "the service
+   * that would have told us did not answer". The first is null and becomes
+   * a 401. The second is a 503, because the alternative is that a slow
+   * network signs the shop owner out in the middle of an edit and blames
+   * them for it — which is exactly what happened while this was being
+   * tested: Supabase took fifty seconds to answer one request, returned an
+   * error, and the panel reported the owner as not signed in.
+   *
+   * Failing closed is still failing closed. Nothing is let through either
+   * way; only the explanation differs, and the explanation decides whether
+   * the panel asks the owner to sign in again or to try again. */
   var result;
   try {
     result = await client.auth.getUser(token);
   } catch (err) {
-    /* A network failure reaching Supabase, not a rejected token. Logged so an
-       outage is visible; the caller is still simply unauthenticated. */
-    log.error('could not verify token', err);
-    return null;
+    log.error('the auth service could not be reached', err);
+    throw Errors.unavailable();
   }
 
-  if (result.error || !result.data || !result.data.user) return null;
+  if (result.error) {
+    /* A status in the 4xx range is a verdict on the token — expired, revoked,
+       signed by something else. Anything else (a 5xx, or the 0 that a fetch
+       failure carries) is a verdict on the service. */
+    var status = result.error.status;
+
+    if (status >= 400 && status < 500) return null;
+
+    log.error('the auth service refused to answer', result.error, { status: status });
+    throw Errors.unavailable();
+  }
+
+  if (!result.data || !result.data.user) return null;
 
   var user = result.data.user;
 
@@ -104,10 +134,11 @@ async function currentUser(req) {
     if (row.error) throw new Error(row.error.message);
     profile = row.data;
   } catch (err) {
-    /* Without a profile there is no role, and no role means no privileges.
-       Failing closed matters more here than reporting the cause. */
+    /* The database, not the caller. Same reasoning as above: a profile that
+       cannot be read is an outage, and calling it "signed out" would be a
+       lie that costs the owner their session. */
     log.error('could not read profile', err, { userId: user.id });
-    return null;
+    throw Errors.unavailable();
   }
 
   if (!profile) return null;

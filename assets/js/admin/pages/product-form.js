@@ -32,10 +32,21 @@ window.ZB.adminPages = window.ZB.adminPages || {};
 
   var ui = ZB.adminUI;
 
+  /* THERE IS NO "OUT OF STOCK" STATUS, AND THERE WAS NEVER MEANT TO BE
+   *
+   * It was offered here while the catalogue was generated and status was
+   * whatever this file said it was. In the database a product is active,
+   * draft or archived, and whether it is out of stock is answered by its
+   * stock being zero — one fact, in one place, that cannot contradict
+   * itself. Choosing it here would have been a 400 from the server.
+   *
+   * The product list still filters by "Out of stock", which is the question
+   * that was really being asked, and the endpoint answers it with stock = 0.
+   * Archived is not offered either: a product gets there by being deleted,
+   * and comes back the same way. */
   var STATUSES = [
     { id: 'active', label: 'Active — visible in the store' },
-    { id: 'draft', label: 'Draft — hidden from the store' },
-    { id: 'out-of-stock', label: 'Out of stock' }
+    { id: 'draft', label: 'Draft — hidden from the store' }
   ];
 
   /* Working copy of the product being edited. Held here rather than read
@@ -61,12 +72,71 @@ window.ZB.adminPages = window.ZB.adminPages || {};
 
 
   /* -----------------------------------------------------------------------
-     Options drawn from the catalogue's own seed
+     The options the form offers
+
+     The departments and categories come from the menu — the real one, read
+     from the database by assets/js/bootstrap.js — so a category the owner
+     added a moment ago is in this list. Sizes and colours are still
+     suggestion lists from the catalogue seed; they are not a table yet.
      ----------------------------------------------------------------------- */
 
   function departments() {
+    var live = (ZB.navigation || []).map(function (dept) {
+      return { id: dept.id, label: dept.label };
+    });
+
+    if (live.length) return live;
+
+    /* Only reached if the menu could not be loaded at all. */
     return Object.keys(ZB.catalogueSeed.departments).map(function (id) {
       return { id: id, label: id.charAt(0).toUpperCase() + id.slice(1) };
+    });
+  }
+
+  /**
+   * Every category in a department, as options keyed by slug.
+   *
+   * This was a free text field, which a database cannot honour: a typed
+   * name that matches nothing is a product with nowhere to go, and the
+   * owner would only find out when the save failed. A product has to be
+   * filed under a category that exists, so the form offers the ones that
+   * do.
+   *
+   * A sub-category is labelled with its parent - "Eastern Wear / Kurta" -
+   * because "Kurta" alone appears in more than one department and the two
+   * are different categories.
+   */
+  function categoriesFor(dept) {
+    var found = (ZB.navigation || []).filter(function (d) { return d.id === dept; })[0];
+    if (!found) return [];
+
+    var out = [];
+
+    found.items.forEach(function (item) {
+      out.push({ id: ZB.ui.slug(item.label), label: item.label });
+
+      (item.children || []).forEach(function (child) {
+        out.push({
+          id: ZB.ui.slug(child.label),
+          label: item.label + ' \u2192 ' + child.label
+        });
+      });
+    });
+
+    return out;
+  }
+
+  /** What to call a category slug, for a message about it. */
+  function labelOfCategory(dept, slug) {
+    var hit = categoriesFor(dept).filter(function (o) { return o.id === slug; })[0];
+    return hit ? hit.label : slug;
+  }
+
+  function categoryField(dept, value) {
+    return fields.select({
+      name: 'category', label: 'Category', value: value,
+      options: [{ id: '', label: 'Choose a category' }].concat(categoriesFor(dept)),
+      help: 'Where it appears in the shop\u2019s menu. New ones are added under Categories.'
     });
   }
 
@@ -118,8 +188,11 @@ window.ZB.adminPages = window.ZB.adminPages || {};
               '<div class="a-form__row">' +
                 fields.text({ name: 'stock', label: 'Stock', type: 'number', min: 0,
                             step: '1', value: d.stock }) +
-                fields.text({ name: 'sku', label: 'SKU', value: d.sku,
-                            help: 'Left empty, one is generated.' }) +
+                /* Shown, not editable. The server derives the SKU from the
+                   product's name, because a typed one can collide with a
+                   SKU already in use and nothing here could tell. */
+                fields.text({ name: 'sku', label: 'SKU', value: d.sku, readonly: true,
+                            help: 'Set from the product name when it is saved.' }) +
               '</div>' +
             '</div>' +
           '</section>' +
@@ -128,8 +201,7 @@ window.ZB.adminPages = window.ZB.adminPages || {};
             '<div class="a-card__body">' +
               fields.select({ name: 'dept', label: 'Department', value: d.dept,
                             options: departments() }) +
-              fields.text({ name: 'category', label: 'Category', value: d.category,
-                          help: 'For example Ready To Wear, Polo, Fragrance.' }) +
+              '<div id="pf-category-host">' + categoryField(d.dept, d.category) + '</div>' +
               fields.select({ name: 'status', label: 'Status', value: d.status,
                             options: STATUSES }) +
               fields.toggle({ name: 'featured', label: 'Featured product', value: d.featured,
@@ -188,8 +260,8 @@ window.ZB.adminPages = window.ZB.adminPages || {};
         '</div>' +
 
         '<p class="a-form__note">' +
-          'There is no database in this build. A saved product is held in this ' +
-          'tab only and is lost when the page reloads.' +
+          'Saving writes to the shop\u2019s database. An active product is in the ' +
+          'shop as soon as it is saved; a draft is not shown until it is.' +
         '</p>' +
 
       '</form>';
@@ -303,9 +375,9 @@ window.ZB.adminPages = window.ZB.adminPages || {};
       if (e.target.closest('[data-delete-product]')) {
         ZB.adminModal.confirm({
           title: 'Delete this product?',
-          body: '“' + (draft.title || 'This product') + '” will be removed from the ' +
-                'list. This build has no database, so the change lasts until the ' +
-                'page is reloaded.',
+          body: '“' + (draft.title || 'This product') + '” leaves the shop straight ' +
+                'away. It is archived rather than erased, because past orders point ' +
+                'at it, so it can be put back from the product list.',
           confirmLabel: 'Delete product',
           cancelLabel: 'Keep it',
           tone: 'danger'
@@ -314,17 +386,25 @@ window.ZB.adminPages = window.ZB.adminPages || {};
           ZB.repo.products.remove(editingId).then(function () {
             ZB.adminToast.success('“' + draft.title + '” deleted.');
             ZB.router.navigate('/admin/products');
+          }).catch(function (failure) {
+            ZB.adminToast.error((failure && failure.message) || 'That could not be deleted.');
           });
         });
       }
     });
 
-    /* Changing department changes which sizes and colours exist. */
+    /* Changing department changes which categories, sizes and colours
+       exist. The category especially: every one of them belongs to exactly
+       one department, so leaving the old value selected would file the
+       product somewhere it cannot go. */
     var dept = document.getElementById('pf-dept');
     if (dept) {
       dept.addEventListener('change', function () {
+        var categoryHost = document.getElementById('pf-category-host');
         var sizesHost = document.getElementById('pf-sizes');
         var coloursHost = document.getElementById('pf-colours');
+
+        if (categoryHost) categoryHost.innerHTML = categoryField(dept.value, '');
 
         sizesHost.innerHTML = fields.chips({
           name: 'sizes', label: 'Sizes', options: sizesFor(dept.value), value: []
@@ -389,8 +469,9 @@ window.ZB.adminPages = window.ZB.adminPages || {};
         sku: data.sku || undefined,
         dept: data.dept,
         deptLabel: data.dept.charAt(0).toUpperCase() + data.dept.slice(1),
-        category: ZB.ui.slug(data.category),
-        categoryLabel: data.category,
+        /* Already a slug: the control's values are slugs, not labels. */
+        category: data.category,
+        categoryLabel: labelOfCategory(data.dept, data.category),
         status: data.status,
         colour: data.colour || null,
         sizes: data.sizes,
@@ -490,14 +571,15 @@ window.ZB.adminPages = window.ZB.adminPages || {};
           price: row.price || '',
           compareAt: row.compareAt || '',
           dept: row.dept || 'women',
-          category: row.categoryLabel || '',
+          /* The slug, because the category control's values are slugs. */
+          category: row.category || '',
           sizes: row.sizes || [],
           colour: row.colour || '',
           stock: row.stock === undefined ? '' : row.stock,
           sku: row.sku || '',
           status: row.status || 'draft',
           featured: !!row.featured,
-          images: row.image ? [row.image] : []
+          images: (row.images || []).slice()
         };
 
         host.innerHTML = renderForm(true);

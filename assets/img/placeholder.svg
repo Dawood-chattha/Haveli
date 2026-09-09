@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" role="img" aria-label="No image yet">
+  <!--
+    Shown where a product has no image of its own.
+
+    Every product in the generated catalogue had two photographs, so nothing
+    ever needed this. A product added through the panel starts with none, and
+    the card was writing src="undefined" — a broken-image icon on the shop
+    floor. This is the same warm ground and ink the rest of the site uses, so
+    an unphotographed product reads as unfinished rather than as broken.
+  -->
+  <rect width="600" height="800" fill="#f2efe9"/>
+  <g fill="none" stroke="#030302" stroke-opacity=".18" stroke-width="6"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path d="M300 250c-18 0-32-13-32-29s14-29 32-29 32 13 32 29c0 12-9 18-19 23-8 4-13 8-13 16"/>
+    <path d="M300 300 190 360l-40 78 52 30 30-46v168h136V422l30 46 52-30-40-78-110-60z"/>
+  </g>
+  <text x="300" y="620" text-anchor="middle"
+        font-family="Roboto, Arial, sans-serif" font-size="26" letter-spacing="3"
+        fill="#030302" fill-opacity=".32">NO IMAGE YET</text>
+</svg>

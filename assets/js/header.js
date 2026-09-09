@@ -652,10 +652,19 @@ window.ZB = window.ZB || {};
     }
   }
 
+  /* The drawer is built from ZB.navigation, which now arrives over the
+     network — so this waits for it rather than rendering the menu twice.
+     Nav.init() is not repeatable: buildTabs() inserts, it does not replace,
+     and select() ignores a department that is already showing. */
+  function start() {
+    if (ZB.data && ZB.data.whenReady) ZB.data.whenReady(init);
+    else init();
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', start);
   } else {
-    init();
+    start();
   }
 
 }(window.ZB));

@@ -122,6 +122,20 @@ var Errors = {
 
   internal: function () {
     return new AppError('server_error', 'Something went wrong on our side.', 500);
+  },
+
+  /**
+   * A service this request depends on did not answer.
+   *
+   * Distinct from 500 because it is worth telling a caller that trying again
+   * is likely to work, and distinct from 401 for a more important reason: an
+   * auth service that times out is not a caller who is signed out. Returning
+   * 401 there would send the shop owner back to the login screen in the
+   * middle of an edit and call it their fault.
+   */
+  unavailable: function (message) {
+    return new AppError('unavailable',
+                        message || 'The service is busy. Try again in a moment.', 503);
   }
 };
 

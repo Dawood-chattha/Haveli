@@ -1,14 +1,37 @@
 /* =========================================================================
-   catalogue.js — builds and queries the mock product catalogue
+   catalogue.js — the shop's products, and the questions pages ask of them
    -------------------------------------------------------------------------
-   Expands ZB.catalogueSeed across every leaf category in ZB.navigation, so
-   any link the drawer can produce lands on a page with products on it.
+   This file used to invent the catalogue. It expanded ZB.catalogueSeed
+   across every leaf in the menu and derived each product's price, colour,
+   fabric and stock from a hash of its own id, so that a shop with no
+   database still had something on every page. That worked, and none of it
+   was real.
 
-   The expansion is deterministic: every value comes from a hash of the
-   product's own id, so a product looks identical on every render, on every
-   route, and after a reload. Nothing here talks to a server.
+   It now loads the products from /api/catalogue, which reads them from the
+   database as an anonymous visitor — so what arrives here is exactly what a
+   stranger is allowed to see. Drafts and archived products are not in it,
+   because the read policy in db/policies.sql does not return them, not
+   because anything in the browser filtered them out.
 
-   Query API:
+   WHAT DELIBERATELY DID NOT CHANGE
+   Everything below the Queries heading. Category pages, search, facets,
+   sorting and the wishlist all speak to this file through the same names
+   they always have, over products with the same field names they always
+   had — api/_lib/shape.js does the translating from database columns once,
+   on the server, so that twenty thousand lines of interface do not have to
+   learn a new vocabulary.
+
+   THE WHOLE CATALOGUE ARRIVES AT ONCE, AND THAT IS A CHOICE WITH A LIMIT
+   Filtering, faceting and sorting all happen here, in the browser, over the
+   full list. That is what makes the filters instant and what makes them
+   correct — a facet count is honest because it was counted over everything.
+   It also means the response grows with the shop: around a quarter of a
+   megabyte for five hundred products. Somewhere in the low thousands that
+   becomes a real download and the filtering has to move to the server, one
+   page at a time. api/catalogue.js says the same thing from its own side
+   and refuses to serve more than five thousand.
+
+   Query API — unchanged:
      ZB.catalogue.all()
      ZB.catalogue.byId(id)
      ZB.catalogue.byDept(deptId)
@@ -16,6 +39,9 @@
      ZB.catalogue.search(term)
      ZB.catalogue.byIds(ids)                          wishlist order preserved
      ZB.catalogue.related(product, limit)
+
+   New, and the only asynchronous thing here:
+     ZB.catalogue.load()      a promise for the first load
    ========================================================================= */
 
 window.ZB = window.ZB || {};
@@ -23,185 +49,98 @@ window.ZB = window.ZB || {};
 (function (ZB) {
   'use strict';
 
-  var products = null;      /* built on first use */
+  var products = null;      /* null until loaded, then an array */
   var byIdMap = {};
   var byCategoryMap = {};   /* 'men/polo' -> [product] */
   var byDeptMap = {};
+  var pending = null;       /* the in-flight load, so two callers share one */
 
   /* -----------------------------------------------------------------------
-     Deterministic pseudo-randomness
-     A product's every attribute is derived from its id, so the catalogue is
-     stable without storing hundreds of literal objects.
+     Indexing
      ----------------------------------------------------------------------- */
 
   /**
-   * djb2 followed by a bit-mixing finalizer. The finalizer matters: ids in
-   * one category differ only in their last character, and plain djb2 would
-   * hand neighbouring products near-identical numbers — a row of products
-   * all priced within ten rupees of each other.
-   */
-  function hash(str) {
-    var h = 5381;
-    for (var i = 0; i < str.length; i++) {
-      h = ((h << 5) + h) ^ str.charCodeAt(i);
-    }
-
-    h ^= h >>> 16;
-    h = Math.imul(h, 2246822507);
-    h ^= h >>> 13;
-    h = Math.imul(h, 3266489909);
-    h ^= h >>> 16;
-
-    return h >>> 0;
-  }
-
-  /** A second, independent number from the same id. */
-  function hashWith(str, salt) {
-    return hash(salt + ':' + str);
-  }
-
-  function pick(list, n) {
-    return list[n % list.length];
-  }
-
-  /**
-   * The sizes one product is stocked in, chosen by the bits of its hash.
+   * Build the three lookups every query below depends on.
    *
-   * This started out as a contiguous run, which looked more like real stock
-   * but made the Size facet useless: every window through a five-size list
-   * contains the middle size, so filtering by L returned the whole
-   * catalogue. Picking by bit gives each size an independent chance to be
-   * absent, which is what a filter needs to bite on.
+   * The category key is the product's own department and category slug
+   * joined, which is the same key the old build() produced from the menu
+   * tree — deliberately, because byCategory() falls back to walking
+   * ZB.navigation and turning a child's label into a slug when it is asked
+   * for a parent category. That fallback only lines up because the server
+   * derives its slugs with the same rules ZB.ui.slug uses; api/_lib/rows.js
+   * says so at the top of slugify().
    */
-  function sizesFor(all, n) {
-    var chosen = all.filter(function (size, i) { return (n >> i) & 1; });
-
-    /* Never leave a product with nothing to buy. */
-    if (chosen.length < 2) chosen = all.slice(0, 2 + (n % 2));
-
-    return chosen;
-  }
-
-  /* -----------------------------------------------------------------------
-     Building
-     ----------------------------------------------------------------------- */
-
-  /**
-   * Flatten a department into the categories that actually hold products.
-   * A category with children is a container: its own page shows everything
-   * underneath it rather than a separate set of products.
-   */
-  function leavesOf(dept) {
-    var leaves = [];
-
-    dept.items.forEach(function (item) {
-      if (item.children && item.children.length) {
-        item.children.forEach(function (child) {
-          leaves.push({ label: child.label, parent: item.label });
-        });
-      } else {
-        leaves.push({ label: item.label, parent: null });
-      }
-    });
-
-    return leaves;
-  }
-
-  function makeProduct(dept, config, leaf, index) {
-    var ui = ZB.ui;
-    var seed = ZB.catalogueSeed;
-
-    var categorySlug = ui.slug(leaf.label);
-    var id = dept.id + '-' + categorySlug + '-' + (index + 1);
-
-    var n = hash(id);
-    var n2 = hashWith(id, 'b');
-    var n3 = hashWith(id, 'c');
-    var n4 = hashWith(id, 'd');
-
-    /* Price snapped to the nearest 10, the way retail pricing reads. */
-    var span = config.price[1] - config.price[0];
-    var price = Math.round((config.price[0] + (n % span)) / 10) * 10;
-
-    var onSale = n2 % seed.saleEvery === 0;
-    var compareAt = onSale ? Math.round((price * 1.4) / 10) * 10 : null;
-
-    var badge = n3 % seed.badgeEvery === 0 ? pick(seed.badges, n) : null;
-
-    /* Imagery comes from the category's own pool where it has one, then its
-       parent's, and only then the department's garment photographs. Without
-       this a perfume in Women's Fragrance was shown wearing a kaftan. */
-    var poolName = seed.categoryPools[categorySlug] ||
-                   (leaf.parent ? seed.categoryPools[ui.slug(leaf.parent)] : null);
-    var pool = (poolName && seed.imagePools[poolName]) || config.images;
-
-    var art = pick(pool, n2);
-
-    return {
-      id: id,
-      title: pick(config.adjectives, n) + ' ' + leaf.label + ' - ' +
-             config.code + (1000 + (n % 8999)),
-      dept: dept.id,
-      deptLabel: dept.label,
-      category: categorySlug,
-      categoryLabel: leaf.label,
-      parentLabel: leaf.parent,
-      price: price,
-      compareAt: compareAt,
-      badge: badge,
-      colour: pick(config.colours, n3),
-      colourHex: seed.colourHex[pick(config.colours, n3)] || '#cccccc',
-      fabric: pick(config.fabrics, n4),
-      sizes: sizesFor(config.sizes, n2),
-      inStock: n4 % seed.outOfStockEvery !== 0,
-      /* Stand-ins for the two orderings a real shop would take from its own
-         records: how well a product sells, and when it was listed. */
-      popularity: n3 % 1000,
-      addedDaysAgo: n4 % 540,
-      /* Two views, so the card can swap on hover the way the reference does. */
-      images: [
-        'assets/img/products/' + art + '-a.jpg',
-        'assets/img/products/' + art + '-b.jpg'
-      ],
-      path: '/product/' + id
-    };
-  }
-
-  function build() {
-    products = [];
+  function index(list) {
+    products = list;
     byIdMap = {};
     byCategoryMap = {};
     byDeptMap = {};
 
-    var seed = ZB.catalogueSeed;
-    if (!seed || !ZB.navigation) return;
+    products.forEach(function (p) {
+      byIdMap[p.id] = p;
 
-    ZB.navigation.forEach(function (dept) {
-      var config = seed.departments[dept.id];
-      if (!config) return;
+      (byDeptMap[p.dept] = byDeptMap[p.dept] || []).push(p);
 
-      byDeptMap[dept.id] = [];
-
-      leavesOf(dept).forEach(function (leaf) {
-        var key = dept.id + '/' + ZB.ui.slug(leaf.label);
-        var list = [];
-
-        for (var i = 0; i < seed.perCategory; i++) {
-          var product = makeProduct(dept, config, leaf, i);
-          list.push(product);
-          products.push(product);
-          byIdMap[product.id] = product;
-          byDeptMap[dept.id].push(product);
-        }
-
-        byCategoryMap[key] = list;
-      });
+      var key = p.dept + '/' + p.category;
+      (byCategoryMap[key] = byCategoryMap[key] || []).push(p);
     });
   }
 
+  /* -----------------------------------------------------------------------
+     Loading
+     ----------------------------------------------------------------------- */
+
+  /**
+   * Fetch the catalogue once.
+   *
+   * Called by assets/js/bootstrap.js before the router starts, so that the
+   * first page rendered has products on it rather than an empty state that
+   * fills in a moment later. Repeat calls return the same promise instead of
+   * a second request.
+   *
+   * A failure rejects rather than resolving to an empty catalogue, because
+   * "the shop has nothing in it" and "the shop could not be reached" are
+   * different things and the caller is the one placed to say which happened.
+   */
+  function load() {
+    if (pending) return pending;
+
+    pending = fetch('/api/catalogue', {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin'
+    }).then(function (res) {
+      if (!res.ok) {
+        throw new Error('The catalogue could not be loaded (' + res.status + ').');
+      }
+      return res.json();
+    }).then(function (payload) {
+      if (!payload || !payload.ok || !payload.data) {
+        throw new Error('The catalogue came back in a shape this page did not expect.');
+      }
+
+      index(payload.data.products || []);
+      return products;
+    }).catch(function (err) {
+      /* Clear the memo so a later attempt — a retry, a second page view in
+         the same session — is a fresh request rather than the same failure
+         handed out again. */
+      pending = null;
+      throw err;
+    });
+
+    return pending;
+  }
+
+  /**
+   * The loaded products, or an empty list.
+   *
+   * Every query below calls this and none of them wait. The catalogue is
+   * loaded before the router starts, so by the time a page asks, the answer
+   * is there; and if the load failed, an empty catalogue is what the pages'
+   * existing "nothing found" states are for.
+   */
   function ready() {
-    if (!products) build();
-    return products;
+    return products || [];
   }
 
   /* -----------------------------------------------------------------------
@@ -250,12 +189,12 @@ window.ZB = window.ZB || {};
 
     /** Word match across title, category, department and colour. */
     search: function (term) {
-      ready();
+      var list = ready();
 
       var words = String(term || '').toLowerCase().split(/\s+/).filter(Boolean);
       if (!words.length) return [];
 
-      return products.filter(function (p) {
+      return list.filter(function (p) {
         var haystack = (
           p.title + ' ' + p.categoryLabel + ' ' + (p.parentLabel || '') + ' ' +
           p.deptLabel + ' ' + p.colour
@@ -289,6 +228,15 @@ window.ZB = window.ZB || {};
         var seen = {};
         products.forEach(function (p) {
           getValues(p).forEach(function (label) {
+            /* COLOUR AND FABRIC ARE OPTIONAL, AND WERE NOT
+               Every product in the generated catalogue had both, so a facet
+               was always a real value. A product added through the panel
+               may have neither, and the null went in as a facet option
+               whose label could not be sorted. There is no "no colour"
+               filter and there should not be — a facet lists the values on
+               offer, and "none" is not one of them. */
+            if (label === null || label === undefined || label === '') return;
+
             var key = slug(label);
             if (!seen[key]) seen[key] = { value: key, label: label, count: 0 };
             seen[key].count++;
@@ -389,7 +337,14 @@ window.ZB = window.ZB || {};
       return Catalogue.byCategory(product.dept, product.category)
         .filter(function (p) { return p.id !== product.id; })
         .slice(0, limit || 4);
-    }
+    },
+
+    /**
+     * Load the catalogue. The one asynchronous thing in this file, and the
+     * only method a page should not call — assets/js/bootstrap.js awaits it
+     * before the router starts so that no page has to.
+     */
+    load: load
   };
 
   ZB.catalogue = Catalogue;

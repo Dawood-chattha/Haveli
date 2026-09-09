@@ -99,11 +99,21 @@ window.ZB = window.ZB || {};
   }
 
   function start() {
-    /* The first answer is awaited before the router runs, so the panel does
-       not paint a dashboard and then snatch it away. A visitor who is signed
-       in sees the dashboard; one who is not sees the sign-in screen; nobody
-       sees both. */
-    ZB.auth.load().then(function () {
+    /* Two things are awaited before the router runs.
+     *
+     * Who is calling, so the panel does not paint a dashboard and then
+     * snatch it away — a visitor who is signed in sees the dashboard, one
+     * who is not sees the sign-in screen, nobody sees both.
+     *
+     * And the shop's own data, because the sections that have not been
+     * connected to the API yet still read ZB.catalogue and ZB.navigation,
+     * and those now arrive over the network. See assets/js/bootstrap.js;
+     * it resolves whether the load worked or not, so a failure still opens
+     * the panel rather than leaving a blank page. */
+    Promise.all([
+      ZB.auth.load(),
+      (ZB.data && ZB.data.ready) || Promise.resolve()
+    ]).then(function () {
       boot();
       guard(window.location.pathname);
 

@@ -1,11 +1,21 @@
 /* =========================================================================
-   navigation.js — mock category tree for the menu drawer
+   navigation.js — the menu, as a fallback
    -------------------------------------------------------------------------
-   UI-only data. Structure mirrors the reference storefront's drawer: three
-   top-level departments, each a flat list of categories where some categories
-   open a nested panel of sub-categories.
+   THIS IS NO LONGER WHERE THE MENU COMES FROM.
 
-   Shape:
+   The categories table is, and assets/js/bootstrap.js fetches it from
+   /api/categories and replaces ZB.navigation with it before the first page
+   renders. A category the owner adds in the panel appears in the drawer;
+   one they hide leaves it.
+
+   What is below is the structure the database was seeded with, and it is
+   kept for the one case where the fetch does not arrive: a menu that is
+   slightly out of date leaves the site navigable, where no menu at all
+   leaves it looking broken. The catalogue deliberately has no equivalent —
+   a stale menu is a small wrong; invented products are a customer ordering
+   something that does not exist.
+
+   Shape, which api/_lib/shape.js reproduces exactly:
      { id, label, items: [ { label, children?: [ { label } ] } ] }
    ========================================================================= */
 

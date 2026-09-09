@@ -91,10 +91,15 @@ window.ZB = window.ZB || {};
 
         '<div class="product-card__media">' +
           '<div class="product-card__frame">' +
-            '<img class="product-card__img" src="' + product.images[0] + '"' +
+            '<img class="product-card__img" src="' + ZB.ui.productImage(product, 0) + '"' +
                  ' alt="' + label + '" width="800" height="1200"' +
                  ' loading="lazy" decoding="async">' +
-            '<img class="product-card__img product-card__img--alt" src="' + product.images[1] + '"' +
+            /* The hover image, falling back to the first rather than to the
+               placeholder: a card that swaps a photograph for "no image
+               yet" when the pointer crosses it looks broken, where showing
+               the same photograph twice just looks still. */
+            '<img class="product-card__img product-card__img--alt"' +
+                 ' src="' + ZB.ui.productImage(product, (product.images || []).length > 1 ? 1 : 0) + '"' +
                  ' alt="" aria-hidden="true" width="800" height="1200"' +
                  ' loading="lazy" decoding="async">' +
           '</div>' +

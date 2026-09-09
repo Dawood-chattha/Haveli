@@ -17,6 +17,7 @@
     "seed:dry": "node scripts/seed.mjs --dry",
     "verify:db": "node --env-file=.env.local scripts/verify-db.mjs",
     "verify:auth": "node --env-file=.env.local scripts/verify-auth.mjs",
+    "verify:api": "node --env-file=.env.local scripts/verify-api.mjs",
     "static": "powershell -ExecutionPolicy Bypass -File dev/serve.ps1"
   },
   "dependencies": {

@@ -46,6 +46,7 @@
 
 var createClient = require('@supabase/supabase-js').createClient;
 var Env = require('./env');
+var Cookies = require('./cookies');
 
 /* Sessions belong to the browser. A server client that tried to persist or
    refresh one would be writing another request's identity into a shared
@@ -56,12 +57,62 @@ var SERVER_AUTH = {
   detectSessionInUrl: false
 };
 
+/* A REQUEST THAT NEVER ENDS IS WORSE THAN ONE THAT FAILS
+ *
+ * Without this, a slow or unreachable Supabase leaves the endpoint waiting
+ * for as long as the network cares to take. It is not hypothetical: one
+ * verification run here recorded a single PATCH at fifty-one seconds, with
+ * the browser showing a spinner for all of it and the serverless function
+ * billed for all of it. Vercel would have cut the function off before the
+ * answer arrived anyway, so the wait bought nothing.
+ *
+ * Fifteen seconds is far longer than a healthy round trip and short enough
+ * to become a 503 the panel can act on. The abort surfaces as a thrown
+ * fetch error, which auth.js and the endpoints already treat as an outage.
+ */
+var TIMEOUT_MS = 15000;
+
+function fetchWithTimeout(input, init) {
+  var options = init || {};
+
+  /* A signal already on the request wins — a caller that set its own
+     deadline meant it. */
+  if (options.signal) return fetch(input, options);
+
+  var merged = {};
+  Object.keys(options).forEach(function (k) { merged[k] = options[k]; });
+  merged.signal = AbortSignal.timeout(TIMEOUT_MS);
+
+  return fetch(input, merged);
+}
+
 /**
- * The caller's own access token, from the Authorization header.
- * Returns an empty string when there is none — which is a valid state, not
- * an error: anonymous visitors read the catalogue.
+ * The caller's own access token: the cookie first, then the header.
+ *
+ * Returns an empty string when there is none, which is a valid state rather
+ * than an error — anonymous visitors read the catalogue.
+ *
+ * THE COOKIE HAS TO BE READ HERE, NOT ONLY IN auth.js
+ *
+ * This used to look at the Authorization header alone, and auth.js looked at
+ * both. So a browser — which is signed in with an HttpOnly cookie and cannot
+ * send a header, because JavaScript is not allowed to read the token — was
+ * correctly identified as an administrator by requireAdmin(), and then given
+ * an ANONYMOUS database client to do the work with.
+ *
+ * What that looked like was worse than a clean failure. Reads appeared to
+ * succeed, because the catalogue is public: the product list came back with
+ * a plausible number of rows in it. It was the public's view of the shop —
+ * no drafts, nothing archived — presented as the owner's. Writes were
+ * refused by the policies, which is the only reason it was noticed.
+ *
+ * Every test until then had authenticated with the header, the one way
+ * nothing in the browser ever does.
  */
 function bearerToken(req) {
+  var fromCookie = Cookies.accessToken(req);
+  if (fromCookie) return fromCookie;
+
   var header = (req && req.headers && req.headers.authorization) || '';
   if (!header) return '';
 
@@ -87,7 +138,7 @@ function asUser(req) {
 
   return createClient(Env.supabaseUrl(), Env.anonKey(), {
     auth: SERVER_AUTH,
-    global: { headers: headers }
+    global: { headers: headers, fetch: fetchWithTimeout }
   });
 }
 
@@ -101,7 +152,8 @@ function asUser(req) {
  */
 function asAdmin() {
   return createClient(Env.supabaseUrl(), Env.serviceRoleKey(), {
-    auth: SERVER_AUTH
+    auth: SERVER_AUTH,
+    global: { fetch: fetchWithTimeout }
   });
 }
 

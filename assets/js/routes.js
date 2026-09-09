@@ -51,10 +51,21 @@ window.ZB = window.ZB || {};
     });
   }
 
+  /* The router is started only once the catalogue and the menu are in.
+     Starting it first would render the home page against an empty shop and
+     then have to redraw it, and a category route would decide there was
+     nothing in the category before anything had arrived. See
+     assets/js/bootstrap.js — it resolves whether the load succeeded or not,
+     so a failure still boots the site, with the pages' own empty states. */
+  function start() {
+    if (ZB.data && ZB.data.whenReady) ZB.data.whenReady(boot);
+    else boot();
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
+    document.addEventListener('DOMContentLoaded', start);
   } else {
-    boot();
+    start();
   }
 
 }(window.ZB));

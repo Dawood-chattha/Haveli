@@ -44,10 +44,30 @@ window.ZB.pages = window.ZB.pages || {};
              '</ul>';
     }
 
-    return '<p>' + esc(product.title) + ' in ' + esc(product.colour) + ', cut from ' +
-           esc(product.fabric.toLowerCase()) + '. Part of the ' +
-           esc(product.categoryLabel.toLowerCase()) + ' range, made for everyday ' +
-           'wear and priced to be worn often.</p>';
+    /* THE OWNER'S OWN WORDS, WHERE THERE ARE ANY
+     *
+     * This sentence was written when a product had no description to show:
+     * the catalogue was generated, and every product in it had a colour and
+     * a fabric to name. Both are optional now, and a product added through
+     * the panel with neither is what turned this line into a crash — the
+     * first real product ever saved took the whole page down with it.
+     *
+     * So the description comes first, and the fallback is assembled from
+     * whatever the product actually has. */
+    if (product.description) {
+      return '<p>' + esc(product.description) + '</p>';
+    }
+
+    var facts = [];
+    if (product.colour) facts.push('in ' + esc(product.colour));
+    if (product.fabric) facts.push('cut from ' + esc(String(product.fabric).toLowerCase()));
+    if (product.categoryLabel) {
+      facts.push('part of the ' + esc(String(product.categoryLabel).toLowerCase()) + ' range');
+    }
+
+    return '<p>' + esc(product.title) +
+           (facts.length ? ', ' + facts.join(', ') : '') +
+           '. Made for everyday wear and priced to be worn often.</p>';
   }
 
   ZB.pages.product = {
@@ -96,7 +116,9 @@ window.ZB.pages = window.ZB.pages || {};
                '</button>';
       }).join('');
 
-      var sizes = product.sizes.map(function (size) {
+      var hasSizes = (product.sizes || []).length > 0;
+
+      var sizes = (product.sizes || []).map(function (size) {
         return '<button class="pdp__size" type="button" data-pdp-size="' + ui.esc(size) + '"' +
                  ' aria-pressed="false">' + ui.esc(size) + '</button>';
       }).join('');
@@ -130,7 +152,7 @@ window.ZB.pages = window.ZB.pages || {};
 
             '<div class="pdp__media">' +
               '<div class="pdp__frame">' +
-                '<img id="pdp-main" src="' + product.images[0] + '"' +
+                '<img id="pdp-main" src="' + ZB.ui.productImage(product, 0) + '"' +
                      ' alt="' + ui.esc(product.title) + '" width="800" height="1200">' +
               '</div>' +
               '<div class="pdp__thumbs">' + thumbs + '</div>' +
@@ -156,22 +178,32 @@ window.ZB.pages = window.ZB.pages || {};
                 (out ? 'Sold out' : 'In stock') +
               '</p>' +
 
-              '<div class="pdp__option">' +
-                '<span class="pdp__option-label">Colour: ' +
-                  '<span class="pdp__option-value">' + ui.esc(product.colour) + '</span>' +
-                '</span>' +
-                '<div class="pdp__swatches">' +
-                  '<span class="pdp__swatch" style="background:' + product.colourHex + '"' +
-                        ' title="' + ui.esc(product.colour) + '"></span>' +
-                '</div>' +
-              '</div>' +
+              /* NOT EVERY PRODUCT HAS A COLOUR OR A SIZE
+                 The generated catalogue gave every product both, so these
+                 rows were always worth drawing. A fragrance has neither, a
+                 bag has no size, and an empty "Colour:" with nothing after
+                 it reads as something that failed to load. */
+              (product.colour
+                ? '<div class="pdp__option">' +
+                    '<span class="pdp__option-label">Colour: ' +
+                      '<span class="pdp__option-value">' + ui.esc(product.colour) + '</span>' +
+                    '</span>' +
+                    '<div class="pdp__swatches">' +
+                      '<span class="pdp__swatch" style="background:' +
+                            ui.esc(product.colourHex || 'transparent') + '"' +
+                            ' title="' + ui.esc(product.colour) + '"></span>' +
+                    '</div>' +
+                  '</div>'
+                : '') +
 
-              '<div class="pdp__option">' +
-                '<span class="pdp__option-label">Size: ' +
-                  '<span class="pdp__option-value" id="pdp-size-value">Select a size</span>' +
-                '</span>' +
-                '<div class="pdp__sizes">' + sizes + '</div>' +
-              '</div>' +
+              (hasSizes
+                ? '<div class="pdp__option">' +
+                    '<span class="pdp__option-label">Size: ' +
+                      '<span class="pdp__option-value" id="pdp-size-value">Select a size</span>' +
+                    '</span>' +
+                    '<div class="pdp__sizes">' + sizes + '</div>' +
+                  '</div>'
+                : '') +
 
               '<div class="pdp__buy">' +
                 '<div class="pdp__qty">' +
@@ -179,9 +211,13 @@ window.ZB.pages = window.ZB.pages || {};
                   '<span class="pdp__qty-value" id="pdp-qty" aria-live="polite">1</span>' +
                   '<button type="button" data-pdp-qty="1" aria-label="Increase quantity">+</button>' +
                 '</div>' +
+                /* A product with no sizes has nothing to choose, so the
+                   button must not wait for a choice — it stayed disabled
+                   on "Select a size" forever, and the product could never
+                   be bought. */
                 '<button class="pdp__add" type="button" id="pdp-add"' +
-                        (out ? ' disabled' : ' disabled') + '>' +
-                  (out ? 'Sold out' : 'Select a size') +
+                        (out || hasSizes ? ' disabled' : '') + '>' +
+                  (out ? 'Sold out' : (hasSizes ? 'Select a size' : 'Add to cart')) +
                 '</button>' +
                 '<button class="pdp__save" type="button" data-wish="' + ui.esc(product.id) + '"' +
                         ' aria-pressed="' + (saved ? 'true' : 'false') + '">' +
@@ -216,6 +252,7 @@ window.ZB.pages = window.ZB.pages || {};
       var root = document.querySelector('.pdp');
       if (!root) return;
 
+      var hasSizes = (product.sizes || []).length > 0;
       var chosenSize = null;
       var qty = 1;
       var out = product.inStock === false;
@@ -228,8 +265,11 @@ window.ZB.pages = window.ZB.pages || {};
 
       var refreshAdd = function () {
         if (out) return;
-        addBtn.disabled = !chosenSize;
-        addBtn.textContent = chosenSize ? 'Add to cart' : 'Select a size';
+
+        /* Nothing to choose means nothing to wait for. */
+        var ready = !hasSizes || !!chosenSize;
+        addBtn.disabled = !ready;
+        addBtn.textContent = ready ? 'Add to cart' : 'Select a size';
       };
 
       root.addEventListener('click', function (e) {
@@ -251,7 +291,7 @@ window.ZB.pages = window.ZB.pages || {};
           ZB.util.all('[data-pdp-size]', root).forEach(function (b) {
             b.setAttribute('aria-pressed', b === size ? 'true' : 'false');
           });
-          sizeValue.textContent = chosenSize;
+          if (sizeValue) sizeValue.textContent = chosenSize;
           note.textContent = '';
           refreshAdd();
           return;
@@ -267,10 +307,13 @@ window.ZB.pages = window.ZB.pages || {};
 
         /* ---- add to cart ---- */
         if (e.target.closest('#pdp-add')) {
-          if (out || !chosenSize) return;
+          if (out || (hasSizes && !chosenSize)) return;
+
           ZB.store.addToCart(product, chosenSize, qty);
-          note.textContent = qty + ' × ' + product.title + ' (' + chosenSize +
-                             ') added to your cart.';
+
+          note.textContent = qty + ' × ' + product.title +
+                             (chosenSize ? ' (' + chosenSize + ')' : '') +
+                             ' added to your cart.';
           return;
         }
 

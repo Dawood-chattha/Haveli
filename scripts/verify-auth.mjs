@@ -199,7 +199,14 @@ try {
     if (error) throw new Error('signing in as ' + role + ': ' + error.message);
     tokens[role] = data.session.access_token;
   }
-  await signer.auth.signOut();
+  /* No sign-out. Signing out deletes the session at Supabase, and an access
+     token names the session that issued it — so the last person signed in
+     here would be left holding a token that verifies as nothing. It does not
+     change the checks below, which reach PostgREST and are decided by the
+     token's signature rather than by a session lookup, but it is a false
+     precondition and it broke scripts/verify-api.mjs outright. `anon` is its
+     own client and was never signed in, which is what actually keeps the
+     signed-out checks honest. */
   pass('all three can sign in');
 
   const customer = as(tokens.customer);

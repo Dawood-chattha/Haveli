@@ -127,73 +127,144 @@ window.ZB = window.ZB || {};
   }
 
   /* -----------------------------------------------------------------------
-     Products
-     ----------------------------------------------------------------------- */
+     THE OVERLAY, AND WHAT IS LEFT OF IT
 
-  /* -----------------------------------------------------------------------
-     EDITS LIVE IN MEMORY
+     Every write on this page used to land here: an edit was held in memory
+     on top of the generated catalogue and lost on reload, because there was
+     nothing to save to. Products and categories now save to the database,
+     and this remains for the one section that has not been connected yet.
 
-     There is nothing to save to. Rather than refuse to edit at all — which
-     would leave the product form untestable — a write is applied to an
-     overlay on top of the generated catalogue and kept for as long as the
-     tab is open. A reload loses it, and the UI says so where it matters.
-
-     The overlay is also the seam: when a backend arrives, these three
-     objects go, and create/update/remove become calls that return the
-     server's answer. Nothing else changes, because no page reaches past
-     these methods.
+     Inventory reads currentRows(), which is built from ZB.catalogue — the
+     storefront's own list, keyed by slug rather than by the database id the
+     product endpoints take. Connecting it is a step of its own, and until
+     then its stock changes are held here exactly as they were, with the
+     page still saying so.
      ----------------------------------------------------------------------- */
 
   var edited = {};     /* id -> the fields that were changed */
-  var removed = {};    /* id -> true */
-  var added = [];      /* rows created in this session, newest first */
-  var nextId = 1;
 
   /** The catalogue as the admin currently sees it. */
   function currentRows() {
-    var rows = added.concat(ZB.catalogue.all().map(toRow));
-
     /* ALWAYS A COPY, EVEN WHEN THERE IS NOTHING TO MERGE
        The obvious shortcut is to return `row` untouched when it has no
-       overlay entry. It is wrong: a row created this session lives in
-       `added`, and handing that object out means a caller holds a live
-       reference into the repo's own state. Two things then go wrong. A
-       page can change the store by accident, without going through a
-       write method. And a value read a moment ago silently changes under
-       whoever is still holding it — which is not how a value fetched from
-       a server behaves, and is exactly the difference that would break
-       these pages the day a backend is connected.
+       overlay entry. It is wrong: handing out the object means a caller
+       holds a live reference into the repo's own state. Two things then go
+       wrong. A page can change the store by accident, without going through
+       a write method. And a value read a moment ago silently changes under
+       whoever is still holding it — which is not how a value fetched from a
+       server behaves.
 
        A shallow copy is enough: writes replace whole fields. */
-    return rows
-      .filter(function (row) { return !removed[row.id]; })
-      .map(function (row) {
-        var merged = {};
-        Object.keys(row).forEach(function (key) { merged[key] = row[key]; });
+    return ZB.catalogue.all().map(toRow).map(function (row) {
+      var merged = {};
+      Object.keys(row).forEach(function (key) { merged[key] = row[key]; });
 
-        if (edited[row.id]) {
-          Object.keys(edited[row.id]).forEach(function (key) {
-            merged[key] = edited[row.id][key];
-          });
-        }
+      if (edited[row.id]) {
+        Object.keys(edited[row.id]).forEach(function (key) {
+          merged[key] = edited[row.id][key];
+        });
+      }
 
-        return merged;
-      });
+      return merged;
+    });
   }
 
-  /* `newest` is deliberately absent: it means "leave the natural order
-     alone". currentRows() puts anything created in this session in front of
-     the catalogue, so that order already is newest-first. Sorting by id
-     instead looked right and was not — ids are not chronological, so a
-     product created a moment ago landed in the middle of the first page
-     under a heading that promised otherwise. */
-  var SORTS = {
-    'name-asc':  function (a, b) { return a.title.localeCompare(b.title); },
-    'name-desc': function (a, b) { return b.title.localeCompare(a.title); },
-    'price-asc': function (a, b) { return a.price - b.price; },
-    'price-desc': function (a, b) { return b.price - a.price; },
-    'stock-asc': function (a, b) { return (a.stock || 0) - (b.stock || 0); }
+  /* -----------------------------------------------------------------------
+     Talking to the API
+
+     Everything below this line that concerns products or categories is a
+     real request to a real server. The rest of this file is still the
+     in-memory mock described above, and each remaining section says so.
+
+     WHAT THIS DOES NOT SEND
+     No key, no token, no identity of any kind. The browser is signed in
+     with an HttpOnly cookie that JavaScript cannot read, which is the point
+     of it: `credentials: 'same-origin'` tells fetch to attach the cookie,
+     and nothing here ever holds the value. Whether the caller is allowed to
+     do what they asked is decided by api/_lib/auth.js and then again by the
+     policies in db/policies.sql. This module only draws the answer.
+     ----------------------------------------------------------------------- */
+
+  var Api = {
+
+    /**
+     * A request that resolves with `data` or rejects with an Error.
+     *
+     * The rejection carries the server's own message, because the server is
+     * the only party that knows what went wrong — "the original price must
+     * be higher than the sale price" is worth showing, and this file could
+     * not have written it. `fields` comes along when the server named the
+     * fields at fault, so a form can mark them.
+     */
+    send: function (method, path, body) {
+      var options = {
+        method: method,
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' }
+      };
+
+      if (body !== undefined) {
+        options.headers['Content-Type'] = 'application/json';
+        options.body = JSON.stringify(body);
+      }
+
+      return fetch(path, options).then(function (res) {
+        return res.json().catch(function () {
+          /* A response that is not JSON at all — a proxy error page, or the
+             storefront's index.html served because the route was missed. */
+          throw new Error('The server did not answer properly (' + res.status + ').');
+        }).then(function (payload) {
+          if (res.ok && payload && payload.ok) return payload.data;
+
+          var error = new Error(
+            (payload && payload.error && payload.error.message) ||
+            'That could not be completed.');
+
+          error.status = res.status;
+          error.code = payload && payload.error && payload.error.code;
+          error.fields = payload && payload.error && payload.error.fields;
+
+          throw error;
+        });
+      });
+    },
+
+    get: function (path) { return Api.send('GET', path); },
+
+    /** A path with a query string, skipping anything empty. */
+    query: function (path, params) {
+      var parts = [];
+
+      Object.keys(params || {}).forEach(function (key) {
+        var value = params[key];
+        if (value === null || value === undefined || value === '') return;
+        parts.push(encodeURIComponent(key) + '=' + encodeURIComponent(value));
+      });
+
+      return parts.length ? path + '?' + parts.join('&') : path;
+    }
   };
+
+  Repo.api = Api;
+
+  /* -----------------------------------------------------------------------
+     Products
+
+     PAGED BY THE SERVER, UNLIKE THE STOREFRONT
+     The shop downloads its whole catalogue and filters it in the browser,
+     which is what makes its facets instant. The panel does not: it asks for
+     one page at a time, with the search and the filters in the query
+     string, because a shop with ten thousand products still has to open its
+     product list in a moment. The pages here already expected
+     { items, total, page, pages } and drew a pager from it, so nothing
+     above this file changed.
+
+     WHAT A WRITE IS TRUSTED FOR
+     Nothing. The slug, the SKU and the department are all derived on the
+     server; the price is checked against the schema; whether this browser
+     may write at all is decided from the database on every request. A field
+     sent from here is a request, not an instruction.
+     ----------------------------------------------------------------------- */
 
   Repo.products = {
 
@@ -206,31 +277,41 @@ window.ZB = window.ZB || {};
       { id: 'stock-asc', label: 'Stock, low to high' }
     ],
 
-    /** The values the filter controls offer, taken from the data itself. */
+    /**
+     * The values the filter controls offer.
+     *
+     * Taken from the category tree rather than from a page of products,
+     * which is the difference between "the departments this page happens to
+     * show" and "the departments the shop has". There is no endpoint of its
+     * own for this: the categories the panel already loads answer it.
+     */
     facets: function () {
-      var rows = currentRows();
-      var depts = {};
-      var categories = {};
+      return Categories.load().then(function (tree) {
+        var categories = {};
 
-      rows.forEach(function (row) {
-        depts[row.dept] = row.deptLabel;
-        categories[row.category] = row.categoryLabel;
-      });
+        tree.items.forEach(function (row) {
+          /* Keyed by slug, because that is what the product list filters
+             by. Two departments may legitimately use the same category
+             name, and the option merges them — the same behaviour the
+             filter itself has. */
+          categories[row.slug] = row.label;
+        });
 
-      var toList = function (map) {
-        return Object.keys(map).sort(function (a, b) {
-          return map[a].localeCompare(map[b]);
-        }).map(function (id) { return { id: id, label: map[id] }; });
-      };
-
-      return Repo.defer({
-        departments: toList(depts),
-        categories: toList(categories),
-        statuses: [
-          { id: 'active', label: 'Active' },
-          { id: 'draft', label: 'Draft' },
-          { id: 'out-of-stock', label: 'Out of stock' }
-        ]
+        return {
+          departments: tree.departments.map(function (dept) {
+            return { id: dept.slug, label: dept.label };
+          }),
+          categories: Object.keys(categories).sort(function (a, b) {
+            return categories[a].localeCompare(categories[b]);
+          }).map(function (slug) {
+            return { id: slug, label: categories[slug] };
+          }),
+          statuses: [
+            { id: 'active', label: 'Active' },
+            { id: 'draft', label: 'Draft' },
+            { id: 'out-of-stock', label: 'Out of stock' }
+          ]
+        };
       });
     },
 
@@ -239,158 +320,148 @@ window.ZB = window.ZB || {};
      *
      * options: { search, dept, category, status, sort, page, perPage }
      * resolves: { items, total, page, pages, perPage }
-     *
-     * Paging is done here rather than in the page so that swapping in a
-     * server query — which pages on the server — does not change what the
-     * caller receives.
      */
     list: function (options) {
       options = options || {};
 
-      var rows = currentRows();
-
-      if (options.search) {
-        var needle = String(options.search).toLowerCase();
-        rows = rows.filter(function (row) {
-          return row.title.toLowerCase().indexOf(needle) > -1 ||
-                 row.sku.toLowerCase().indexOf(needle) > -1 ||
-                 row.categoryLabel.toLowerCase().indexOf(needle) > -1;
-        });
-      }
-
-      if (options.dept) {
-        rows = rows.filter(function (row) { return row.dept === options.dept; });
-      }
-
-      if (options.category) {
-        rows = rows.filter(function (row) { return row.category === options.category; });
-      }
-
-      if (options.status) {
-        rows = rows.filter(function (row) { return row.status === options.status; });
-      }
-
-      /* Sorting before paging, or page two would be sorted on its own.
-         An unknown sort, and 'newest', both leave the natural order. */
-      var compare = SORTS[options.sort];
-      if (compare) rows = rows.slice().sort(compare);
-
-      var total = rows.length;
-      var perPage = options.perPage || 20;
-      var pages = Math.max(1, Math.ceil(total / perPage));
-      var page = Math.min(Math.max(1, options.page || 1), pages);
-      var start = (page - 1) * perPage;
-
-      return Repo.defer({
-        items: rows.slice(start, start + perPage),
-        total: total,
-        page: page,
-        pages: pages,
-        perPage: perPage
-      });
+      return Api.get(Api.query('/api/admin/products', {
+        search: options.search,
+        dept: options.dept,
+        category: options.category,
+        status: options.status,
+        sort: options.sort,
+        page: options.page,
+        perPage: options.perPage
+      }));
     },
 
     /** One product, or null. Never throws for a bad id. */
     get: function (id) {
-      var hit = currentRows().filter(function (row) { return row.id === id; })[0];
-      return Repo.defer(hit || null);
+      return Api.get('/api/admin/products/' + encodeURIComponent(id))
+        .then(function (data) { return data.product; })
+        .catch(function (err) {
+          if (err.status === 404) return null;
+          throw err;
+        });
     },
 
     /** Total count, without dragging a page of rows along with it. */
     count: function () {
-      return Repo.defer(currentRows().length);
+      return Repo.products.list({ perPage: 1 }).then(function (result) {
+        return result.total;
+      });
     },
 
-    /* -- writes. See the note above: these live in memory only. -- */
+    /* -- writes -- */
 
     create: function (data) {
-      var id = 'new-' + (nextId++);
-
-      var row = {
-        id: id,
-        title: data.title,
-        image: (data.images && data.images[0]) || null,
-        dept: data.dept,
-        deptLabel: data.deptLabel || data.dept,
-        category: data.category,
-        categoryLabel: data.categoryLabel || data.category,
-        price: data.price,
-        compareAt: data.compareAt || null,
-        colour: data.colour || null,
-        sizes: data.sizes || [],
-        stock: data.stock || 0,
-        inStock: (data.stock || 0) > 0,
-        sku: data.sku || ('HAV-NEW-' + id.toUpperCase()),
-        status: data.status || 'draft',
-        featured: !!data.featured,
-        description: data.description || '',
-        storefrontPath: null
-      };
-
-      added.unshift(row);
-      return Repo.defer(row);
+      return toServerProduct(data).then(function (body) {
+        return Api.send('POST', '/api/admin/products', body);
+      }).then(function (result) { return result.product; });
     },
 
     update: function (id, data) {
-      var exists = currentRows().some(function (row) { return row.id === id; });
-      if (!exists) {
-        return Promise.reject({ message: 'That product no longer exists.' });
-      }
-
-      /* A row created this session is edited in place; a generated one gets
-         an overlay entry, because the catalogue itself is not writable. */
-      var own = added.filter(function (row) { return row.id === id; })[0];
-
-      if (own) {
-        Object.keys(data).forEach(function (key) { own[key] = data[key]; });
-      } else {
-        edited[id] = edited[id] || {};
-        Object.keys(data).forEach(function (key) { edited[id][key] = data[key]; });
-      }
-
-      return Repo.products.get(id);
+      return toServerProduct(data).then(function (body) {
+        return Api.send('PATCH', '/api/admin/products/' + encodeURIComponent(id), body);
+      }).then(function (result) { return result.product; });
     },
 
     /**
-     * Removing a generated product only hides it, which is what makes
-     * restore() possible. A row created in this session has nowhere to be
-     * hidden from, so it is handed back for restore() to put again.
+     * Remove a product, which archives it.
+     *
+     * It leaves the shop immediately and the row stays, because past orders
+     * point at it. The token returned is the status it had, which is what
+     * restore() puts back — not 'active', because archiving a draft and
+     * then undoing it must not publish it.
      */
     remove: function (id) {
-      var own = added.filter(function (row) { return row.id === id; })[0];
-
-      if (own) {
-        added = added.filter(function (row) { return row.id !== id; });
-      } else {
-        removed[id] = true;
-      }
-
-      var undo = { id: id, row: own || null, edits: edited[id] || null };
-      delete edited[id];
-
-      return Repo.defer(undo);
+      return Api.send('DELETE', '/api/admin/products/' + encodeURIComponent(id))
+        .then(function (result) {
+          return { id: id, previousStatus: result.previousStatus };
+        });
     },
 
     /** Put back what remove() took, from the token it returned. */
     restore: function (undo) {
-      if (!undo) return Repo.defer(false);
+      if (!undo || !undo.id) return Promise.resolve(false);
 
-      if (undo.row) added.unshift(undo.row);
-      else delete removed[undo.id];
-
-      if (undo.edits) edited[undo.id] = undo.edits;
-      return Repo.defer(true);
+      return Api.send('PATCH', '/api/admin/products/' + encodeURIComponent(undo.id),
+                      { status: undo.previousStatus || 'draft' })
+        .then(function () { return true; });
     },
 
     /**
-     * Whether anything has been changed in this session.
-     * The list uses it to say plainly that the changes are not saved.
+     * Whether anything has been changed but not saved.
+     *
+     * Always false now, and the honest answer: every write above reaches
+     * the database before its promise resolves. The list still asks, and
+     * still has the banner for it, because the sections that have not been
+     * connected yet answer this question differently.
      */
     hasUnsavedEdits: function () {
-      return added.length > 0 || Object.keys(edited).length > 0 ||
-             Object.keys(removed).length > 0;
+      return false;
     }
   };
+
+  /**
+   * Write a change into the in-memory overlay currentRows() reads.
+   *
+   * What Repo.products.update used to be, and all that is left of it. Only
+   * inventory uses it now, for the reason given at its setStock; the
+   * product list and the product form both write to the database.
+   */
+  function overlayEdit(id, data) {
+    var exists = currentRows().some(function (row) { return row.id === id; });
+    if (!exists) {
+      return Promise.reject(new Error('That product no longer exists.'));
+    }
+
+    edited[id] = edited[id] || {};
+    Object.keys(data).forEach(function (key) { edited[id][key] = data[key]; });
+
+    return Repo.defer(currentRows().filter(function (row) { return row.id === id; })[0]);
+  }
+
+  /**
+   * Turn what the product form collected into what the API accepts.
+   *
+   * The form has always worked in `dept` + `category` slugs, because that
+   * is what the storefront's URLs are made of. The database files a product
+   * under one category id and copies the department down from it with a
+   * trigger, so the department in the form is not sent at all — it is
+   * already implied by the category, and sending both would create a way
+   * for them to disagree.
+   *
+   * Only keys the caller actually supplied are forwarded, so an edit that
+   * touched the price does not resend — and risk overwriting — everything
+   * else on the product.
+   */
+  function toServerProduct(data) {
+    var body = {};
+    var has = function (key) {
+      return Object.prototype.hasOwnProperty.call(data, key) && data[key] !== undefined;
+    };
+
+    ['title', 'description', 'price', 'compareAt', 'stock', 'status',
+     'colour', 'colourHex', 'fabric', 'badge', 'featured', 'sizes', 'images'
+    ].forEach(function (key) {
+      if (has(key)) body[key] = data[key];
+    });
+
+    if (!has('category')) return Promise.resolve(body);
+
+    return Categories.idFor(data.dept, data.category).then(function (id) {
+      if (!id) {
+        var err = new Error('There is no “' + (data.categoryLabel || data.category) +
+                            '” category to put this in. Add it under Categories first.');
+        err.fields = { category: 'No such category.' };
+        throw err;
+      }
+
+      body.categoryId = id;
+      return body;
+    });
+  }
 
   /* -----------------------------------------------------------------------
      Inventory
@@ -584,7 +655,20 @@ window.ZB = window.ZB || {};
         change.status = quantity > 0 ? 'active' : 'out-of-stock';
       }
 
-      return Repo.products.update(id, change);
+      /* STILL THE IN-MEMORY OVERLAY, DELIBERATELY
+       *
+       * Inventory reads currentRows(), which is built from ZB.catalogue —
+       * so its rows are keyed by the storefront slug, not by the database
+       * id the product endpoints take. Sending a slug to
+       * /api/admin/products/:id would be a 400 on every save.
+       *
+       * Connecting inventory properly is its own step: it needs the rows
+       * to come from /api/admin/products so that drafts and out-of-stock
+       * items are in the list at all, which changes what the page counts
+       * and what its filters mean. Until then this keeps working the way
+       * it worked yesterday, and the page still says the change is not
+       * saved. What it must not do is silently fail. */
+      return overlayEdit(id, change);
     },
 
     /** Add to or take from what is there. Never goes below zero. */
@@ -596,7 +680,8 @@ window.ZB = window.ZB || {};
     },
 
     hasUnsavedEdits: function () {
-      return Repo.products.hasUnsavedEdits();
+      /* Its own overlay, not the product endpoints' — see setStock. */
+      return Object.keys(edited).length > 0;
     }
   };
   /* -----------------------------------------------------------------------
@@ -1337,193 +1422,150 @@ window.ZB = window.ZB || {};
   /* -----------------------------------------------------------------------
      Categories
 
-     WHERE A CATEGORY COMES FROM
-     Not from a table of its own. The storefront's menu is ZB.navigation,
-     and that tree already *is* the category structure — three departments,
-     each holding categories, some of which hold sub-categories. Inventing a
-     second list here would let the panel and the shop disagree about what
-     the store sells, which is the one thing this screen must never do.
+     THE MENU IS NOW A TABLE, NOT A FILE
+     This section used to flatten ZB.navigation — data/navigation.js, a file
+     — into rows, and an edit lived in an overlay until the next reload. The
+     categories table has replaced it, and the storefront reads the same
+     rows: a category added here appears in the shop's drawer, and one
+     hidden here leaves it.
 
-     So this reads the same tree, flattens it into rows, and counts the
-     products behind each one through ZB.catalogue — the same call the
-     storefront's own category page makes. A count shown here is therefore
-     the count a shopper would actually land on.
+     THE WHOLE TREE ARRIVES AT ONCE, AND IS FILTERED HERE
+     The products endpoint pages in the database; this one does not, and the
+     reason is that almost every question the page asks needs the whole tree
+     anyway. Whether a row is a sub-category depends on its parent, the
+     indenting depends on the rows around it, the "place it under" dropdown
+     is a list of all of them, and childrenOf() is called from the page
+     synchronously, in the middle of building a sentence. A menu is bounded
+     by how many things a person will put in one; ninety rows is already a
+     large shop's worth.
 
-     WHAT AN EDIT CAN AND CANNOT DO, HONESTLY
-     A rename or a hide is held in the overlay below, exactly like a product
-     edit, and is gone on reload. It also does not reach the storefront:
-     the two are separate documents, and ZB.navigation is a file, not a
-     database. The UI says so rather than implying otherwise — and the
-     category's storefront URL is deliberately built from its original
-     `slug`, never from the edited name, so a renamed category still links
-     to the page that actually exists.
-
-     Adding a backend replaces the body of these methods. The navigation
-     tree becomes the seed for the first import and nothing above this line
-     changes.
+     MENU ORDER IS REBUILT HERE
+     The API returns the rows in their own sort order, flat. The list draws
+     a tree, so they are re-ordered into department, then category, then its
+     children — the order the drawer itself reads in, which is what makes
+     the indenting mean anything.
      ----------------------------------------------------------------------- */
 
-  var catEdited = {};   /* id -> changed fields */
-  var catRemoved = {};  /* id -> true */
-  var catAdded = [];    /* created this session, newest first */
-  var catNextId = 1;
+  var Categories = {
 
-  /** Flatten ZB.navigation into rows, parents immediately before children. */
-  function navigationRows() {
-    var slug = ZB.ui.slug;
-    var rows = [];
+    /* The whole tree, kept between calls. Every method below reads it, and
+       every write clears it — a stale menu is how a category that was just
+       renamed keeps its old name in the dropdown next to it. */
+    cache: null,
 
-    (ZB.navigation || []).forEach(function (dept) {
-      dept.items.forEach(function (item) {
-        var itemSlug = slug(item.label);
-        var parentId = dept.id + '/' + itemSlug;
-        var children = item.children || [];
+    load: function (force) {
+      if (force) Categories.cache = null;
 
-        rows.push({
-          id: parentId,
-          label: item.label,
-          slug: itemSlug,
-          dept: dept.id,
-          deptLabel: dept.label,
-          parentId: null,
-          parentLabel: null,
-          level: 1,
-          childCount: children.length,
-          status: 'active',
-          source: 'navigation'
+      if (!Categories.cache) {
+        Categories.cache = Api.get('/api/admin/categories').catch(function (err) {
+          /* A failed load must not be remembered as the answer. */
+          Categories.cache = null;
+          throw err;
         });
-
-        children.forEach(function (child) {
-          var childSlug = slug(child.label);
-          rows.push({
-            id: parentId + '/' + childSlug,
-            label: child.label,
-            slug: childSlug,
-            dept: dept.id,
-            deptLabel: dept.label,
-            parentId: parentId,
-            parentLabel: item.label,
-            level: 2,
-            childCount: 0,
-            status: 'active',
-            source: 'navigation'
-          });
-        });
-      });
-    });
-
-    return rows;
-  }
-
-  /**
-   * How many products sit behind a category.
-   *
-   * ZB.catalogue.byCategory already answers this for both shapes: a leaf
-   * returns its own products, and a category with children returns
-   * everything underneath it. Counting the children by hand here would be a
-   * second implementation of the same rule, free to drift from the one the
-   * shop uses.
-   */
-  function productCountFor(row) {
-    if (row.source !== 'navigation') return 0;
-    return ZB.catalogue.byCategory(row.dept, row.slug).length;
-  }
-
-  /**
-   * Where a newly added category goes in menu order.
-   *
-   * Not the front of the list, which is where the product overlay puts a
-   * new row and is right there — a product list has no natural order to
-   * violate. A category list does. Prepending put a brand-new sub-category
-   * one row ABOVE the parent it belongs to, indented, with the hairline
-   * that says "these belong together" pointing at the wrong row. The tree
-   * has to stay a tree, so an added row is spliced in where it actually
-   * belongs: after its parent's existing children, or at the end of its
-   * department for a top-level one.
-   *
-   * The page makes the new row findable by flashing it instead.
-   */
-  function spliceIntoTree(rows, row) {
-    var at = -1;
-
-    if (row.parentId) {
-      var parentAt = -1;
-      rows.forEach(function (other, i) {
-        if (other.id === row.parentId) parentAt = i;
-      });
-
-      if (parentAt > -1) {
-        at = parentAt + 1;
-        while (at < rows.length && rows[at].parentId === row.parentId) at++;
       }
-    } else {
-      /* After everything already in this department. */
-      rows.forEach(function (other, i) {
-        if (other.dept === row.dept) at = i + 1;
+
+      return Categories.cache;
+    },
+
+    forget: function () { Categories.cache = null; },
+
+    /**
+     * The category id behind a department and a category slug.
+     *
+     * What the product form works in and what the API needs are two
+     * different things — see toServerProduct(). Resolves null when there is
+     * no such category, which the caller turns into a message naming it.
+     */
+    idFor: function (dept, slug) {
+      return Categories.load().then(function (tree) {
+        var hit = tree.items.filter(function (row) {
+          return row.slug === slug && (!dept || row.dept === dept);
+        })[0];
+
+        return hit ? hit.id : null;
       });
     }
+  };
 
-    if (at < 0) rows.push(row);
-    else rows.splice(at, 0, row);
-  }
+  /**
+   * The rows in menu order: department, its categories, each one's children.
+   *
+   * The list indents a child under its parent, which only reads correctly
+   * while the parent is the row above it. The API's own order is by the
+   * `sort` column across the whole table, so this regroups.
+   */
+  function inMenuOrder(items, departments) {
+    var order = {};
+    departments.forEach(function (dept, i) { order[dept.slug] = i; });
 
-  /** The category tree as the admin currently sees it. */
-  function currentCategories() {
-    var rows = navigationRows();
+    var bySort = function (a, b) {
+      if (a.sort !== b.sort) return a.sort - b.sort;
+      return a.label.localeCompare(b.label);
+    };
 
-    /* Oldest first, so a category added under one added a moment earlier
-       finds its parent already in place. */
-    catAdded.slice().reverse().forEach(function (row) {
-      spliceIntoTree(rows, row);
+    var children = {};
+    items.forEach(function (row) {
+      if (row.parentId) (children[row.parentId] = children[row.parentId] || []).push(row);
     });
 
-    var live = rows
-      .filter(function (row) { return !catRemoved[row.id]; })
-      .map(function (row) {
-        var merged = {};
-        Object.keys(row).forEach(function (key) { merged[key] = row[key]; });
+    var tops = items.filter(function (row) { return !row.parentId; });
 
-        if (catEdited[row.id]) {
-          Object.keys(catEdited[row.id]).forEach(function (key) {
-            merged[key] = catEdited[row.id][key];
-          });
-        }
+    tops.sort(function (a, b) {
+      var da = order[a.dept] === undefined ? 99 : order[a.dept];
+      var db = order[b.dept] === undefined ? 99 : order[b.dept];
+      if (da !== db) return da - db;
+      return bySort(a, b);
+    });
 
-        merged.productCount = productCountFor(row);
-        /* Built from `slug`, not from the edited label — see the note
-           above. A row added in this session has no storefront page at
-           all, so it gets no link rather than a broken one. */
-        merged.storefrontPath = row.source === 'navigation'
-          ? '/category/' + row.dept + '/' + row.slug
-          : null;
-
-        return merged;
+    var out = [];
+    tops.forEach(function (row) {
+      out.push(row);
+      (children[row.id] || []).sort(bySort).forEach(function (child) {
+        out.push(child);
       });
-
-    /* Recounted from what actually survives rather than carried over from
-       the navigation tree: deleting a sub-category has to change the
-       "3 sub-categories" line on its parent in the same breath, or the row
-       above contradicts the rows below it. */
-    var kids = {};
-    live.forEach(function (row) {
-      if (row.parentId) kids[row.parentId] = (kids[row.parentId] || 0) + 1;
     });
-    live.forEach(function (row) { row.childCount = kids[row.id] || 0; });
 
-    return live;
+    /* Anything whose parent was filtered out or is missing still has to
+       appear — a row the page cannot show is a row nobody can fix. */
+    if (out.length !== items.length) {
+      var seen = {};
+      out.forEach(function (row) { seen[row.id] = true; });
+      items.forEach(function (row) { if (!seen[row.id]) out.push(row); });
+    }
+
+    return out;
   }
 
-  /* 'tree' is the natural order — navigationRows() already emits parents
-     immediately before their own children, which is the order the menu
-     itself reads in. Every other sort breaks that adjacency, so the page
-     stops indenting when one is chosen rather than indenting rows whose
-     parent is now forty lines away. */
+  /** Every category, in menu order, with the storefront link filled in. */
+  function categoryRows() {
+    return Categories.load().then(function (tree) {
+      return inMenuOrder(tree.items, tree.departments).map(function (row) {
+        var out = {};
+        Object.keys(row).forEach(function (key) { out[key] = row[key]; });
+
+        /* Built from the slug, never from the label. A rename leaves the
+           address alone on purpose — see api/admin/categories/[id].js. */
+        out.storefrontPath = '/category/' + row.dept + '/' + row.slug;
+        return out;
+      });
+    });
+  }
+
+  /* 'tree' is the natural order, which is what inMenuOrder produces. Every
+     other sort breaks the adjacency between a parent and its children, so
+     the page stops indenting when one is chosen rather than indenting rows
+     whose parent is now forty lines away. */
   var CATEGORY_SORTS = {
     'name-asc':      function (a, b) { return a.label.localeCompare(b.label); },
     'name-desc':     function (a, b) { return b.label.localeCompare(a.label); },
     'products-desc': function (a, b) { return b.productCount - a.productCount; },
     'products-asc':  function (a, b) { return a.productCount - b.productCount; }
   };
+
+  /* childrenOf() is called synchronously by the page, in the middle of
+     composing the delete dialog's sentence. It reads this, which the list
+     that drew the row filled in a moment earlier. */
+  var lastRows = [];
 
   Repo.categories = {
 
@@ -1537,42 +1579,45 @@ window.ZB = window.ZB || {};
 
     /**
      * The filter options, taken from the data itself so a control can never
-     * offer a value that would return nothing — the same rule the
-     * storefront's facets follow.
+     * offer a value that would return nothing.
      */
     facets: function () {
-      var rows = currentCategories();
+      return Categories.load().then(function (tree) {
+        var rows = tree.items;
 
-      var depts = {};
-      var statuses = {};
-      var levels = {};
+        var depts = {};
+        var statuses = {};
+        var levels = {};
 
-      rows.forEach(function (row) {
-        depts[row.dept] = row.deptLabel;
-        statuses[row.status] = row.status === 'active' ? 'Visible' : 'Hidden';
-        levels[row.level] = row.level === 1 ? 'Top level' : 'Sub-category';
-      });
+        rows.forEach(function (row) {
+          depts[row.dept] = row.deptLabel;
+          statuses[row.status] = row.status === 'active' ? 'Visible' : 'Hidden';
+          levels[row.level] = row.level === 1 ? 'Top level' : 'Sub-category';
+        });
 
-      var toList = function (map, sortByLabel) {
-        var keys = Object.keys(map);
-        keys.sort(sortByLabel
-          ? function (a, b) { return map[a].localeCompare(map[b]); }
-          : function (a, b) { return Number(a) - Number(b); });
-        return keys.map(function (id) { return { id: id, label: map[id] }; });
-      };
+        var toList = function (map, sortByLabel) {
+          var keys = Object.keys(map);
+          keys.sort(sortByLabel
+            ? function (a, b) { return map[a].localeCompare(map[b]); }
+            : function (a, b) { return Number(a) - Number(b); });
+          return keys.map(function (id) { return { id: id, label: map[id] }; });
+        };
 
-      return Repo.defer({
-        departments: toList(depts, true),
-        statuses: toList(statuses, true),
-        levels: toList(levels, false),
-        /* Every category that is allowed to be a parent, for the add form.
-           Only top-level rows qualify: the storefront menu is two deep and
-           a third level would have nowhere to render. */
-        parents: rows.filter(function (row) { return row.level === 1; })
-                     .map(function (row) {
-                       return { id: row.id, label: row.deptLabel + ' → ' + row.label,
-                                dept: row.dept };
-                     })
+        return {
+          departments: toList(depts, true),
+          statuses: toList(statuses, true),
+          levels: toList(levels, false),
+
+          /* Every category that may be a parent, for the add form. Only
+             top-level rows qualify: the storefront menu is two deep and a
+             third level would have nowhere to render. The server refuses
+             one anyway. */
+          parents: rows.filter(function (row) { return row.level === 1; })
+                       .map(function (row) {
+                         return { id: row.id, label: row.deptLabel + ' → ' + row.label,
+                                  dept: row.dept };
+                       })
+        };
       });
     },
 
@@ -1586,175 +1631,145 @@ window.ZB = window.ZB || {};
      */
     list: function (options) {
       options = options || {};
-      var rows = currentCategories();
 
-      if (options.search) {
-        var needle = String(options.search).toLowerCase();
-        rows = rows.filter(function (row) {
-          return row.label.toLowerCase().indexOf(needle) > -1 ||
-                 (row.parentLabel || '').toLowerCase().indexOf(needle) > -1 ||
-                 row.deptLabel.toLowerCase().indexOf(needle) > -1;
-        });
-      }
+      return categoryRows().then(function (all) {
+        lastRows = all;
 
-      if (options.dept) {
-        rows = rows.filter(function (row) { return row.dept === options.dept; });
-      }
+        var rows = all;
 
-      if (options.level) {
-        rows = rows.filter(function (row) {
-          return String(row.level) === String(options.level);
-        });
-      }
+        if (options.search) {
+          var needle = String(options.search).toLowerCase();
+          rows = rows.filter(function (row) {
+            return row.label.toLowerCase().indexOf(needle) > -1 ||
+                   (row.parentLabel || '').toLowerCase().indexOf(needle) > -1 ||
+                   row.deptLabel.toLowerCase().indexOf(needle) > -1;
+          });
+        }
 
-      if (options.status) {
-        rows = rows.filter(function (row) { return row.status === options.status; });
-      }
+        if (options.dept) {
+          rows = rows.filter(function (row) { return row.dept === options.dept; });
+        }
 
-      var compare = CATEGORY_SORTS[options.sort];
-      if (compare) rows = rows.slice().sort(compare);
+        if (options.level) {
+          rows = rows.filter(function (row) {
+            return String(row.level) === String(options.level);
+          });
+        }
 
-      var total = rows.length;
-      var perPage = options.perPage || 20;
-      var pages = Math.max(1, Math.ceil(total / perPage));
-      var page = Math.min(Math.max(1, options.page || 1), pages);
-      var start = (page - 1) * perPage;
+        if (options.status) {
+          rows = rows.filter(function (row) { return row.status === options.status; });
+        }
 
-      return Repo.defer({
-        items: rows.slice(start, start + perPage),
-        total: total,
-        page: page,
-        pages: pages,
-        perPage: perPage,
-        tree: !compare
+        var compare = CATEGORY_SORTS[options.sort];
+        if (compare) rows = rows.slice().sort(compare);
+
+        var total = rows.length;
+        var perPage = options.perPage || 20;
+        var pages = Math.max(1, Math.ceil(total / perPage));
+        var page = Math.min(Math.max(1, options.page || 1), pages);
+        var start = (page - 1) * perPage;
+
+        return {
+          items: rows.slice(start, start + perPage),
+          total: total,
+          page: page,
+          pages: pages,
+          perPage: perPage,
+          tree: !compare
+        };
       });
     },
 
     get: function (id) {
-      var hit = currentCategories().filter(function (row) { return row.id === id; })[0];
-      return Repo.defer(hit || null);
+      return categoryRows().then(function (rows) {
+        return rows.filter(function (row) { return row.id === id; })[0] || null;
+      });
     },
 
     /** Every category, unpaged — for the summary tiles above the list. */
     summary: function () {
-      var rows = currentCategories();
-      var empty = rows.filter(function (row) { return row.productCount === 0; });
-
-      return Repo.defer({
-        total: rows.length,
-        topLevel: rows.filter(function (row) { return row.level === 1; }).length,
-        hidden: rows.filter(function (row) { return row.status !== 'active'; }).length,
-        empty: empty.length
+      return categoryRows().then(function (rows) {
+        return {
+          total: rows.length,
+          topLevel: rows.filter(function (row) { return row.level === 1; }).length,
+          hidden: rows.filter(function (row) { return row.status !== 'active'; }).length,
+          empty: rows.filter(function (row) { return row.productCount === 0; }).length
+        };
       });
     },
 
-    /* -- writes. In memory only, exactly like products. -- */
+    /* -- writes -- */
 
     create: function (data) {
-      var id = 'new-cat-' + (catNextId++);
-      var parent = data.parentId
-        ? currentCategories().filter(function (row) { return row.id === data.parentId; })[0]
-        : null;
-
-      var dept = parent ? parent.dept : data.dept;
-      var deptRow = (ZB.navigation || []).filter(function (d) { return d.id === dept; })[0];
-
-      var row = {
-        id: id,
+      return Api.send('POST', '/api/admin/categories', {
         label: data.label,
-        slug: ZB.ui.slug(data.label),
-        dept: dept,
-        deptLabel: deptRow ? deptRow.label : dept,
-        parentId: parent ? parent.id : null,
-        parentLabel: parent ? parent.label : null,
-        level: parent ? 2 : 1,
-        childCount: 0,
-        status: data.status || 'active',
-        source: 'new'
-      };
-
-      catAdded.unshift(row);
-      return Repo.defer(row);
+        parentId: data.parentId || undefined,
+        dept: data.dept || undefined,
+        active: data.status ? data.status === 'active' : true
+      }).then(function (result) {
+        Categories.forget();
+        return result.category;
+      });
     },
 
     update: function (id, data) {
-      var exists = currentCategories().some(function (row) { return row.id === id; });
-      if (!exists) {
-        return Promise.reject({ message: 'That category no longer exists.' });
+      var body = {};
+
+      if (Object.prototype.hasOwnProperty.call(data, 'label')) body.label = data.label;
+      if (Object.prototype.hasOwnProperty.call(data, 'status')) {
+        body.active = data.status === 'active';
       }
+      if (Object.prototype.hasOwnProperty.call(data, 'sort')) body.sort = data.sort;
 
-      var own = catAdded.filter(function (row) { return row.id === id; })[0];
-
-      if (own) {
-        Object.keys(data).forEach(function (key) { own[key] = data[key]; });
-        if (data.label) own.slug = ZB.ui.slug(data.label);
-      } else {
-        catEdited[id] = catEdited[id] || {};
-        Object.keys(data).forEach(function (key) { catEdited[id][key] = data[key]; });
-      }
-
-      return Repo.categories.get(id);
+      return Api.send('PATCH', '/api/admin/categories/' + encodeURIComponent(id), body)
+        .then(function (result) {
+          Categories.forget();
+          return result.category;
+        });
     },
 
     /**
-     * Remove a category, and with it anything filed underneath it.
+     * Delete a category, which the server refuses while anything is in it.
      *
-     * Leaving the children behind would put rows in the list whose parent
-     * is gone — orphans the reader cannot get back to and cannot explain.
-     * The count of what will go is shown in the dialog before this runs.
+     * This used to take the sub-categories with it and hand back a token to
+     * put them all again. Neither is true now, and the difference is not a
+     * limitation — a cascade would delete a department's worth of the shop
+     * from one click, with an undo that cannot restore products once their
+     * images and order lines are gone. A category that must go is emptied
+     * first, deliberately. Hiding one takes it out of the shop immediately
+     * and is reversible, which is what "remove this" usually means.
      *
-     * Products are never touched. A category is a label on the menu; the
-     * products it held still exist and still belong to the department.
+     * The rejection carries the server's count of what is in the way.
      */
     remove: function (id) {
-      var all = currentCategories();
-      var doomed = all.filter(function (row) {
-        return row.id === id || row.parentId === id;
-      });
-
-      var undo = { rows: [], removed: [], edits: {} };
-
-      doomed.forEach(function (row) {
-        var own = catAdded.filter(function (added) { return added.id === row.id; })[0];
-
-        if (own) {
-          undo.rows.push(own);
-          catAdded = catAdded.filter(function (added) { return added.id !== row.id; });
-        } else {
-          undo.removed.push(row.id);
-          catRemoved[row.id] = true;
-        }
-
-        if (catEdited[row.id]) {
-          undo.edits[row.id] = catEdited[row.id];
-          delete catEdited[row.id];
-        }
-      });
-
-      undo.count = doomed.length;
-      return Repo.defer(undo);
+      return Api.send('DELETE', '/api/admin/categories/' + encodeURIComponent(id))
+        .then(function () {
+          Categories.forget();
+          return { id: id };
+        });
     },
 
-    restore: function (undo) {
-      if (!undo) return Repo.defer(false);
-
-      (undo.rows || []).forEach(function (row) { catAdded.unshift(row); });
-      (undo.removed || []).forEach(function (id) { delete catRemoved[id]; });
-      Object.keys(undo.edits || {}).forEach(function (id) {
-        catEdited[id] = undo.edits[id];
-      });
-
-      return Repo.defer(true);
+    /**
+     * There is nothing to restore.
+     *
+     * A deleted category was empty — the server would not have deleted it
+     * otherwise — so nothing was lost with it, and adding it again is the
+     * same three fields it took the first time. Kept as a method because
+     * the page's undo path still calls it, and answering false is how it
+     * learns there is nothing to offer.
+     */
+    restore: function () {
+      return Promise.resolve(false);
     },
 
-    /** How many sub-categories a row would take with it. */
+    /** How many sub-categories a row holds, from the last list drawn. */
     childrenOf: function (id) {
-      return currentCategories().filter(function (row) { return row.parentId === id; });
+      return lastRows.filter(function (row) { return row.parentId === id; });
     },
 
+    /** Always false: every write above reaches the database. */
     hasUnsavedEdits: function () {
-      return catAdded.length > 0 || Object.keys(catEdited).length > 0 ||
-             Object.keys(catRemoved).length > 0;
+      return false;
     }
   };
 

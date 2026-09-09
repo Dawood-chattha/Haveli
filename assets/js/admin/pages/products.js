@@ -368,7 +368,7 @@ window.ZB.adminPages = window.ZB.adminPages || {};
       var dirty = ZB.repo.products.hasUnsavedEdits();
       note.hidden = !dirty;
       note.textContent = dirty
-        ? 'Changes are held in this tab only and are lost on reload — there is no database yet.'
+        ? 'Some changes have not been saved.'
         : '';
     }
   }

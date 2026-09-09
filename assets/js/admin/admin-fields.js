@@ -80,6 +80,9 @@ window.ZB = window.ZB || {};
         (o.max !== undefined ? ' max="' + ui.esc(o.max) + '"' : '') +
         (o.step ? ' step="' + ui.esc(o.step) + '"' : '') +
         (o.placeholder ? ' placeholder="' + ui.esc(o.placeholder) + '"' : '') +
+        /* readonly rather than disabled: a disabled input is skipped by the
+           keyboard and not read out, and this is a value worth reading. */
+        (o.readonly ? ' readonly' : '') +
         ' autocomplete="off" aria-describedby="' + describedBy(o.name, o.help) + '">';
 
       if (o.prefix) {

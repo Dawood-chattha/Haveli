@@ -29,9 +29,24 @@ window.ZB = window.ZB || {};
       .replace(/'/g, '&#39;');
   }
 
+  /**
+   * A product's nth image, or the placeholder.
+   *
+   * Every product in the generated catalogue had two photographs, so the
+   * cards and the gallery read product.images[0] straight. A product the
+   * owner adds starts with none, and that wrote src="undefined" into the
+   * page — a broken-image icon in the middle of the shop. One helper, so
+   * the answer is the same everywhere it is asked.
+   */
+  function productImage(product, index) {
+    var list = (product && product.images) || [];
+    return list[index || 0] || 'assets/img/placeholder.svg';
+  }
+
   var UI = {
     slug: slug,
     esc: esc,
+    productImage: productImage,
 
     /** Route-aware href, so links work in both history and hash mode. */
     href: function (path) {

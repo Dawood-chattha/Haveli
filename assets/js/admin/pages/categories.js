@@ -411,13 +411,14 @@ window.ZB.adminPages = window.ZB.adminPages || {};
       ? 'Showing ' + from + '–' + to + ' of ' + result.total + ' categories'
       : 'No categories found';
 
+    /* Kept, and now always hidden: the repo saves every change to the
+       database before its promise resolves, so it answers false. The
+       element stays because the answer is the repo's to give, not this
+       page's to assume. */
     if (note) {
       var dirty = ZB.repo.categories.hasUnsavedEdits();
       note.hidden = !dirty;
-      note.textContent = dirty
-        ? 'Changes are held in this tab only and do not reach the storefront menu — ' +
-          'there is no database yet.'
-        : '';
+      note.textContent = dirty ? 'Some changes have not been saved.' : '';
     }
   }
 
@@ -588,9 +589,10 @@ window.ZB.adminPages = window.ZB.adminPages || {};
 
      One dialog, two callers. The fields a category has are the same either
      way; only the placement control differs, and only because moving an
-     existing category would be a claim this build cannot honour — the
-     storefront menu is a file, and a row that says it moved when nothing
-     moved is worse than a row that cannot.
+     existing category is a larger operation than a form field: it carries
+     every product under it into another department, and the API does not
+     accept the change for that reason. Offering a control that would be
+     ignored is worse than not offering it.
      ----------------------------------------------------------------------- */
 
   var fields = ZB.adminFields.make('cat');
@@ -628,8 +630,8 @@ window.ZB.adminPages = window.ZB.adminPages || {};
     loadFacets().then(function () {
       ZB.adminModal.form({
         title: 'Add a category',
-        intro: 'It appears in this list straight away. Reaching the storefront ' +
-               'menu needs a backend, which this build does not have yet.',
+        intro: 'It is saved straight away, and appears in the shop\u2019s menu ' +
+               'the next time a page there is opened.',
         submitLabel: 'Add category',
 
         body:
@@ -687,6 +689,14 @@ window.ZB.adminPages = window.ZB.adminPages || {};
                 load();
               }
             });
+          }).catch(function (failure) {
+            /* Not calling done() keeps the dialog open with what was typed
+               still in it, which is what a failure needs — the name may be
+               the thing to change. The server wrote the message; it knows
+               what went wrong and this page does not. */
+            fields.showErrors(form, {
+              label: (failure && failure.message) || 'That could not be saved.'
+            }, ['label']);
           });
         }
       });
@@ -759,9 +769,10 @@ window.ZB.adminPages = window.ZB.adminPages || {};
               ZB.adminToast.success('“' + saved.label + '” updated.');
             })
             .catch(function (failure) {
-              done(true);
-              ZB.adminToast.error(failure.message || 'That could not be saved.');
-              load();
+              /* Held open, for the same reason as the add dialog. */
+              fields.showErrors(form, {
+                label: (failure && failure.message) || 'That could not be saved.'
+              }, ['label']);
             });
         }
       });
@@ -812,50 +823,83 @@ window.ZB.adminPages = window.ZB.adminPages || {};
      Delete
      ----------------------------------------------------------------------- */
 
+  /**
+   * Delete, or explain why not.
+   *
+   * A category that still holds sub-categories or products cannot be
+   * deleted, and the server is what refuses it. That is not a limitation to
+   * apologise for: the alternative is a cascade, and deleting "Eastern
+   * Wear" would take six sub-categories and every product in them from one
+   * click, with an undo that cannot bring products back once their images
+   * and order lines are gone.
+   *
+   * So a full category is offered the thing that was almost certainly
+   * meant instead — hide it, which takes it out of the shop immediately and
+   * can be undone by showing it again. An empty one is deleted outright,
+   * and needs no undo: nothing was in it, and adding it again is the same
+   * three fields it took the first time.
+   */
   function confirmDelete(id) {
     ZB.repo.categories.get(id).then(function (row) {
       if (!row) { load(); return; }
 
       var children = ZB.repo.categories.childrenOf(id).length;
 
-      /* Says what else goes, and says what does not. "Delete a category"
-         reads as "delete its products" to most people, and it does not. */
-      var body = '“' + row.label + '” will be removed from the list.';
-      if (children) {
-        body += ' The ' + children + ' ' +
-                (children === 1 ? 'category' : 'categories') + ' under it go too.';
+      if (children || row.productCount) {
+        var holds = [];
+        if (children) {
+          holds.push(children + (children === 1 ? ' sub-category' : ' sub-categories'));
+        }
+        if (row.productCount) {
+          holds.push(row.productCount + (row.productCount === 1 ? ' product' : ' products'));
+        }
+
+        ZB.adminModal.confirm({
+          title: 'This category is not empty',
+          body: '“' + row.label + '” still holds ' + holds.join(' and ') + ', so it ' +
+                'cannot be deleted. Hiding it takes it out of the shop straight ' +
+                'away, leaves everything in it where it is, and can be undone by ' +
+                'showing it again.',
+          confirmLabel: 'Hide it instead',
+          cancelLabel: 'Leave it as it is'
+        }).then(function (yes) {
+          if (!yes) return;
+
+          ZB.repo.categories.update(id, { status: 'hidden' }).then(function () {
+            loadFacets();
+            load();
+            loadMetrics();
+            ZB.adminToast.success('“' + row.label + '” is hidden.');
+          }).catch(function (failure) {
+            ZB.adminToast.error((failure && failure.message) || 'That could not be changed.');
+          });
+        });
+
+        return;
       }
-      if (row.productCount) {
-        body += ' The ' + row.productCount + ' products in it are not deleted — ' +
-                'they stay in ' + row.deptLabel + '.';
-      }
-      body += ' This build has no database, so the change lasts until reload.';
 
       ZB.adminModal.confirm({
         title: 'Delete this category?',
-        body: body,
+        body: '“' + row.label + '” is empty, so nothing goes with it. It is ' +
+              'removed from the shop\u2019s menu as well as from this list.',
         confirmLabel: 'Delete category',
         cancelLabel: 'Keep it',
         tone: 'danger'
       }).then(function (yes) {
         if (!yes) return;
 
-        ZB.repo.categories.remove(id).then(function (undo) {
+        ZB.repo.categories.remove(id).then(function () {
           loadFacets();
           load();
           loadMetrics();
-
-          ZB.adminToast.success('“' + row.label + '” deleted.', {
-            label: 'Undo',
-            onClick: function () {
-              ZB.repo.categories.restore(undo).then(function () {
-                loadFacets();
-                load();
-                loadMetrics();
-                ZB.adminToast.info('“' + row.label + '” restored.');
-              });
-            }
-          });
+          ZB.adminToast.success('“' + row.label + '” deleted.');
+        }).catch(function (failure) {
+          /* Most likely something was put in it between the dialog opening
+             and this running. The server counted; this page guessed. */
+          ZB.adminToast.error((failure && failure.message) || 'That could not be deleted.');
+          loadFacets();
+          load();
+          loadMetrics();
         });
       });
     });
