@@ -200,9 +200,16 @@ window.ZB = window.ZB || {};
       var swap = function () {
         outlet.innerHTML = typeof page.render === 'function' ? page.render(params) : '';
 
+        /* The shop's own name, from the settings record — so renaming the
+           shop in the panel renames its browser tabs too. It falls back to
+           HAVELI, which is the real name rather than a placeholder, for the
+           moment before /api/shop has answered. */
+        var brand = (ZB.shop && ZB.shop.name) || 'HAVELI';
+
         document.title = typeof page.title === 'function'
-          ? page.title(params) + ' — HAVELI'
-          : (page.title ? page.title + ' — HAVELI' : 'HAVELI — Real Fashion, Real Prices');
+          ? page.title(params) + ' — ' + brand
+          : (page.title ? page.title + ' — ' + brand
+                        : brand + ' — Real Fashion, Real Prices');
 
         document.body.setAttribute('data-route', hit ? hit.route.path : '404');
 

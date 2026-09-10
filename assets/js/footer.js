@@ -37,18 +37,37 @@ window.ZB = window.ZB || {};
         return '<span class="footer__social-item">' + ui.esc(name) + '</span>';
       }).join('');
 
+      /* WHAT THE SHOP CALLS ITSELF, AND HOW TO REACH IT
+         From the settings record, which the owner fills in from the panel.
+         These two lines used to be an invented mailbox and an invented phone
+         number sitting in data/footer.js, and a customer reading a footer
+         cannot tell one of those from a real one.
+
+         So a detail that has not been set is not shown. An empty contact
+         list is a footer that is merely quiet; a made-up one is a footer
+         that is wrong. The name falls back to the shop's own, which is not
+         invented. */
+      var shop = ZB.shop || {};
+      var wordmark = shop.name || 'HAVELI';
+
+      var contact = [shop.email, shop.phone]
+        .filter(function (line) { return line; })
+        .map(function (line) { return '<li>' + ui.esc(line) + '</li>'; })
+        .join('');
+
       return '' +
         '<div class="footer__inner">' +
 
           '<div class="footer__top">' +
             '<div class="footer__brand">' +
-              '<a class="footer__wordmark" href="' + ui.href('/') + '">HAVELI</a>' +
+              '<a class="footer__wordmark" href="' + ui.href('/') + '">' +
+                ui.esc(wordmark) +
+              '</a>' +
               '<h2 class="footer__blurb-title">' + ui.esc(data.blurb.title) + '</h2>' +
-              '<p class="footer__blurb">' + ui.esc(data.blurb.body) + '</p>' +
-              '<ul class="footer__contact">' +
-                '<li>' + ui.esc(data.contact.email) + '</li>' +
-                '<li>' + ui.esc(data.contact.phone) + '</li>' +
-              '</ul>' +
+              '<p class="footer__blurb">' +
+                ui.esc(shop.tagline || data.blurb.body) +
+              '</p>' +
+              (contact ? '<ul class="footer__contact">' + contact + '</ul>' : '') +
             '</div>' +
 
             '<div class="footer__groups">' + groups + '</div>' +
@@ -69,7 +88,11 @@ window.ZB = window.ZB || {};
           '</div>' +
 
           '<div class="footer__bottom">' +
-            '<p class="footer__copyright">© 2026 HAVELI</p>' +
+            /* The year is this year's, not one written into the source. A
+               hard-coded year is correct until midnight on 31 December and
+               then quietly wrong for twelve months. */
+            '<p class="footer__copyright">© ' + new Date().getFullYear() + ' ' +
+              ui.esc(wordmark) + '</p>' +
             '<div class="footer__legal">' + legal + '</div>' +
             '<div class="footer__social" aria-label="Social channels">' + social + '</div>' +
 

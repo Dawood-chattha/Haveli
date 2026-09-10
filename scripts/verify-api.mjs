@@ -1574,6 +1574,82 @@ try {
           finally_.body.data.settings.store.name);
   }
 
+  /* =====================================================================
+     17. The shop's own details, on the shop's own pages
+     ---------------------------------------------------------------------
+     The footer used to carry an invented mailbox at haveli.example and a
+     phone number nobody answers, written into data/footer.js. A customer
+     reading a footer cannot tell an invented address from a real one, so
+     they are gone, and GET /api/shop serves the owner's instead.
+
+     The two things worth proving: a signed-out visitor can read it, and
+     it publishes the named fields rather than whatever else is in the
+     settings record.
+     ===================================================================== */
+
+  console.log('\n17. THE SHOP — what the storefront is allowed to know');
+
+  {
+    /* Something to look for, set through the panel the way the owner does. */
+    const phone = '+92 300 ' + String(stamp).slice(-7);
+
+    await expectStatus('the owner fills in the shop’s details', 200, 'PATCH',
+                       '/api/admin/settings', {
+      token: owner.token,
+      body: { store: { name: 'Verify Shop ' + stamp,
+                       tagline: 'Verify tagline ' + stamp,
+                       supportEmail: 'shop-' + stamp + '@verify.invalid',
+                       phone: phone,
+                       lowStockAt: 7 } }
+    });
+
+    const seen = await expectStatus('A SIGNED-OUT VISITOR CAN READ THEM', 200, 'GET',
+                                    '/api/shop');
+
+    if (seen.status === 200) {
+      const shop = seen.body.data.shop;
+
+      check('the name and tagline are published',
+            shop.name === 'Verify Shop ' + stamp &&
+            shop.tagline === 'Verify tagline ' + stamp,
+            JSON.stringify(shop));
+      check('so is how to reach the shop',
+            shop.email === 'shop-' + stamp + '@verify.invalid' && shop.phone === phone,
+            shop.email + ' / ' + shop.phone);
+
+      /* The named list, and nothing beyond it. A field added to the
+         settings record later must not be published by having been added. */
+      check('AND NOTHING ELSE FROM THE SETTINGS RECORD IS',
+            keysOf(shop) === 'address,city,email,name,phone,tagline', keysOf(shop));
+      check('the low-stock level in particular is not public',
+            !('lowStockAt' in shop), keysOf(shop));
+      check('nor the delivery rule, which has its own endpoint',
+            !('shipping' in shop), keysOf(shop));
+      check('nor anything about notifications',
+            !('notifications' in shop) && !('sendTo' in shop), keysOf(shop));
+    }
+
+    await expectStatus('and it is a read-only endpoint', 405, 'PATCH', '/api/shop',
+                       { token: owner.token, body: { name: 'Nope' } });
+
+    /* Cleared straight through the service key: the endpoint will not take
+       an empty name, deliberately, and this run must not leave the shop
+       named after a test. */
+    await admin.from('settings')
+      .update({ store: { shipping: { flat: 250, freeOver: 5000 }, lowStockAt: 10 },
+                notifications: {} })
+      .eq('id', true);
+
+    const cleared = await call('GET', '/api/shop');
+
+    check('THE SHOP IS NOT LEFT NAMED AFTER A TEST RUN',
+          cleared.body.data.shop.name.indexOf('Verify Shop') < 0,
+          cleared.body.data.shop.name);
+    check('and an unset detail comes back empty rather than invented',
+          cleared.body.data.shop.email === '' && cleared.body.data.shop.phone === '',
+          JSON.stringify(cleared.body.data.shop));
+  }
+
 } catch (err) {
   fail('the run stopped: ' + err.message);
 } finally {

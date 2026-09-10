@@ -25,6 +25,10 @@
    shop's structure and changes rarely, so a slightly stale one is better
    than none; a product list is the shop's stock, and inventing one is how a
    customer ends up ordering something that does not exist.
+
+   The shop's contact details follow the catalogue's rule, not the menu's.
+   A stale menu is a menu; an invented email address is a mailbox a customer
+   writes to and nobody reads.
    ========================================================================= */
 
 window.ZB = window.ZB || {};
@@ -61,6 +65,39 @@ window.ZB = window.ZB || {};
     });
   }
 
+  /**
+   * The shop's own name and contact details.
+   *
+   * They used to be in data/footer.js, invented — an unroutable mailbox at
+   * haveli.example and a phone number nobody answers. A customer reading a
+   * footer has no way to tell an invented address from a real one, so those
+   * are gone and this is where the real ones come from: the settings record,
+   * which the owner fills in from the panel.
+   *
+   * A FAILURE HERE LEAVES NO CONTACT DETAILS, AND THAT IS RIGHT
+   * The footer omits what it does not have. The alternative — falling back
+   * to the values that used to be in the file — is publishing an address
+   * nobody chose, which is the thing this replaced.
+   */
+  function loadShop() {
+    return fetch('/api/shop', REQUEST).then(function (res) {
+      if (!res.ok) {
+        throw new Error('The shop details could not be loaded (' + res.status + ').');
+      }
+      return res.json();
+    }).then(function (payload) {
+      var shop = payload && payload.ok && payload.data && payload.data.shop;
+      if (shop) ZB.shop = shop;
+    });
+  }
+
+  /* What the pages read before the answer arrives, and what they keep if it
+     never does. The name is the shop's real one and is a fair fallback; the
+     contact details are blank because there is no honest fallback for
+     those. */
+  ZB.shop = ZB.shop || { name: 'HAVELI', tagline: '', email: '', phone: '',
+                         address: '', city: '' };
+
   ZB.data = {
     /** Resolves when the shop's data is loaded, or when it is not. */
     ready: null,
@@ -71,7 +108,8 @@ window.ZB = window.ZB || {};
 
   ZB.data.ready = Promise.all([
     ZB.catalogue ? ZB.catalogue.load() : Promise.resolve(),
-    loadNavigation()
+    loadNavigation(),
+    loadShop()
   ]).then(function () {
     return true;
   }, function (err) {

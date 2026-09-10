@@ -17,11 +17,11 @@
    only its own button lights up.
 
    THE PART THAT MATTERS MOST: SAYING WHAT ACTUALLY HAPPENS
-   In a build with no server, most of a settings screen cannot do anything.
-   Hiding that is the worst thing this page could do — a switch labelled
-   "email me when an order arrives" that quietly sends nothing is not a
-   half-built feature, it is a false statement about the shop. So every
-   card carries a mark:
+   Not every setting a shop wants to keep is a setting anything can act on
+   yet. Hiding that is the worst thing this page could do — a switch
+   labelled "email me when an order arrives" that quietly sends nothing is
+   not a half-built feature, it is a false statement about the shop. So
+   every card carries a mark:
 
      In force        the change takes effect the moment it is saved
      Partly in force some fields work, and the card names which
@@ -30,9 +30,9 @@
    and the fields that do work say so on the field itself.
 
    THE THREE THINGS THIS PAGE REFUSES TO DRAW
-     - A password field. There is no authentication service, so a password
-       typed here would go into a variable and nowhere else. A credential
-       collected by a form that cannot use it is worse than no form.
+     - A password field. Changing a password is the authentication service's
+       job, and a settings form is not where a credential should be typed,
+       carried through a data layer, or looked at by this file at all.
      - An editable role. Whatever a frontend writes into a field called
        "role" is a word on a screen, never a permission — permission is
        decided where the data lives, by a service that checks who is asking.
@@ -83,7 +83,7 @@ window.ZB.adminPages = window.ZB.adminPages || {};
      ----------------------------------------------------------------------- */
 
   var EFFECTS = {
-    live: { label: 'In force', title: 'Saving this changes what the panel does.' },
+    live: { label: 'In force', title: 'Saving this changes what the shop does.' },
     part: { label: 'Partly in force', title: 'Some fields here take effect; the card says which.' },
     recorded: { label: 'Recorded only', title: 'Kept and shown. Nothing acts on it in this build.' }
   };
@@ -201,12 +201,13 @@ window.ZB.adminPages = window.ZB.adminPages || {};
         '<div class="a-form__row">' +
           f.store.text({ name: 'supportEmail', label: 'Support email', type: 'email',
                        value: s.supportEmail,
-                       help: 'Where customers reply. Nothing is sent from it in this build.' }) +
+                       help: 'Shown in the shop’s footer. Nothing is sent from ' +
+                             'it — there is no mail service yet.' }) +
           /* Both halves of a paired row carry a help line, or neither does.
              One of the two explained leaves its input sitting a line lower
              than its partner's, and the row stops reading as a row. */
           f.store.text({ name: 'phone', label: 'Phone', value: s.phone,
-                       help: 'Shown wherever customers are told how to reach the shop.' }) +
+                       help: 'Shown in the shop’s footer, beside the email.' }) +
         '</div>' +
 
         '<div class="a-form__row">' +
@@ -257,12 +258,14 @@ window.ZB.adminPages = window.ZB.adminPages || {};
       '</form>';
 
     return card({
-      id: 'store', title: 'Store', icon: 'store', effect: 'part',
+      id: 'store', title: 'Store', icon: 'store', effect: 'live',
       blurb: 'The shop’s own details, what delivery costs, and the stock level ' +
-             'that counts as low. <strong>Delivery</strong> and <strong>Low ' +
-             'stock at</strong> are live — delivery is what customers are ' +
-             'charged at checkout. The details above them are saved and are not ' +
-             'shown anywhere yet.',
+             'that counts as low. All of it is live: the <strong>name</strong>, ' +
+             '<strong>tagline</strong>, <strong>support email</strong> and ' +
+             '<strong>phone</strong> are what the shop shows its customers in ' +
+             'the footer, and <strong>delivery</strong> is what they are charged ' +
+             'at checkout. A detail left blank is not shown at all, rather than ' +
+             'shown as something invented.',
       body: body,
       foot: saveRow('store', 'Save store details')
     });
@@ -295,10 +298,10 @@ window.ZB.adminPages = window.ZB.adminPages || {};
         readOnly({
           label: 'Password',
           value: 'Managed by the sign-in service',
-          note: 'There is no sign-in service in this build, so there is no ' +
-                'password to change and no field to type one into. A password ' +
-                'collected by a form that cannot use it would sit in the page ' +
-                'and go nowhere, which is worse than not asking for it.'
+          note: 'The password belongs to the sign-in service and is changed ' +
+                'there, not here. A settings form is not a place to type a ' +
+                'credential: it would pass through the panel, the data layer ' +
+                'and this file, none of which should ever see one.'
         }) +
       '</form>';
 

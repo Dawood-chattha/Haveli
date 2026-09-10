@@ -637,6 +637,20 @@ window.ZB = window.ZB || {};
     initSearch();
     initCartPanel();
 
+    /* The wordmark, if the shop has been given a different name.
+       index.html carries HAVELI as static text so the header is readable
+       before a single script runs, and this replaces it only when there is
+       something else to say. Doing it here rather than in index.html keeps
+       the no-JavaScript case correct; doing it only on a difference keeps
+       the usual case free of a flash from one name to the same name. */
+    var brand = document.querySelector('.header__logo');
+    var named = ZB.shop && ZB.shop.name;
+
+    if (brand && named && named !== brand.textContent) {
+      brand.textContent = named;
+      brand.setAttribute('aria-label', named + ' home');
+    }
+
     // Both badges follow the store, so anything that changes either list —
     // a product page, the cart page, a heart on a card, another tab's
     // restore — updates them. One subscription, because they are answering
