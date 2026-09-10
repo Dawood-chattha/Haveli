@@ -403,6 +403,18 @@ window.ZB.pages = window.ZB.pages || {};
       }
 
       function showSignedIn(user) {
+        /* THE HEADING SAYS "SIGN IN" UNTIL SOMEBODY HAS
+           render() draws the page once, for a visitor who has not signed
+           in, and this function replaces only what is below the heading —
+           so a signed-in customer was reading "Sign in" above their own
+           orders and addresses. The heading is part of what changes.
+
+           Signing out re-renders the whole route (see the button below),
+           which puts the original heading back without anything here
+           having to remember it. */
+        var heading = document.querySelector('.page-head__title');
+        if (heading) heading.textContent = 'Your account';
+
         root.innerHTML = '' +
           '<div class="account__form">' +
             '<p class="account__note" role="status">' +
