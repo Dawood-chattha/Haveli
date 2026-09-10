@@ -107,6 +107,7 @@ const madeProducts = [];
 const madeOrders = [];
 const madeCoupons = [];
 const madeBanners = [];
+const madeAddresses = [];
 const madeUploads = [];
 
 try {
@@ -1650,6 +1651,204 @@ try {
           JSON.stringify(cleared.body.data.shop));
   }
 
+  /* =====================================================================
+     18. Saved addresses
+     ---------------------------------------------------------------------
+     The addresses table has existed since Phase 1 and been empty since
+     Phase 1. These are the endpoints that fill it.
+
+     The two that matter are at the end: another customer cannot reach one
+     of these rows, and deleting one does not change an order that shipped
+     to it. The second is what makes the first safe to offer at all — an
+     address book you cannot clear out without rewriting history is not one
+     anybody should be given.
+     ===================================================================== */
+
+  console.log('\n18. ADDRESSES — the customer’s own, and only theirs');
+
+  await expectStatus('a signed-out visitor cannot list them', 401, 'GET',
+                     '/api/account/addresses');
+
+  await expectStatus('nor save one', 401, 'POST', '/api/account/addresses',
+                     { body: { name: 'X', phone: '03001234567',
+                               line1: '1 Street', city: 'Karachi' } });
+
+  {
+    const empty = await expectStatus('a new customer has none', 200, 'GET',
+                                     '/api/account/addresses', shopper);
+
+    check('an empty book is an empty list, not an error',
+          empty.body.data.total === 0 && Array.isArray(empty.body.data.items),
+          JSON.stringify(empty.body.data));
+  }
+
+  /* --- what will not be saved ------------------------------------------- */
+
+  await expectStatus('an address with no city', 400, 'POST', '/api/account/addresses',
+                     { token: shopper.token,
+                       body: { name: 'Verify Buyer', phone: '03001234567',
+                               line1: '1 Test Street' } });
+
+  await expectStatus('a phone number made of words', 400, 'POST',
+                     '/api/account/addresses',
+                     { token: shopper.token,
+                       body: { name: 'Verify Buyer', phone: 'call me',
+                               line1: '1 Test Street', city: 'Karachi' } });
+
+  /* --- the first one is the default ------------------------------------- */
+
+  const home = await expectStatus('the first address is saved', 200, 'POST',
+                                  '/api/account/addresses', {
+    token: shopper.token,
+    body: { label: 'Home', name: 'Verify Buyer', phone: '03001234567',
+            line1: '1 Test Street', line2: 'Block A', city: 'Karachi',
+            postalCode: '75500' }
+  });
+
+  if (home.status === 200) {
+    const row = home.body.data.address;
+    madeAddresses.push(row.id);
+
+    check('THE FIRST ONE IS THE DEFAULT WITHOUT BEING ASKED',
+          row.isDefault === true, JSON.stringify(row));
+    check('it comes back in the checkout form’s own vocabulary',
+          keysOf(row) === 'city,created,id,isDefault,label,line1,line2,name,phone,postcode',
+          keysOf(row));
+    check('the postcode survived the rename',
+          row.postcode === '75500', row.postcode);
+
+    const office = await expectStatus('a second address', 200, 'POST',
+                                      '/api/account/addresses', {
+      token: shopper.token,
+      body: { label: 'Office', name: 'Verify Buyer', phone: '03009999999',
+              line1: '9 Work Road', city: 'Lahore' }
+    });
+
+    if (office.status === 200) {
+      const second = office.body.data.address;
+      madeAddresses.push(second.id);
+
+      check('DOES NOT STEAL THE DEFAULT', second.isDefault === false,
+            JSON.stringify(second));
+
+      const listed = await call('GET', '/api/account/addresses', shopper);
+
+      check('the default is listed first',
+            listed.body.data.items[0].id === row.id, listed.body.data.items[0].label);
+
+      /* --- moving the default ------------------------------------------ */
+
+      await expectStatus('the second is made the default', 200, 'PATCH',
+                         '/api/account/addresses/' + second.id,
+                         { token: shopper.token, body: { isDefault: true } });
+
+      const moved = await call('GET', '/api/account/addresses', shopper);
+      const defaults = moved.body.data.items.filter((a) => a.isDefault);
+
+      check('THERE IS EXACTLY ONE DEFAULT AFTERWARDS',
+            defaults.length === 1 && defaults[0].id === second.id,
+            JSON.stringify(moved.body.data.items.map((a) => a.label + (a.isDefault ? '*' : ''))));
+      check('and it moved to the top of the list',
+            moved.body.data.items[0].id === second.id);
+
+      await expectStatus('turning the default off is refused', 400, 'PATCH',
+                         '/api/account/addresses/' + second.id,
+                         { token: shopper.token, body: { isDefault: false } });
+
+      /* --- editing ------------------------------------------------------ */
+
+      const fixed = await expectStatus('a phone number is corrected', 200, 'PATCH',
+                                       '/api/account/addresses/' + row.id,
+                                       { token: shopper.token,
+                                         body: { phone: '03211112223' } });
+
+      if (fixed.status === 200) {
+        check('only that field changed',
+              fixed.body.data.address.phone === '03211112223' &&
+              fixed.body.data.address.line1 === '1 Test Street' &&
+              fixed.body.data.address.city === 'Karachi',
+              JSON.stringify(fixed.body.data.address));
+      }
+
+      await expectStatus('nothing to change', 400, 'PATCH',
+                         '/api/account/addresses/' + row.id,
+                         { token: shopper.token, body: {} });
+
+      await expectStatus('an id that is not an id', 400, 'GET',
+                         '/api/account/addresses/not-a-uuid', shopper);
+
+      /* --- and the reason the policy is there --------------------------- */
+
+      await expectStatus('ANOTHER CUSTOMER CANNOT READ IT', 404, 'GET',
+                         '/api/account/addresses/' + row.id, owner);
+
+      await expectStatus('NOR EDIT IT', 404, 'PATCH',
+                         '/api/account/addresses/' + row.id,
+                         { token: owner.token, body: { city: 'Taken' } });
+
+      await expectStatus('NOR DELETE IT', 404, 'DELETE',
+                         '/api/account/addresses/' + row.id, owner);
+
+      {
+        /* Including the shop's owner, who has no wider policy here — unlike
+           orders, where they do. The panel has no screen for this and must
+           not gain one by accident. */
+        const mine = await call('GET', '/api/account/addresses/' + row.id, shopper);
+        check('and it is untouched', mine.body.data.address.city === 'Karachi',
+              mine.body.data.address.city);
+
+        const theirs = await call('GET', '/api/account/addresses', owner);
+        check('an administrator’s own book holds only their own',
+              (theirs.body.data.items || []).every((a) => a.id !== row.id),
+              theirs.body.data.total + ' rows');
+      }
+
+      /* --- ordering to one, then deleting it ---------------------------- */
+
+      /* Restocked first. Sections 8 and 15 between them bought every one
+         of the five this product started with, and an order that cannot be
+         placed would make the check below pass for having nothing to
+         prove. */
+      await call('PATCH', '/api/admin/products/' + cheap.id,
+                 { token: owner.token, body: { stock: 5 } });
+
+      const sent = await expectStatus('an order is placed to a saved address', 200,
+                                      'POST', '/api/checkout', {
+        token: shopper.token,
+        body: Object.assign({
+          items: [{ productId: cheap.id, qty: 1 }]
+        }, {
+          name: row.name, phone: '03211112223', line1: row.line1,
+          line2: row.line2, city: row.city, postcode: row.postcode
+        })
+      });
+
+      if (sent.status === 200) {
+        madeOrders.push(sent.body.data.order.id);
+
+        await expectStatus('the address is then deleted', 200, 'DELETE',
+                           '/api/account/addresses/' + row.id, shopper);
+
+        madeAddresses.splice(madeAddresses.indexOf(row.id), 1);
+
+        const still = await call('GET', '/api/account/orders?ref=' +
+                                 encodeURIComponent(sent.body.data.order.ref), shopper);
+
+        check('AND THE ORDER STILL SAYS WHERE IT WENT',
+              still.body.data.order.address.line1 === '1 Test Street' &&
+              still.body.data.order.address.city === 'Karachi',
+              JSON.stringify(still.body.data.order.address));
+      }
+
+      await expectStatus('and the deleted address is gone', 404, 'GET',
+                         '/api/account/addresses/' + row.id, shopper);
+
+      const left = await call('GET', '/api/account/addresses', shopper);
+      check('the other one is still there', left.body.data.total === 1,
+            left.body.data.total + ' rows');
+    }
+  }
+
 } catch (err) {
   fail('the run stopped: ' + err.message);
 } finally {
@@ -1668,6 +1867,9 @@ try {
   }
   for (const id of madeBanners) {
     await admin.from('banners').delete().eq('id', id);
+  }
+  for (const id of madeAddresses) {
+    await admin.from('addresses').delete().eq('id', id);
   }
   /* The pictures this run put in the bucket. Nothing else removes them: a
      slide's delete deliberately leaves its file alone, because two slides

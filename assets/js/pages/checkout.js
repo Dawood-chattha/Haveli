@@ -37,6 +37,12 @@ window.ZB.pages = window.ZB.pages || {};
      verify-api.mjs asserts that they still do. */
   var rule = { flat: 250, freeOver: 5000 };
 
+  /* The caller's saved addresses, filled by the same round of requests.
+     Empty is the ordinary case for a new customer and for anybody who has
+     never ticked the box below the form, and the page is written so that
+     empty means "exactly what it did before Phase 8". */
+  var saved = [];
+
   function esc(v) { return ZB.ui.esc(v); }
   function money(n) { return ZB.ui.money(n); }
 
@@ -117,23 +123,97 @@ window.ZB.pages = window.ZB.pages || {};
       '</aside>';
   }
 
-  function formOf(user) {
+  /**
+   * One line of a saved address, as it would be written on a parcel.
+   *
+   * The chooser shows this rather than the fields stacked: a person picking
+   * between two addresses is looking for the difference, and the difference
+   * is usually one word somewhere in the middle of a line.
+   */
+  function addressLine(row) {
+    return [row.line1, row.line2, row.city, row.postcode]
+      .filter(function (part) { return part; })
+      .join(', ');
+  }
+
+  /**
+   * The saved addresses, as a choice, with "somewhere else" at the end.
+   *
+   * Radios rather than a <select>, for the same reason the admin panel's
+   * settings uses them: the content of each option is two lines, and a
+   * select shows one line of the one you already chose.
+   *
+   * WHY THE FIELDS ARE PUT AWAY RATHER THAN FILLED IN
+   * Filling the form from a saved address and leaving it editable reads as
+   * an invitation to edit, and an edit there is a change to this order that
+   * does not reach the address book — so the next order would go back to
+   * the old wording with no explanation. Choosing a saved address means
+   * using it; changing one is done on the account page, where the change
+   * sticks.
+   */
+  function chooserOf(addresses) {
+    if (!addresses.length) return '';
+
+    var options = addresses.map(function (row, i) {
+      return '' +
+        '<label class="checkout__saved" for="saved-' + i + '">' +
+          '<input class="checkout__saved-input" type="radio" name="savedAddress"' +
+                ' id="saved-' + i + '" value="' + esc(row.id) + '"' +
+                (i === 0 ? ' checked' : '') + '>' +
+          '<span class="checkout__saved-body">' +
+            '<span class="checkout__saved-title">' +
+              esc(row.label || row.city) +
+              (row.isDefault ? '<span class="checkout__saved-flag">Default</span>' : '') +
+            '</span>' +
+            '<span class="checkout__saved-line">' +
+              esc(row.name) + ' · ' + esc(row.phone) +
+            '</span>' +
+            '<span class="checkout__saved-line">' + esc(addressLine(row)) + '</span>' +
+          '</span>' +
+        '</label>';
+    }).join('');
+
+    return '' +
+      '<div class="checkout__saved-list" role="radiogroup" aria-label="Delivery address">' +
+        options +
+        '<label class="checkout__saved checkout__saved--new" for="saved-new">' +
+          '<input class="checkout__saved-input" type="radio" name="savedAddress"' +
+                ' id="saved-new" value="">' +
+          '<span class="checkout__saved-body">' +
+            '<span class="checkout__saved-title">Somewhere else</span>' +
+            '<span class="checkout__saved-line">Type a different delivery address.</span>' +
+          '</span>' +
+        '</label>' +
+      '</div>';
+  }
+
+  function formOf(user, addresses) {
+    var hasSaved = addresses.length > 0;
+
     return '' +
       '<form class="checkout__form" id="checkout-form" novalidate>' +
         '<h2 class="checkout__form-title">Delivery</h2>' +
 
+        chooserOf(addresses) +
+
+        '<div class="checkout__address-fields" data-address-fields' +
+             (hasSaved ? ' hidden' : '') + '>' +
+
         '<label class="field-label">Full name' +
-          '<input class="field" type="text" name="name" autocomplete="name" required' +
+          '<input class="field" type="text" name="name" autocomplete="name"' +
+                (hasSaved ? '' : ' required') +
                 ' value="' + esc(user && user.name ? user.name : '') + '">' +
         '</label>' +
 
         '<label class="field-label">Phone' +
-          '<input class="field" type="tel" name="phone" autocomplete="tel" required' +
+          '<input class="field" type="tel" name="phone" autocomplete="tel"' +
+                (hasSaved ? '' : ' required') +
                 ' inputmode="tel" placeholder="03xx xxxxxxx">' +
         '</label>' +
 
         '<label class="field-label">Address' +
-          '<input class="field" type="text" name="line1" autocomplete="address-line1" required' +
+          '<input class="field" type="text" name="line1" autocomplete="address-line1"' +
+                (hasSaved ? '' : ' required') +
                 ' placeholder="House and street">' +
         '</label>' +
 
@@ -143,11 +223,23 @@ window.ZB.pages = window.ZB.pages || {};
 
         '<div class="checkout__pair">' +
           '<label class="field-label">City' +
-            '<input class="field" type="text" name="city" autocomplete="address-level2" required>' +
+            '<input class="field" type="text" name="city" autocomplete="address-level2"' +
+                  (hasSaved ? '' : ' required') + '>' +
           '</label>' +
           '<label class="field-label">Postcode <span class="field-label__hint">optional</span>' +
             '<input class="field" type="text" name="postcode" autocomplete="postal-code">' +
           '</label>' +
+        '</div>' +
+
+        /* NOT TICKED BY DEFAULT, DELIBERATELY
+           Keeping somebody's address is their decision, not a convenience
+           to be helped to. A shop that saves it because saving it is useful
+           has decided something about a customer's data on their behalf. */
+        '<label class="checkout__save-address" for="save-address">' +
+          '<input type="checkbox" id="save-address" name="saveAddress">' +
+          '<span>Save this address for next time</span>' +
+        '</label>' +
+
         '</div>' +
 
         '<label class="field-label">Note for the courier <span class="field-label__hint">optional</span>' +
@@ -196,11 +288,24 @@ window.ZB.pages = window.ZB.pages || {};
 
       var page = this;
 
-      /* Both answers are needed before anything sensible can be drawn: who
-         is signed in, and what delivery costs. */
+      /* Three answers are needed before anything sensible can be drawn: who
+         is signed in, what delivery costs, and where this person has had
+         things sent before.
+
+         THE ADDRESSES ARE ALLOWED TO FAIL
+         If that request does not answer, the page draws the form it always
+         drew and the order goes through. A convenience that takes the
+         checkout down with it when it breaks is not a convenience — so it
+         resolves to an empty list rather than rejecting, exactly as the
+         shipping rule falls back to its own defaults. */
       Promise.all([
         ZB.auth.loaded ? Promise.resolve(ZB.auth.user) : ZB.auth.load(),
         fetch('/api/checkout', {
+          headers: { Accept: 'application/json' },
+          credentials: 'same-origin'
+        }).then(function (res) { return res.ok ? res.json() : null; })
+         .catch(function () { return null; }),
+        fetch('/api/account/addresses', {
           headers: { Accept: 'application/json' },
           credentials: 'same-origin'
         }).then(function (res) { return res.ok ? res.json() : null; })
@@ -210,10 +315,13 @@ window.ZB.pages = window.ZB.pages || {};
 
         var user = answers[0];
         var options = answers[1];
+        var book = answers[2];
 
         if (options && options.ok && options.data && options.data.shipping) {
           rule = options.data.shipping;
         }
+
+        saved = (book && book.ok && book.data && book.data.items) || [];
 
         page.paint(root, user);
       });
@@ -264,7 +372,7 @@ window.ZB.pages = window.ZB.pages || {};
         : '';
 
       root.innerHTML = '<div class="checkout">' + warning +
-                       formOf(user) + summaryOf(cart.live, sums) + '</div>';
+                       formOf(user, saved) + summaryOf(cart.live, sums) + '</div>';
 
       this.bind(root, cart);
     },
@@ -287,6 +395,38 @@ window.ZB.pages = window.ZB.pages || {};
         button.textContent = on ? 'Placing your order' : 'Place order';
       };
 
+      /* --- the saved-address chooser ------------------------------------- */
+
+      var fields = form.querySelector('[data-address-fields]');
+
+      /** Which saved address is chosen, or null for "somewhere else". */
+      var chosen = function () {
+        var picked = form.querySelector('[name="savedAddress"]:checked');
+        if (!picked || !picked.value) return null;
+
+        return saved.filter(function (row) { return row.id === picked.value; })[0] || null;
+      };
+
+      /* Required has to move with hidden, not merely accompany it.
+         checkValidity() still enforces a required field inside a hidden
+         container, so leaving the attributes on would make Place order do
+         nothing at all — silently, with the offending field off screen. */
+      var showFields = function (on) {
+        if (!fields) return;
+
+        fields.hidden = !on;
+
+        ['name', 'phone', 'line1', 'city'].forEach(function (n) {
+          var el = fields.querySelector('[name="' + n + '"]');
+          if (el) el.required = on;
+        });
+      };
+
+      form.addEventListener('change', function (e) {
+        if (!e.target.closest('[name="savedAddress"]')) return;
+        showFields(!chosen());
+      });
+
       form.addEventListener('submit', function (e) {
         e.preventDefault();
         say('');
@@ -305,6 +445,20 @@ window.ZB.pages = window.ZB.pages || {};
 
         busy(true);
 
+        /* The chosen saved address, or what was typed. Either way it is
+           only ever a suggestion: place_order re-reads nothing from it but
+           the four fields it insists on, and every figure on the order is
+           decided in SQL. */
+        var pick = chosen();
+
+        var where = pick
+          ? { name: pick.name, phone: pick.phone, line1: pick.line1,
+              line2: pick.line2 || undefined, city: pick.city,
+              postcode: pick.postcode || undefined }
+          : { name: value('name'), phone: value('phone'), line1: value('line1'),
+              line2: value('line2') || undefined, city: value('city'),
+              postcode: value('postcode') || undefined };
+
         var body = {
           items: cart.live.map(function (pair) {
             return {
@@ -313,16 +467,22 @@ window.ZB.pages = window.ZB.pages || {};
               size: pair.line.size || null
             };
           }),
-          name: value('name'),
-          phone: value('phone'),
-          line1: value('line1'),
-          line2: value('line2') || undefined,
-          city: value('city'),
-          postcode: value('postcode') || undefined,
+          name: where.name,
+          phone: where.phone,
+          line1: where.line1,
+          line2: where.line2,
+          city: where.city,
+          postcode: where.postcode,
           note: value('note') || undefined,
           coupon: value('coupon') || undefined,
           method: 'cod'
         };
+
+        /* Asked for before the order is sent, because the checkbox is
+           inside the form that is about to be replaced. Acted on after —
+           see below. */
+        var keepIt = !pick && form.querySelector('[name="saveAddress"]') &&
+                     form.querySelector('[name="saveAddress"]').checked;
 
         fetch('/api/checkout', {
           method: 'POST',
@@ -349,6 +509,31 @@ window.ZB.pages = window.ZB.pages || {};
           /* The cart is emptied only now, after the order exists. Clearing
              it before would lose somebody's shopping to a failed request. */
           ZB.store.clearCart();
+
+          /* AFTER THE ORDER, AND NOT WAITED FOR
+             The order is the thing that had to happen; saving the address
+             is a convenience for next time. Doing it first would risk
+             storing an address for an order that then failed, and waiting
+             for it would hold somebody on a spinner after their order is
+             already placed. If it fails, nothing is said — there is no
+             useful thing to ask of a person whose order has gone through,
+             and the box is there again next time. */
+          if (keepIt) {
+            fetch('/api/account/addresses', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+              credentials: 'same-origin',
+              /* postcode here, postalCode there. The checkout's field has
+                 been called postcode since before there was a database and
+                 is not being renamed to match a column; the address book
+                 takes the column's name. One line of translation. */
+              body: JSON.stringify({
+                name: where.name, phone: where.phone,
+                line1: where.line1, line2: where.line2,
+                city: where.city, postalCode: where.postcode
+              })
+            }).catch(function () {});
+          }
 
           /* Its own address, so a refresh or a back button lands on the
              order rather than on an empty checkout. */

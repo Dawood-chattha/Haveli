@@ -269,3 +269,72 @@
 @media (max-width: 560px) {
   .checkout__pair { grid-template-columns: 1fr; }
 }
+
+/* -------------------------------------------------------------------------
+   The saved-address chooser
+
+   Radios showing two lines each, in the same squared idiom as everything
+   else. A <select> would show one line of the option already chosen, which
+   is the wrong shape for a choice made by spotting the difference between
+   two similar addresses.
+
+   The whole card is the label, so the hit target is the card rather than a
+   12px circle — the same reason the size buttons on a product page are
+   buttons and not a dropdown.
+   ------------------------------------------------------------------------- */
+
+.checkout__saved-list {
+  display: grid;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+.checkout__saved {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+  padding: var(--sp-3) var(--sp-4);
+  border: var(--bw) solid var(--c-line);
+  cursor: pointer;
+}
+
+.checkout__saved:hover { border-color: var(--c-ink); }
+
+/* The radio itself stays visible and focusable — it is what a keyboard and
+   a screen reader move between, and hiding it to draw a prettier one is how
+   a form stops being operable without a mouse. */
+.checkout__saved-input { margin-top: 3px; flex: none; }
+
+.checkout__saved:has(.checkout__saved-input:checked) { border-color: var(--c-ink); }
+
+.checkout__saved-body { display: grid; gap: 2px; }
+
+.checkout__saved-title {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--c-ink);
+}
+
+.checkout__saved-flag {
+  font-size: var(--fs-3xs);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--c-paper);
+  background: var(--c-ink);
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+}
+
+.checkout__saved-line { font-size: var(--fs-3xs); color: var(--c-muted); }
+
+.checkout__save-address {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-3xs);
+  color: var(--c-body);
+  cursor: pointer;
+}

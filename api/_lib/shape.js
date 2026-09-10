@@ -601,6 +601,38 @@ function adminCoupon(row) {
   };
 }
 
+/* -------------------------------------------------------------------------
+   A saved delivery address
+   ------------------------------------------------------------------------- */
+
+var ADDRESS_SELECT =
+  'id, label, name, phone, line1, line2, city, postal_code, is_default, created_at';
+
+/**
+ * One saved address, in the vocabulary the checkout form already uses.
+ *
+ * `postcode` rather than `postal_code`, because that is what the input in
+ * assets/js/pages/checkout.js has been called since before there was a
+ * database, and renaming a field on a working form to match a column is
+ * the wrong way round.
+ */
+function customerAddress(row) {
+  return {
+    id: row.id,
+    label: row.label || '',
+
+    name: row.name,
+    phone: row.phone,
+    line1: row.line1,
+    line2: row.line2 || '',
+    city: row.city,
+    postcode: row.postal_code || '',
+
+    isDefault: !!row.is_default,
+    created: row.created_at
+  };
+}
+
 module.exports = {
   PRODUCT_SELECT: PRODUCT_SELECT,
   CATEGORY_SELECT: CATEGORY_SELECT,
@@ -608,6 +640,7 @@ module.exports = {
   CUSTOMER_SELECT: CUSTOMER_SELECT,
   BANNER_SELECT: BANNER_SELECT,
   COUPON_SELECT: COUPON_SELECT,
+  ADDRESS_SELECT: ADDRESS_SELECT,
 
   storefrontProduct: storefrontProduct,
   adminProduct: adminProduct,
@@ -619,6 +652,7 @@ module.exports = {
   adminCustomer: adminCustomer,
   adminBanner: adminBanner,
   adminCoupon: adminCoupon,
+  customerAddress: customerAddress,
 
   STATUS_LABELS: STATUS_LABELS,
   PAYMENT_LABELS: PAYMENT_LABELS,

@@ -148,6 +148,260 @@ window.ZB.pages = window.ZB.pages || {};
         });
       }
 
+      /* -------------------------------------------------------------------
+         The address book
+
+         WHY THIS IS ON THE ACCOUNT PAGE AND NOT ONLY IN THE CHECKOUT
+         A saved address is worth changing when it is wrong, not only when
+         something is being bought. Somebody who has moved should not have
+         to start an order to correct where their parcels go.
+
+         WHAT DELETING ONE DOES NOT DO
+         It does not change any order. place_order copies the address onto
+         the order as a snapshot, so an order that shipped here last month
+         still says so. The wording below says that, because "delete" beside
+         an address a parcel is currently travelling to is a frightening
+         button without it.
+         ------------------------------------------------------------------- */
+
+      var addressHost = null;
+      var addressRows = [];
+      var addressBusy = false;
+
+      function addressApi(method, path, body) {
+        return fetch('/api/account/addresses' + path, {
+          method: method,
+          headers: Object.assign({ Accept: 'application/json' },
+                                 body ? { 'Content-Type': 'application/json' } : {}),
+          credentials: 'same-origin',
+          body: body ? JSON.stringify(body) : undefined
+        }).then(function (res) {
+          return res.json().then(function (payload) {
+            if (!res.ok || !payload.ok) {
+              var err = new Error((payload.error && payload.error.message) ||
+                                  'That did not work.');
+              err.fields = payload.error && payload.error.fields;
+              throw err;
+            }
+            return payload.data;
+          });
+        });
+      }
+
+      /** One line of the address, as it would be written on a parcel. */
+      function addressLine(row) {
+        return [row.line1, row.line2, row.city, row.postcode]
+          .filter(function (part) { return part; })
+          .join(', ');
+      }
+
+      function addressCard(row) {
+        return '' +
+          '<li class="account__address' + (row.isDefault ? ' is-default' : '') + '"' +
+              ' data-address="' + ui.esc(row.id) + '">' +
+            '<div class="account__address-head">' +
+              '<span class="account__address-label">' +
+                ui.esc(row.label || row.city) +
+              '</span>' +
+              (row.isDefault
+                ? '<span class="account__address-flag">Default</span>'
+                : '') +
+            '</div>' +
+            '<p class="account__address-body">' +
+              ui.esc(row.name) + ' · ' + ui.esc(row.phone) + '<br>' +
+              ui.esc(addressLine(row)) +
+            '</p>' +
+            '<div class="account__address-actions">' +
+              (row.isDefault
+                ? ''
+                : '<button class="btn btn--sm" type="button" data-make-default>' +
+                    'Make default' +
+                  '</button>') +
+              '<button class="btn btn--sm" type="button" data-remove-address>' +
+                'Remove' +
+              '</button>' +
+            '</div>' +
+          '</li>';
+      }
+
+      function addressForm() {
+        return '' +
+          '<form class="account__address-form" id="address-form" novalidate hidden>' +
+            '<div class="checkout__pair">' +
+              '<label class="field-label">Name this address ' +
+                '<span class="field-label__hint">optional</span>' +
+                '<input class="field" type="text" name="label" maxlength="40"' +
+                      ' placeholder="Home, Office">' +
+              '</label>' +
+              '<label class="field-label">Full name' +
+                '<input class="field" type="text" name="name" autocomplete="name" required>' +
+              '</label>' +
+            '</div>' +
+
+            '<label class="field-label">Phone' +
+              '<input class="field" type="tel" name="phone" autocomplete="tel" required' +
+                    ' inputmode="tel" placeholder="03xx xxxxxxx">' +
+            '</label>' +
+
+            '<label class="field-label">Address' +
+              '<input class="field" type="text" name="line1" autocomplete="address-line1"' +
+                    ' required placeholder="House and street">' +
+            '</label>' +
+
+            '<label class="field-label">Area <span class="field-label__hint">optional</span>' +
+              '<input class="field" type="text" name="line2" autocomplete="address-line2">' +
+            '</label>' +
+
+            '<div class="checkout__pair">' +
+              '<label class="field-label">City' +
+                '<input class="field" type="text" name="city" autocomplete="address-level2"' +
+                      ' required>' +
+              '</label>' +
+              '<label class="field-label">Postcode ' +
+                '<span class="field-label__hint">optional</span>' +
+                '<input class="field" type="text" name="postalCode"' +
+                      ' autocomplete="postal-code">' +
+              '</label>' +
+            '</div>' +
+
+            '<p class="account__note" role="alert" data-address-error hidden></p>' +
+
+            '<div class="account__address-form-actions">' +
+              '<button class="btn btn--primary" type="submit">Save address</button>' +
+              '<button class="btn" type="button" data-cancel-address>Cancel</button>' +
+            '</div>' +
+          '</form>';
+      }
+
+      function paintAddresses() {
+        if (!addressHost) return;
+
+        addressHost.innerHTML =
+          (addressRows.length
+            ? '<ul class="account__addresses">' +
+                addressRows.map(addressCard).join('') +
+              '</ul>'
+            : '<p class="account__note">' +
+                'No saved addresses yet. Save one and the checkout will offer it.' +
+              '</p>') +
+
+          '<button class="btn btn--block" type="button" data-add-address>' +
+            'Add an address' +
+          '</button>' +
+
+          addressForm();
+      }
+
+      function showAddresses(host) {
+        addressHost = host;
+
+        addressApi('GET', '').then(function (data) {
+          if (!document.body.contains(host)) return;
+          addressRows = data.items || [];
+          paintAddresses();
+        }).catch(function () {
+          if (!document.body.contains(host)) return;
+          host.innerHTML = '<p class="account__note">Your addresses could not be loaded.</p>';
+        });
+      }
+
+      /* One listener on the section rather than one per button: the list is
+         redrawn after every change, and handlers bound to the old buttons
+         would be bound to elements that are no longer in the document. */
+      function bindAddresses(root) {
+        root.addEventListener('click', function (e) {
+          var add = e.target.closest('[data-add-address]');
+          var cancel = e.target.closest('[data-cancel-address]');
+          var makeDefault = e.target.closest('[data-make-default]');
+          var remove = e.target.closest('[data-remove-address]');
+
+          if (add) {
+            var form = root.querySelector('#address-form');
+            add.hidden = true;
+            form.hidden = false;
+            form.querySelector('[name="name"]').focus();
+            return;
+          }
+
+          if (cancel) {
+            paintAddresses();
+            return;
+          }
+
+          if (makeDefault || remove) {
+            var card = e.target.closest('[data-address]');
+            if (!card || addressBusy) return;
+
+            var id = card.getAttribute('data-address');
+            addressBusy = true;
+
+            var work = makeDefault
+              ? addressApi('PATCH', '/' + encodeURIComponent(id), { isDefault: true })
+              : addressApi('DELETE', '/' + encodeURIComponent(id));
+
+            work.then(function () {
+              return addressApi('GET', '');
+            }).then(function (data) {
+              addressRows = data.items || [];
+              paintAddresses();
+            }).catch(function (err) {
+              window.alert(err.message);
+            }).then(function () {
+              addressBusy = false;
+            });
+          }
+        });
+
+        root.addEventListener('submit', function (e) {
+          var form = e.target.closest('#address-form');
+          if (!form) return;
+
+          e.preventDefault();
+          if (addressBusy) return;
+
+          var note = form.querySelector('[data-address-error]');
+          var button = form.querySelector('[type="submit"]');
+          var value = function (name) {
+            var el = form.querySelector('[name="' + name + '"]');
+            return el ? el.value.trim() : '';
+          };
+
+          note.hidden = true;
+          addressBusy = true;
+          button.disabled = true;
+          button.textContent = 'Saving';
+
+          addressApi('POST', '', {
+            label: value('label') || undefined,
+            name: value('name'),
+            phone: value('phone'),
+            line1: value('line1'),
+            line2: value('line2') || undefined,
+            city: value('city'),
+            postalCode: value('postalCode') || undefined
+          }).then(function () {
+            return addressApi('GET', '');
+          }).then(function (data) {
+            addressRows = data.items || [];
+            paintAddresses();
+          }).catch(function (err) {
+            /* The field-level messages the server sent, joined — the form
+               is short enough that one line above the buttons is easier to
+               act on than six markers to hunt for. */
+            var fields = err.fields
+              ? Object.keys(err.fields).map(function (k) { return err.fields[k]; })
+              : [];
+
+            note.textContent = fields.length ? fields.join(' ') : err.message;
+            note.hidden = false;
+            button.disabled = false;
+            button.textContent = 'Save address';
+          }).then(function () {
+            addressBusy = false;
+          });
+        });
+      }
+
       function showSignedIn(user) {
         root.innerHTML = '' +
           '<div class="account__form">' +
@@ -159,11 +413,21 @@ window.ZB.pages = window.ZB.pages || {};
             '<h2 class="account__heading">Your orders</h2>' +
             '<div id="account-orders">' + ui.pending('your orders') + '</div>' +
 
+            '<h2 class="account__heading">Delivery addresses</h2>' +
+            '<p class="account__note">' +
+              'Saved here and offered at the checkout. Removing one does not ' +
+              'change any order already placed — an order keeps the address ' +
+              'it was sent to.' +
+            '</p>' +
+            '<div id="account-addresses">' + ui.pending('your addresses') + '</div>' +
+
             '<a class="btn btn--primary btn--block" href="/wishlist">Your wishlist</a>' +
             '<button class="btn btn--block" type="button" data-signout>Sign out</button>' +
           '</div>';
 
         showOrders(document.getElementById('account-orders'));
+        showAddresses(document.getElementById('account-addresses'));
+        bindAddresses(root);
 
         root.querySelector('[data-signout]').addEventListener('click', function (e) {
           var button = e.currentTarget;
