@@ -145,7 +145,21 @@ window.ZB = window.ZB || {};
     ZB.catalogue ? ZB.catalogue.load() : Promise.resolve(),
     loadNavigation(),
     loadShop(),
-    loadPages()
+    loadPages(),
+
+    /* WHO IS SIGNED IN, ON EVERY PAGE AND NOT ONLY TWO
+       This used to be asked lazily, by the account page and the checkout,
+       because they were the only two that drew anything different for a
+       signed-in visitor. assets/js/store-sync.js needs it everywhere: a
+       cart saved to an account cannot come back to a browser that never
+       asked whose browser it is, and the symptom is an empty cart on the
+       second device with the rows sitting on the server.
+
+       It costs one small request per page load, in this same round rather
+       than after it, and ZB.auth caches the answer — so the two pages that
+       already asked are not asking twice. A failure is a signed-out
+       visitor, which is how the site works anyway. */
+    ZB.auth ? ZB.auth.load() : Promise.resolve()
   ]).then(function () {
     return true;
   }, function (err) {

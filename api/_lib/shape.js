@@ -682,6 +682,61 @@ function adminPage(row) {
   };
 }
 
+/* -------------------------------------------------------------------------
+   A saved cart, and a saved wishlist
+   ------------------------------------------------------------------------- */
+
+/* Lean on purpose. PRODUCT_SELECT pulls the category tree, the colour, the
+   fabric and every image; a cart line needs a name, a price, a picture and
+   somewhere to click. */
+var CART_SELECT =
+  'id, size, qty, created_at,' +
+  ' products ( id, slug, title, price, stock, status,' +
+  '            product_images ( url, sort ) )';
+
+var WISHLIST_SELECT = 'id, created_at, products ( slug )';
+
+/**
+ * One saved cart line, in the shape assets/js/store.js already keeps.
+ *
+ * The id is the slug, for the same reason it is on a storefront product:
+ * every route and every control in the cart is built from it. productId
+ * rides along because that is what the checkout files an order line
+ * against.
+ *
+ * Returns null when the product has gone. The caller drops those: a line
+ * pointing at nothing is not a line, and the cart page already says its
+ * piece about items the catalogue no longer has.
+ */
+function cartLine(row) {
+  var product = row.products;
+  if (!product) return null;
+
+  var images = (product.product_images || []).slice()
+    .sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); });
+
+  return {
+    id: product.slug,
+    productId: product.id,
+    title: product.title,
+
+    /* Today's price, read back from the products table. A cart shows what
+       it will cost; what it does cost is decided by place_order at the
+       moment of ordering, from this same column. */
+    price: product.price,
+
+    image: (images[0] && images[0].url) || null,
+    href: '/product/' + product.slug,
+
+    size: row.size,
+    qty: row.qty,
+
+    /* So the cart page can say a line cannot be ordered before the
+       checkout refuses it. Both are true; only one of them is polite. */
+    inStock: (product.stock || 0) > 0 && product.status === 'active'
+  };
+}
+
 module.exports = {
   PRODUCT_SELECT: PRODUCT_SELECT,
   CATEGORY_SELECT: CATEGORY_SELECT,
@@ -691,6 +746,8 @@ module.exports = {
   COUPON_SELECT: COUPON_SELECT,
   ADDRESS_SELECT: ADDRESS_SELECT,
   PAGE_SELECT: PAGE_SELECT,
+  CART_SELECT: CART_SELECT,
+  WISHLIST_SELECT: WISHLIST_SELECT,
 
   storefrontProduct: storefrontProduct,
   adminProduct: adminProduct,
@@ -703,6 +760,7 @@ module.exports = {
   adminBanner: adminBanner,
   adminCoupon: adminCoupon,
   customerAddress: customerAddress,
+  cartLine: cartLine,
   publicPage: publicPage,
   adminPage: adminPage,
 

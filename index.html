@@ -290,6 +290,10 @@
 
 <!-- Boot (must come last) -->
 <script src="assets/js/bootstrap.js"></script>
+
+<!-- The cart follows the customer once they sign in. After bootstrap.js,
+     because a slug cannot become a product id without the catalogue. -->
+<script src="assets/js/store-sync.js"></script>
 <script src="assets/js/routes.js"></script>
 </body>
 </html>

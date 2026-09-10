@@ -2015,6 +2015,194 @@ try {
                            lead: restored.body.data.page.lead }));
   }
 
+  /* =====================================================================
+     20. The saved cart and wishlist
+     ---------------------------------------------------------------------
+     Three tables that have existed since Phase 1 and been empty since
+     Phase 1. A cart lived in one browser's localStorage, so a phone and a
+     laptop were two different shops.
+
+     THE CHECK THAT MATTERS IS THE ONE ABOUT PRICE
+     A cart line is a product, a size and a quantity, and nothing else. No
+     price is accepted and none is stored — see db/schema.sql, which says
+     so, and api/checkout.js, which is the whole reason. A cart that could
+     carry a price would be a cart that could carry a price the shop never
+     set.
+     ===================================================================== */
+
+  console.log('\n20. CART AND WISHLIST — carried by the account, not the browser');
+
+  await expectStatus('a signed-out visitor has no cart to read', 401, 'GET',
+                     '/api/account/cart');
+
+  await expectStatus('nor one to save', 401, 'PUT', '/api/account/cart',
+                     { body: { items: [] } });
+
+  await expectStatus('nor a wishlist', 401, 'GET', '/api/account/wishlist');
+
+  {
+    const empty = await expectStatus('a new customer has an empty cart', 200, 'GET',
+                                     '/api/account/cart', shopper);
+
+    check('which is an empty list, not a 404',
+          empty.body.data.count === 0 && Array.isArray(empty.body.data.items),
+          JSON.stringify(empty.body.data));
+  }
+
+  /* --- what will not be saved -------------------------------------------- */
+
+  await expectStatus('a cart that is not a list', 400, 'PUT', '/api/account/cart',
+                     { token: shopper.token, body: { items: 'everything' } });
+
+  await expectStatus('a line with no product', 400, 'PUT', '/api/account/cart',
+                     { token: shopper.token, body: { items: [{ size: 'M', qty: 1 }] } });
+
+  await expectStatus('a quantity of nothing', 400, 'PUT', '/api/account/cart',
+                     { token: shopper.token,
+                       body: { items: [{ productId: cheap.id, qty: 0 }] } });
+
+  await expectStatus('a quantity past the line limit', 400, 'PUT', '/api/account/cart',
+                     { token: shopper.token,
+                       body: { items: [{ productId: cheap.id, qty: 100 }] } });
+
+  await expectStatus('a product that does not exist', 409, 'PUT', '/api/account/cart',
+                     { token: shopper.token,
+                       body: { items: [{ productId: randomUUID(), qty: 1 }] } });
+
+  /* --- a real cart -------------------------------------------------------- */
+
+  {
+    const saved = await expectStatus('a cart is saved', 200, 'PUT',
+                                     '/api/account/cart', {
+      token: shopper.token,
+      body: {
+        items: [
+          { productId: cheap.id, size: 'M', qty: 2 },
+          { productId: pricey.id, size: null, qty: 1 },
+
+          /* A price, sent hopefully. Nothing reads it. */
+          { productId: cheap.id, size: 'L', qty: 1, price: 1, total: 1 }
+        ]
+      }
+    });
+
+    if (saved.status === 200) {
+      const lines = saved.body.data.items;
+
+      check('three lines and four items', lines.length === 3 && saved.body.data.count === 4,
+            lines.length + ' lines, ' + saved.body.data.count + ' items');
+
+      check('THE PRICE IS THE SHOP’S, NOT THE ONE THAT WAS SENT',
+            lines.every(function (l) { return l.price === 1200 || l.price === 6000; }),
+            JSON.stringify(lines.map(function (l) { return l.price; })));
+
+      check('a line is keyed by slug and carries the id the checkout needs',
+            lines[0].id === cheap.slug && lines[0].productId === cheap.id,
+            lines[0].id + ' / ' + lines[0].productId);
+
+      check('THE ORDER SURVIVES THE ROUND TRIP',
+            lines[0].productId === cheap.id && lines[1].productId === pricey.id,
+            lines.map(function (l) { return l.id + '/' + l.size; }).join(', '));
+
+      check('and a line says whether it can still be bought',
+            typeof lines[0].inStock === 'boolean');
+    }
+
+    /* The same product in the same size twice is one line. The unique index
+       insists on it and the storefront's cart already behaves that way. */
+    const doubled = await expectStatus('the same line sent twice', 200, 'PUT',
+                                       '/api/account/cart', {
+      token: shopper.token,
+      body: { items: [{ productId: cheap.id, size: 'M', qty: 2 },
+                      { productId: cheap.id, size: 'M', qty: 3 }] }
+    });
+
+    if (doubled.status === 200) {
+      check('BECOMES ONE LINE, ADDED UP',
+            doubled.body.data.items.length === 1 && doubled.body.data.count === 5,
+            JSON.stringify(doubled.body.data));
+    }
+
+    /* --- and it is nobody else's ---------------------------------------- */
+
+    const theirs = await call('GET', '/api/account/cart', owner);
+
+    check('ANOTHER ACCOUNT SEES ITS OWN CART',
+          (theirs.body.data.items || []).every(function (l) {
+            return l.productId !== cheap.id;
+          }) || theirs.body.data.count === 0,
+          JSON.stringify(theirs.body.data.count) + ' items');
+
+    await expectStatus('emptying it', 200, 'DELETE', '/api/account/cart', shopper);
+
+    const gone = await call('GET', '/api/account/cart', shopper);
+    check('leaves nothing behind', gone.body.data.count === 0, gone.body.data.count);
+  }
+
+  /* --- the wishlist ------------------------------------------------------- */
+
+  {
+    await expectStatus('a product that is not a product', 400, 'POST',
+                       '/api/account/wishlist',
+                       { token: shopper.token, body: { productId: 'not-a-uuid' } });
+
+    const first = await expectStatus('a heart', 200, 'POST', '/api/account/wishlist',
+                                     { token: shopper.token,
+                                       body: { productId: cheap.id } });
+
+    if (first.status === 200) {
+      check('it comes back as a slug, which is what the storefront keeps',
+            first.body.data.items[0] === cheap.slug, first.body.data.items[0]);
+    }
+
+    const again = await expectStatus('the same heart again', 200, 'POST',
+                                     '/api/account/wishlist',
+                                     { token: shopper.token,
+                                       body: { productId: cheap.id } });
+
+    if (again.status === 200) {
+      check('IS NOT AN ERROR AND NOT A SECOND ROW',
+            again.body.data.total === 1, again.body.data.total + ' rows');
+    }
+
+    await expectStatus('a second product', 200, 'POST', '/api/account/wishlist',
+                       { token: shopper.token, body: { productId: pricey.id } });
+
+    const removed = await expectStatus('unhearting one', 200, 'DELETE',
+                                       '/api/account/wishlist?productId=' + cheap.id,
+                                       shopper);
+
+    if (removed.status === 200) {
+      check('leaves the other', removed.body.data.total === 1 &&
+            removed.body.data.items[0] === pricey.slug,
+            JSON.stringify(removed.body.data.items));
+    }
+
+    await expectStatus('unhearting it a second time is still fine', 200, 'DELETE',
+                       '/api/account/wishlist?productId=' + cheap.id, shopper);
+
+    const replaced = await expectStatus('the whole list is replaced at sign-in', 200,
+                                        'PUT', '/api/account/wishlist', {
+      token: shopper.token,
+      body: { items: [cheap.id, pricey.id, cheap.id] }
+    });
+
+    if (replaced.status === 200) {
+      check('duplicates in the merged list collapse',
+            replaced.body.data.total === 2, replaced.body.data.total + ' rows');
+    }
+
+    const notMine = await call('GET', '/api/account/wishlist', owner);
+
+    check('AND ANOTHER ACCOUNT SEES ITS OWN',
+          (notMine.body.data.items || []).indexOf(cheap.slug) === -1,
+          JSON.stringify(notMine.body.data.items));
+
+    /* Left empty, so the throwaway accounts take nothing with them that the
+       cleanup would have to find. */
+    await call('PUT', '/api/account/wishlist', { token: shopper.token, body: { items: [] } });
+  }
+
 } catch (err) {
   fail('the run stopped: ' + err.message);
 } finally {

@@ -115,6 +115,28 @@ window.ZB = window.ZB || {};
       emit();
     },
 
+    /**
+     * Put a whole cart and wishlist in place at once.
+     *
+     * For assets/js/store-sync.js, which has one job this cannot be done
+     * with the methods above: at sign-in it holds a list merged from this
+     * browser and the customer's account, and has to install it as it is.
+     * Replaying it through addToCart would stack every quantity on top of
+     * the one already there, and would notify — and therefore save — once
+     * per line.
+     *
+     * Either list may be left out, in which case it is not touched. One
+     * notification for the pair, because they changed together.
+     */
+    replace: function (next) {
+      next = next || {};
+
+      if (Array.isArray(next.cart)) state.cart = next.cart;
+      if (Array.isArray(next.wishlist)) state.wishlist = next.wishlist;
+
+      emit();
+    },
+
     /* ---- wishlist ---- */
 
     inWishlist: function (id) {
