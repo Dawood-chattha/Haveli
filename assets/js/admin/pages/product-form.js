@@ -6,11 +6,16 @@
    what stops the two drifting apart — a field added to one and forgotten in
    the other is the classic way these screens rot.
 
-   IMAGES ARE NEVER UPLOADED
-   There is no server to upload to, so a chosen file is read in the browser
-   and shown as a local preview. Nothing leaves the machine. The form says
-   so, because a file picker that looks like it uploads and does not is
-   worse than one that explains itself.
+   IMAGES ARE UPLOADED, AND THE SERVER DECIDES WHAT THEY ARE
+   A chosen file goes to /api/admin/uploads, which reads its first bytes to
+   decide whether it really is a JPEG, PNG or WebP, names it itself, and
+   puts it in the shop's picture store. The URL that comes back is what is
+   saved on the product.
+
+   This note used to say the opposite — that nothing left the machine —
+   because for a while nothing did: the file was turned into a data URI and
+   stored in a column capped at a thousand characters, which kept the first
+   thousand characters of the picture and said nothing about the rest.
 
    Applied from the UI guidance consulted for these screens:
      - Visible labels on every field, never a placeholder standing in for

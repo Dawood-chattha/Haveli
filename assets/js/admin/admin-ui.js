@@ -66,6 +66,12 @@ window.ZB = window.ZB || {};
     chart:   '<path d="M3.5 20.5h17"/><path d="M7 20.5v-6"/>' +
              '<path d="M12 20.5V6"/><path d="M17 20.5v-9"/>',
 
+    /* A sheet with writing on it, for the Pages screen. Drawn in the same
+       1.5-weight outline as the rest so it belongs beside them. */
+    page:    '<path d="M6 3h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/>' +
+             '<path d="M14 3v4h4"/>' +
+             '<path d="M8.5 12.5h7"/><path d="M8.5 16h7"/><path d="M8.5 9h3"/>',
+
     sliders: '<path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/>' +
              '<circle cx="9" cy="7" r="2.2"/><circle cx="15" cy="12" r="2.2"/>' +
              '<circle cx="8" cy="17" r="2.2"/>',

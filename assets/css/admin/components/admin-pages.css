@@ -1,0 +1,138 @@
+/* =========================================================================
+   admin-pages.css — the written pages screen
+   -------------------------------------------------------------------------
+   A list of twelve, and an editor with a preview under the box being typed
+   into. Built from the same tokens as the rest of the panel: the shared
+   --sp / --fs / --c scale, plus the panel's own --a-* surfaces and lines.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   The list
+
+   Rows rather than a table. A table implies columns worth comparing, and
+   the only comparison here is written against not written — which the row
+   carries as a pill and as its own left edge.
+   ------------------------------------------------------------------------- */
+
+.a-page-rows {
+  margin: var(--sp-4) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: var(--bw) solid var(--a-line);
+}
+
+.a-page-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: var(--bw) solid var(--a-line);
+  border-left: 2px solid transparent;
+}
+
+/* A page with nothing on it, marked on its edge and not only by its pill.
+   Reading down the left-hand side is how somebody finds the four they still
+   have to write. */
+.a-page-row.is-empty { border-left-color: var(--a-warning); }
+
+.a-page-row:hover { background: var(--a-surface-sunken); }
+
+.a-page-row__main { display: grid; gap: 2px; min-width: 0; }
+
+.a-page-row__title {
+  font-size: var(--a-fs-body);
+  font-weight: var(--fw-medium);
+  color: var(--c-ink);
+}
+
+.a-page-row__path {
+  font-size: var(--fs-3xs);
+  color: var(--c-muted);
+}
+
+.a-page-row__aside {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex: none;
+}
+
+/* -------------------------------------------------------------------------
+   The editor
+   ------------------------------------------------------------------------- */
+
+.a-page-editor { margin-top: var(--sp-5); }
+
+/* A monospaced box, because the two rules that matter are about what a line
+   STARTS with — "## " and "- " — and a proportional font hides the leading
+   spaces that decide it. */
+.a-page-editor .a-input--area {
+  min-height: 20rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--fs-3xs);
+  line-height: 1.7;
+}
+
+/* -------------------------------------------------------------------------
+   The preview
+
+   Under the box rather than beside it. Beside would halve the width of a
+   textarea somebody is writing a returns policy in, and the thing being
+   checked — which lines became headings, which became bullets — is just as
+   clear underneath.
+   ------------------------------------------------------------------------- */
+
+.a-page-editor__preview {
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-4);
+  border-top: var(--bw) solid var(--a-line);
+}
+
+.a-page-editor__preview-label {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-3xs);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+}
+
+/* The storefront's own page-copy rules live in assets/css/components/page.css,
+   which the panel does not load. These are the same three shapes again in the
+   panel's own type scale — what is being previewed is the structure, not the
+   shop's typography, and drawing it in neither font would be worse than
+   drawing it in the one the reader is already looking at. */
+.a-page-editor__preview .page-copy { max-width: 62ch; }
+
+.a-page-editor__preview .page-copy__para {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--a-fs-body);
+  line-height: 1.7;
+  color: var(--c-body);
+}
+
+.a-page-editor__preview .page-copy__para--quiet { color: var(--c-muted); }
+
+.a-page-editor__preview .page-copy__heading {
+  margin: var(--sp-4) 0 var(--sp-2);
+  font-size: var(--a-fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--c-ink);
+}
+
+.a-page-editor__preview .page-copy__heading:first-child { margin-top: 0; }
+
+.a-page-editor__preview .page-copy__list {
+  margin: 0 0 var(--sp-3);
+  padding-left: var(--sp-5);
+  font-size: var(--a-fs-body);
+  line-height: 1.7;
+  color: var(--c-body);
+}
+
+.a-page-editor__preview .page-copy__list li { margin-bottom: 4px; }
+
+@media (max-width: 720px) {
+  .a-page-row { flex-direction: column; align-items: flex-start; gap: var(--sp-2); }
+  .a-page-row__aside { width: 100%; justify-content: space-between; }
+}

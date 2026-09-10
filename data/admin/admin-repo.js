@@ -2841,6 +2841,137 @@ window.ZB = window.ZB || {};
   };
 
   /* -----------------------------------------------------------------------
+     Pages
+
+     The twelve written pages the storefront links to from its footer:
+     FAQs, How To Buy, Payment, Shipping, Returns, Order tracking, About,
+     Contact, Stores, Careers, Terms and Privacy.
+
+     THEY USED TO SAY NOTHING AT ALL
+     Every one of them rendered the same sentence about being a placeholder,
+     including Terms and Privacy, which a shop should not open without. The
+     words are rows in the pages table now, written here.
+
+     NEITHER CREATED NOR DELETED, AND THAT IS NOT A MISSING FEATURE
+     Each page has a route in assets/js/routes.js and a link in
+     data/footer.js. A thirteenth row would be words no visitor can reach; a
+     deleted one would be a footer link leading nowhere. Adding a page is a
+     change to the site's shape, made in those files together — not on a
+     screen about wording.
+     ----------------------------------------------------------------------- */
+
+  var pageCache = null;
+  var pageLoad = null;
+
+  function loadPages() {
+    if (!pageLoad) {
+      pageLoad = Api.get('/api/admin/pages').then(function (data) {
+        pageCache = data;
+      }).catch(function (err) {
+        pageLoad = null;
+        throw err;
+      });
+    }
+
+    return pageLoad;
+  }
+
+  function forgetPages() {
+    pageCache = null;
+    pageLoad = null;
+  }
+
+  function currentPages() {
+    return (pageCache && pageCache.items) || [];
+  }
+
+  Repo.pages = {
+
+    /**
+     * Every page, in the order the footer lists them.
+     * options: { view } — 'empty', 'draft', 'published', or nothing for all.
+     * resolves: { items, total, published, empty }
+     *
+     * Never paged. Twelve rows, and the question the screen is opened with
+     * is how many are still blank — which a page of six answers wrongly.
+     */
+    list: function (options) {
+      options = options || {};
+
+      return loadPages().then(function () {
+        var all = currentPages();
+
+        var rows = all.filter(function (row) {
+          if (options.view === 'empty') return !row.written;
+          if (options.view === 'draft') return row.status !== 'published';
+          if (options.view === 'published') return row.status === 'published';
+          return true;
+        });
+
+        return {
+          items: rows,
+          total: rows.length,
+          published: all.filter(function (r) { return r.status === 'published'; }).length,
+          empty: all.filter(function (r) { return !r.written; }).length
+        };
+      });
+    },
+
+    get: function (slug) {
+      return loadPages().then(function () {
+        return currentPages().filter(function (row) { return row.slug === slug; })[0] || null;
+      });
+    },
+
+    summary: function () {
+      return loadPages().then(function () {
+        var rows = currentPages();
+
+        return {
+          total: rows.length,
+          published: rows.filter(function (r) { return r.status === 'published'; }).length,
+          empty: rows.filter(function (r) { return !r.written; }).length,
+
+          /* Published but with nothing in it: a live footer link to a
+             heading and white space. Counted separately because it is the
+             one state that looks finished and is not. */
+          hollow: rows.filter(function (r) {
+            return r.status === 'published' && !r.written;
+          }).length
+        };
+      });
+    },
+
+    /**
+     * Save one page's words.
+     *
+     * The slug is not among the fields: it is the route, and a route the
+     * panel could change is a footer link the panel could break.
+     */
+    update: function (slug, data) {
+      var body = {};
+      var has = function (key) {
+        return Object.prototype.hasOwnProperty.call(data, key) && data[key] !== undefined;
+      };
+
+      ['title', 'eyebrow', 'lead', 'body', 'status'].forEach(function (key) {
+        if (has(key)) body[key] = data[key];
+      });
+
+      return Api.send('PATCH', '/api/admin/pages/' + encodeURIComponent(slug), body)
+        .then(function (result) {
+          forgetPages();
+          return result.page;
+        });
+    },
+
+    /** Always false: every change above reaches the database. */
+    hasUnsavedEdits: function () {
+      return false;
+    }
+  };
+
+  /* -----------------------------------------------------------------------
      Settings
 
      WHAT A SETTING IS FOR, AND WHY THAT IS NOT ONE RECORD

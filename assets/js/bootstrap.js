@@ -106,10 +106,46 @@ window.ZB = window.ZB || {};
     error: null
   };
 
+  /**
+   * The shop's written pages — FAQs, Returns, Terms, and the rest.
+   *
+   * Twelve short rows of text, fetched once here rather than one per
+   * navigation: the router can land on any of them from any other, and a
+   * visible wait on every footer link would be a wait for less text than
+   * one product photograph.
+   *
+   * A FAILURE LEAVES THE PAGES SAYING SO
+   * Each of the twelve keeps its route and its heading, which live in
+   * assets/js/routes.js and in the row's own title — so a footer link never
+   * leads nowhere. What is missing is the words, and the page says that
+   * rather than showing an empty column.
+   */
+  function loadPages() {
+    return fetch('/api/pages', REQUEST).then(function (res) {
+      if (!res.ok) {
+        throw new Error('The shop’s pages could not be loaded (' + res.status + ').');
+      }
+      return res.json();
+    }).then(function (payload) {
+      var items = payload && payload.ok && payload.data && payload.data.items;
+      if (!items) return;
+
+      var byslug = {};
+      items.forEach(function (row) { byslug[row.slug] = row; });
+      ZB.content = byslug;
+    });
+  }
+
+  /* Empty until the answer arrives, and empty for good if it does not.
+     Nothing here is invented: a page with no row shows its own heading and
+     says the words have not been written. */
+  ZB.content = ZB.content || {};
+
   ZB.data.ready = Promise.all([
     ZB.catalogue ? ZB.catalogue.load() : Promise.resolve(),
     loadNavigation(),
-    loadShop()
+    loadShop(),
+    loadPages()
   ]).then(function () {
     return true;
   }, function (err) {

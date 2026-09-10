@@ -633,6 +633,55 @@ function customerAddress(row) {
   };
 }
 
+/* -------------------------------------------------------------------------
+   A written page
+   ------------------------------------------------------------------------- */
+
+var PAGE_SELECT = 'slug, title, eyebrow, lead, body, status, sort, updated_at';
+
+/**
+ * A page as the storefront reads it.
+ *
+ * A draft's words are withheld here rather than in the policy, so that the
+ * panel can still load the page it is editing. The route keeps answering
+ * either way — a link in the footer must never lead nowhere — it simply has
+ * nothing to show, and the page says so in its own words rather than
+ * pretending to be finished.
+ */
+function publicPage(row) {
+  var live = row.status === 'published';
+
+  return {
+    slug: row.slug,
+    title: row.title,
+    eyebrow: row.eyebrow || '',
+    lead: live ? (row.lead || '') : '',
+    body: live ? (row.body || '') : '',
+    written: live && !!(row.body || '').trim()
+  };
+}
+
+/** The same row as the panel edits it: everything, drafts included. */
+function adminPage(row) {
+  return {
+    slug: row.slug,
+    title: row.title,
+    eyebrow: row.eyebrow || '',
+    lead: row.lead || '',
+    body: row.body || '',
+    status: row.status,
+    sort: row.sort,
+
+    /* Whether there is anything to read. The screen counts these, because
+       how many are still empty is the number that page exists to show. */
+    written: !!(row.body || '').trim(),
+
+    /* Where the page can be looked at, so the panel can link to it. */
+    storefrontPath: '/' + row.slug,
+    updated: row.updated_at
+  };
+}
+
 module.exports = {
   PRODUCT_SELECT: PRODUCT_SELECT,
   CATEGORY_SELECT: CATEGORY_SELECT,
@@ -641,6 +690,7 @@ module.exports = {
   BANNER_SELECT: BANNER_SELECT,
   COUPON_SELECT: COUPON_SELECT,
   ADDRESS_SELECT: ADDRESS_SELECT,
+  PAGE_SELECT: PAGE_SELECT,
 
   storefrontProduct: storefrontProduct,
   adminProduct: adminProduct,
@@ -653,6 +703,8 @@ module.exports = {
   adminBanner: adminBanner,
   adminCoupon: adminCoupon,
   customerAddress: customerAddress,
+  publicPage: publicPage,
+  adminPage: adminPage,
 
   STATUS_LABELS: STATUS_LABELS,
   PAYMENT_LABELS: PAYMENT_LABELS,

@@ -33,6 +33,7 @@ window.ZB = window.ZB || {};
     { label: 'Inventory',  path: '/admin/inventory',  icon: 'archive', badge: 'inventory' },
     { label: 'Banners',    path: '/admin/banners',    icon: 'image' },
     { label: 'Coupons',    path: '/admin/coupons',    icon: 'ticket' },
+    { label: 'Pages',      path: '/admin/pages',      icon: 'page' },
     { label: 'Reports',    path: '/admin/reports',    icon: 'chart' },
     { label: 'Settings',   path: '/admin/settings',   icon: 'sliders' }
   ];

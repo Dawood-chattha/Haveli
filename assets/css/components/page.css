@@ -465,3 +465,80 @@
 
 .account__address-form-actions { display: flex; gap: var(--sp-3); }
 .account__address-form-actions .btn { flex: 1; }
+
+/* -------------------------------------------------------------------------
+   A written page
+
+   One column, measured rather than full width. A returns policy set across
+   1200px is a returns policy nobody finishes: the eye loses the start of
+   the next line, and the reader gives up somewhere in the middle of the
+   thing the shop most wants them to have read.
+   ------------------------------------------------------------------------- */
+
+.page-copy {
+  max-width: 64ch;
+  margin-top: var(--sp-6);
+}
+
+.page-copy__para {
+  margin: 0 0 var(--sp-4);
+  font-size: var(--fs-xs);
+  line-height: 1.75;
+  color: var(--c-body);
+}
+
+/* What an unwritten page says. Quieter than the shop's own words, so it
+   reads as a note about the page rather than as the page. */
+.page-copy__para--quiet { color: var(--c-muted); }
+
+.page-copy__heading {
+  margin: var(--sp-6) 0 var(--sp-3);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--c-ink);
+}
+
+.page-copy__heading:first-child { margin-top: 0; }
+
+.page-copy__list {
+  margin: 0 0 var(--sp-4);
+  padding-left: var(--sp-5);
+  font-size: var(--fs-xs);
+  line-height: 1.75;
+  color: var(--c-body);
+}
+
+.page-copy__list li { margin-bottom: var(--sp-2); }
+
+/* -------------------------------------------------------------------------
+   The contact details, on the contact page only
+   ------------------------------------------------------------------------- */
+
+.page-contact {
+  max-width: 64ch;
+  margin: var(--sp-6) 0 0;
+  padding: var(--sp-5) 0 0;
+  list-style: none;
+  border-top: var(--bw) solid var(--c-line);
+  display: grid;
+  gap: var(--sp-3);
+}
+
+.page-contact li {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: var(--sp-3);
+  font-size: var(--fs-xs);
+  color: var(--c-ink);
+}
+
+.page-contact__label {
+  font-size: var(--fs-3xs);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+}
+
+@media (max-width: 560px) {
+  .page-contact li { grid-template-columns: 1fr; gap: 2px; }
+}

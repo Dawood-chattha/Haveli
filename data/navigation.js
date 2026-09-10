@@ -201,7 +201,5 @@ window.ZB.navigation = [
 
 /* Utility tiles pinned to the bottom of the drawer. */
 window.ZB.navUtilities = [
-  { label: 'Stores', href: '/stores', icon: 'pin' },
-  { label: 'Tracking', href: '/tracking', icon: 'truck' },
-  { label: 'Careers', href: '/careers', icon: 'briefcase' }
+  { label: 'Stores', href: '/stores', icon: 'pin' }
 ];

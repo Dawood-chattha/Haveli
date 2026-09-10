@@ -542,9 +542,9 @@ window.ZB.adminPages = window.ZB.adminPages || {};
     ZB.adminModal.confirm({
       title: blocking ? 'Block this account?' : 'Unblock this account?',
       body: blocking
-        ? name + ' will be shown as blocked throughout the panel. This build ' +
-          'has no accounts and no server, so nothing is actually prevented — ' +
-          'the flag is a note to you until a backend enforces it.'
+        ? name + ' will not be able to sign in or place an order. The block ' +
+          'is enforced by the shop itself, not just shown here, and it takes ' +
+          'effect immediately. Their past orders are untouched.'
         : name + '’s account will be shown as active again.',
       confirmLabel: blocking ? 'Block the account' : 'Unblock',
       cancelLabel: 'Leave it',

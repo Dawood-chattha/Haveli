@@ -48,6 +48,7 @@ window.ZB = window.ZB || {};
       .add('/admin/inventory', pages.inventory)
       .add('/admin/banners', pages.banners)
       .add('/admin/coupons', pages.coupons)
+      .add('/admin/pages', pages.pages)
       .add('/admin/reports', pages.reports)
       .add('/admin/settings', pages.settings)
 

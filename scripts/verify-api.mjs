@@ -1849,6 +1849,172 @@ try {
     }
   }
 
+  /* =====================================================================
+     19. The written pages
+     ---------------------------------------------------------------------
+     Twelve routes that used to render the same sentence about being a
+     placeholder, Terms and Privacy among them. The words are rows now.
+
+     The check that matters most is the last one. The body is text an owner
+     types into a form and the storefront puts into the page, which is the
+     shape of every content-management cross-site scripting hole there has
+     ever been. It is stored exactly as typed — the escaping happens at the
+     moment of rendering, in assets/js/rich-text.js — so this proves the
+     round trip does not quietly sanitise, because a check that passed
+     because the server stripped it would pass with the escaping deleted.
+     ===================================================================== */
+
+  console.log('\n19. PAGES — the shop’s own words');
+
+  {
+    const listed = await expectStatus('GET /api/pages, signed out', 200, 'GET',
+                                      '/api/pages');
+
+    const pages = (listed.body.data && listed.body.data.items) || [];
+
+    check('all nine are there', pages.length === 9, pages.length + ' rows');
+    check('including the two a shop should not trade without',
+          ['terms', 'privacy'].every(function (s) {
+            return pages.some(function (p) { return p.slug === s; });
+          }),
+          pages.map(function (p) { return p.slug; }).join(','));
+
+    check('a page carries only what a visitor needs',
+          keysOf(pages[0]) === 'body,eyebrow,lead,slug,title,written',
+          keysOf(pages[0]));
+    check('the status is not published to the world',
+          !('status' in pages[0]), keysOf(pages[0]));
+
+    await expectStatus('one page by slug', 200, 'GET', '/api/pages?slug=terms');
+    await expectStatus('a slug that is not a page', 404, 'GET', '/api/pages?slug=nonesuch');
+    await expectStatus('and it is read-only', 405, 'POST', '/api/pages',
+                       { token: owner.token, body: { title: 'Nope' } });
+  }
+
+  /* --- the panel's side -------------------------------------------------- */
+
+  await expectStatus('a customer cannot read the panel’s list', 403, 'GET',
+                     '/api/admin/pages', shopper);
+
+  await expectStatus('nor write a page', 403, 'PATCH', '/api/admin/pages/terms',
+                     { token: shopper.token, body: { body: 'Anything at all.' } });
+
+  await expectStatus('a signed-out visitor cannot either', 401, 'GET',
+                     '/api/admin/pages');
+
+  {
+    const panel = await expectStatus('GET /api/admin/pages', 200, 'GET',
+                                     '/api/admin/pages', owner);
+
+    check('it counts what is still empty',
+          typeof panel.body.data.empty === 'number' &&
+          typeof panel.body.data.published === 'number',
+          JSON.stringify({ empty: panel.body.data.empty,
+                           published: panel.body.data.published }));
+
+    check('and a row says where it can be looked at',
+          panel.body.data.items[0].storefrontPath === '/' + panel.body.data.items[0].slug,
+          panel.body.data.items[0].storefrontPath);
+  }
+
+  await expectStatus('there is no way to add a thirteenth', 405, 'POST',
+                     '/api/admin/pages',
+                     { token: owner.token, body: { slug: 'extra', title: 'Extra' } });
+
+  await expectStatus('nor to delete one', 405, 'DELETE',
+                     '/api/admin/pages/stores', owner);
+
+  await expectStatus('a page that does not exist', 404, 'PATCH',
+                     '/api/admin/pages/nonesuch',
+                     { token: owner.token, body: { body: 'Hello.' } });
+
+  await expectStatus('nothing to change', 400, 'PATCH', '/api/admin/pages/stores',
+                     { token: owner.token, body: {} });
+
+  await expectStatus('PUBLISHING AN EMPTY PAGE IS REFUSED', 400, 'PATCH',
+                     '/api/admin/pages/stores',
+                     { token: owner.token, body: { status: 'published', body: '' } });
+
+  /* --- writing one, and reading it back ---------------------------------- */
+
+  {
+    /* Stores, because whether it is blank or not says nothing about how the
+       shop trades — unlike Returns or Privacy, which a customer reads and
+       acts on. Put back at the end whatever happens. */
+    const before = (await call('GET', '/api/admin/pages/stores', owner)).body.data.page;
+
+    /* Deliberately hostile, and deliberately ordinary-looking. */
+    const typed = 'We are hiring across retail and design.\n\n' +
+                  '## What we look for\n' +
+                  'People who like the work.\n\n' +
+                  '- Retail assistants\n' +
+                  '- A pattern cutter\n\n' +
+                  'Write to us: <script>alert("xss")</script> & "quotes" \'and\' <b>bold</b>';
+
+    const written = await expectStatus('the owner writes a page', 200, 'PATCH',
+                                       '/api/admin/pages/stores', {
+      token: owner.token,
+      body: { lead: 'Open roles across retail and design.', body: typed,
+              status: 'published' }
+    });
+
+    if (written.status === 200) {
+      const page = written.body.data.page;
+
+      check('it reads back as written', page.written === true && page.status === 'published',
+            JSON.stringify({ written: page.written, status: page.status }));
+
+      check('THE TEXT IS STORED EXACTLY AS TYPED, NOT SANITISED',
+            page.body === typed,
+            'stored ' + JSON.stringify(page.body.slice(-60)));
+
+      /* And a visitor gets it. The escaping is the storefront's job — see
+         assets/js/rich-text.js — and this endpoint must not be doing it,
+         because a value escaped twice is a value shown with &amp;lt; in it. */
+      const seen = await call('GET', '/api/pages?slug=stores');
+
+      check('a signed-out visitor is served the same text',
+            seen.body.data.page.body === typed);
+      check('with the lead beside it',
+            seen.body.data.page.lead === 'Open roles across retail and design.');
+    }
+
+    /* --- a draft says nothing ------------------------------------------- */
+
+    await expectStatus('the page is put back to a draft', 200, 'PATCH',
+                       '/api/admin/pages/stores',
+                       { token: owner.token, body: { status: 'draft' } });
+
+    {
+      const hidden = await call('GET', '/api/pages?slug=stores');
+
+      check('A DRAFT KEEPS ITS ROUTE AND LOSES ITS WORDS',
+            hidden.status === 200 && hidden.body.data.page.body === '' &&
+            hidden.body.data.page.written === false,
+            JSON.stringify(hidden.body.data.page));
+
+      check('but the panel can still see what it is editing',
+            (await call('GET', '/api/admin/pages/stores', owner))
+              .body.data.page.body === typed);
+    }
+
+    /* --- put it back ----------------------------------------------------- */
+
+    await call('PATCH', '/api/admin/pages/stores', {
+      token: owner.token,
+      body: { title: before.title, eyebrow: before.eyebrow,
+              lead: before.lead, body: before.body, status: 'draft' }
+    });
+
+    const restored = await call('GET', '/api/admin/pages/stores', owner);
+
+    check('AND THE SHOP IS NOT LEFT WITH A PAGE A TEST WROTE',
+          restored.body.data.page.body === before.body &&
+          restored.body.data.page.lead === before.lead,
+          JSON.stringify({ body: restored.body.data.page.body.slice(0, 40),
+                           lead: restored.body.data.page.lead }));
+  }
+
 } catch (err) {
   fail('the run stopped: ' + err.message);
 } finally {

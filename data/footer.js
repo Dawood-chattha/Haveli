@@ -35,10 +35,8 @@ window.ZB = window.ZB || {};
         links: [
           { label: 'FAQs', path: '/faqs' },
           { label: 'How To Buy', path: '/how-to-buy' },
-          { label: 'Payment', path: '/payment' },
           { label: 'Shipping & Deliveries', path: '/shipping' },
-          { label: 'Exchange & Returns', path: '/returns' },
-          { label: 'Order Tracking', path: '/tracking' }
+          { label: 'Exchange & Returns', path: '/returns' }
         ]
       },
       {
@@ -46,7 +44,6 @@ window.ZB = window.ZB || {};
         links: [
           { label: 'About Us', path: '/about' },
           { label: 'Contact Us', path: '/contact' },
-          { label: 'Work With Us', path: '/careers' },
           { label: 'Retail Stores', path: '/stores' }
         ]
       },

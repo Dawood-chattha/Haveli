@@ -21,11 +21,14 @@
    they were going to reconstruct anyway.
 
    HONESTY
-   Nothing here reaches a checkout. There is no discount field in the cart
-   and no server to validate a code against, so these rows describe what
-   the shop WOULD honour once a backend exists. The page says so where it
-   cannot be missed rather than letting a code that does nothing look like
-   a code that works.
+   These codes are live. public.place_order reads this same table at the
+   moment an order is priced — the dates, the minimum spend, the usage
+   limit, whether it is switched off — so a code created here is a code a
+   customer can type at the checkout and be charged less for.
+
+   That is worth stating as plainly as its opposite was. This notice used to
+   say the codes reached nothing, which was true until Phase 5 and would now
+   stop an owner handing out a discount that works.
 
    Applied from the UI guidance consulted for this panel:
      - Deleting asks first and the confirmation offers undo (#35).
@@ -102,16 +105,17 @@ window.ZB.adminPages = window.ZB.adminPages || {};
             '</button>'
         }) +
 
-        /* Said once, at the top, where it cannot be scrolled past: these
-           codes are a plan, not a working discount. Anywhere quieter and
-           somebody would hand a customer a code that does nothing. */
-        '<div class="a-notice" role="note">' +
+        /* Said once, at the top, where it cannot be scrolled past. It used
+           to say the opposite — that these codes reached nothing — which was
+           true until the checkout was wired up and is the sort of stale
+           warning that makes somebody not use a working feature. */
+        '<div class="a-notice a-notice--quiet" role="note">' +
           ui.icon('warn') +
           '<p>' +
-            '<strong>Codes are not accepted at the checkout yet.</strong> ' +
-            'The cart has no discount field and there is no server to check a ' +
-            'code against, so these rows describe what the shop would honour ' +
-            'once a backend is connected.' +
+            '<strong>These codes work at the checkout.</strong> ' +
+            'A customer who types one is charged less, and the discount is ' +
+            'worked out by the shop itself when the order is placed — not ' +
+            'here. Switching a code off stops it immediately.' +
           '</p>' +
         '</div>' +
 

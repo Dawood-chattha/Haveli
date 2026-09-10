@@ -29,12 +29,9 @@ window.ZB = window.ZB || {};
       .add('/wishlist', pages.wishlist)
       .add('/account', pages.account)
       .add('/stores', pages.stores)
-      .add('/tracking', pages.tracking)
-      .add('/careers', pages.careers)
       /* Footer destinations. */
       .add('/faqs', pages.faqs)
       .add('/how-to-buy', pages.howToBuy)
-      .add('/payment', pages.payment)
       .add('/shipping', pages.shipping)
       .add('/returns', pages.returns)
       .add('/about', pages.about)
