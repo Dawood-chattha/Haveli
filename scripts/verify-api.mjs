@@ -1344,6 +1344,236 @@ try {
                        '/api/admin/coupons/' + id, owner);
   }
 
+  /* =====================================================================
+     16. Settings
+     ---------------------------------------------------------------------
+     The screen kept its answers in a variable a reload emptied, while the
+     numbers that decide delivery sat in a table nobody could reach. This
+     is that table.
+
+     The last check in here is the whole point of the phase: change the
+     delivery charge through the panel, place a real order, and see the new
+     charge on it — decided by place_order, in SQL, not by anything the
+     browser said.
+     ===================================================================== */
+
+  console.log('\n16. SETTINGS — the numbers the shop actually runs on');
+
+  await expectStatus('a customer cannot read the settings', 403, 'GET',
+                     '/api/admin/settings', shopper);
+
+  await expectStatus('nor change what delivery costs', 403, 'PATCH',
+                     '/api/admin/settings',
+                     { token: shopper.token, body: { store: { shipping: { flat: 0 } } } });
+
+  await expectStatus('a signed-out visitor cannot either', 401, 'GET',
+                     '/api/admin/settings');
+
+  const opened = await expectStatus('GET /api/admin/settings', 200, 'GET',
+                                    '/api/admin/settings', owner);
+
+  /* Everything below changes the live settings row, so what it was is
+     captured here and put back at the end whatever happens. */
+  const wasSettings = opened.status === 200 ? opened.body.data.settings : null;
+
+  if (wasSettings) {
+    check('it comes back in two named groups, and no others',
+          keysOf(wasSettings) === 'notifications,store,updatedAt', keysOf(wasSettings));
+    check('the delivery rule is always answered',
+          Number.isInteger(wasSettings.store.shipping.flat) &&
+          Number.isInteger(wasSettings.store.shipping.freeOver),
+          JSON.stringify(wasSettings.store.shipping));
+    check('and so is the low-stock level',
+          Number.isInteger(wasSettings.store.lowStockAt) && wasSettings.store.lowStockAt > 0,
+          'lowStockAt ' + wasSettings.store.lowStockAt);
+
+    /* --- what will not be accepted -------------------------------------- */
+
+    await expectStatus('a delivery charge that is a typo', 400, 'PATCH',
+                       '/api/admin/settings',
+                       { token: owner.token, body: { store: { shipping: { flat: 99999999 } } } });
+
+    await expectStatus('half a rupee of delivery', 400, 'PATCH', '/api/admin/settings',
+                       { token: owner.token, body: { store: { shipping: { flat: 2.5 } } } });
+
+    await expectStatus('a negative delivery charge', 400, 'PATCH', '/api/admin/settings',
+                       { token: owner.token, body: { store: { shipping: { flat: -100 } } } });
+
+    await expectStatus('a low-stock level of zero', 400, 'PATCH', '/api/admin/settings',
+                       { token: owner.token, body: { store: { lowStockAt: 0 } } });
+
+    await expectStatus('a support address that is not one', 400, 'PATCH',
+                       '/api/admin/settings',
+                       { token: owner.token, body: { store: { supportEmail: 'not-an-address' } } });
+
+    await expectStatus('nothing to change', 400, 'PATCH', '/api/admin/settings',
+                       { token: owner.token, body: {} });
+
+    await expectStatus('a section this endpoint does not keep', 400, 'PATCH',
+                       '/api/admin/settings',
+                       { token: owner.token,
+                         body: { appearance: { density: 'compact' } } });
+
+    /* --- one section at a time ------------------------------------------ */
+
+    const named = await expectStatus('the shop is given a name', 200, 'PATCH',
+                                     '/api/admin/settings', {
+      token: owner.token,
+      body: { store: { name: 'Verify Shop ' + stamp } }
+    });
+
+    if (named.status === 200) {
+      check('SAVING THE NAME LEFT THE DELIVERY RULE ALONE',
+            named.body.data.settings.store.shipping.flat === wasSettings.store.shipping.flat &&
+            named.body.data.settings.store.shipping.freeOver === wasSettings.store.shipping.freeOver,
+            JSON.stringify(named.body.data.settings.store.shipping));
+    }
+
+    const halfShipping = await expectStatus('only the delivery charge is changed', 200, 'PATCH',
+                                            '/api/admin/settings', {
+      token: owner.token,
+      body: { store: { shipping: { flat: 111 } } }
+    });
+
+    if (halfShipping.status === 200) {
+      const s = halfShipping.body.data.settings.store;
+
+      check('AND THE THRESHOLD BESIDE IT SURVIVED',
+            s.shipping.freeOver === wasSettings.store.shipping.freeOver,
+            'freeOver ' + s.shipping.freeOver);
+      check('as did the name saved a moment ago',
+            s.name === 'Verify Shop ' + stamp, s.name);
+    }
+
+    /* A role is dropped rather than stored. Nothing here grants anything,
+       and a field called "role" in a settings record would be the most
+       plausible-looking place to try. */
+    const smuggled = await expectStatus('a role smuggled into the store record', 200, 'PATCH',
+                                        '/api/admin/settings',
+                                        { token: owner.token,
+                                          body: { store: { role: 'admin', city: 'Lahore' } } });
+
+    if (smuggled.status === 200) {
+      check('THE ROLE WAS NOT STORED',
+            !('role' in smuggled.body.data.settings.store),
+            keysOf(smuggled.body.data.settings.store));
+      check('and the field beside it was', smuggled.body.data.settings.store.city === 'Lahore');
+    }
+
+    /* --- the notifications, which are still only recorded ---------------- */
+
+    const noticed = await expectStatus('the notification choices are saved', 200, 'PATCH',
+                                       '/api/admin/settings', {
+      token: owner.token,
+      body: { notifications: { newOrder: false, lowStock: true,
+                               sendTo: 'shop-' + stamp + '@verify.invalid' } }
+    });
+
+    if (noticed.status === 200) {
+      const n = noticed.body.data.settings.notifications;
+      check('they read back as they were set',
+            n.newOrder === false && n.lowStock === true &&
+            n.sendTo === 'shop-' + stamp + '@verify.invalid',
+            JSON.stringify(n));
+      check('and the store section was not touched',
+            noticed.body.data.settings.store.city === 'Lahore');
+    }
+
+    /* =====================================================================
+       AND NOW THE ONE THAT MATTERS
+       ===================================================================== */
+
+    await expectStatus('the owner sets a new delivery charge', 200, 'PATCH',
+                       '/api/admin/settings', {
+      token: owner.token,
+      body: { store: { shipping: { flat: 377, freeOver: 900000 } } }
+    });
+
+    {
+      /* What a shopper is quoted before ordering. Read as the shopper, from
+         the endpoint the checkout page actually calls. */
+      const quoted = await call('GET', '/api/checkout', shopper);
+
+      check('THE CHECKOUT PAGE QUOTES THE NEW CHARGE',
+            quoted.body.data && quoted.body.data.shipping &&
+            quoted.body.data.shipping.flat === 377,
+            JSON.stringify(quoted.body.data && quoted.body.data.shipping));
+    }
+
+    const priced = await expectStatus('and a real order is placed', 200, 'POST',
+                                      '/api/checkout', {
+      token: shopper.token,
+      body: buy([{ productId: cheap.id, qty: 1 }])
+    });
+
+    if (priced.status === 200) {
+      const o = priced.body.data.order;
+      madeOrders.push(o.id);
+
+      check('THE ORDER WAS CHARGED THE NEW DELIVERY, DECIDED IN SQL',
+            o.shipping === 377, 'shipping ' + o.shipping);
+      check('and the total is the goods plus that',
+            o.total === o.subtotal + 377, o.total + ' vs ' + (o.subtotal + 377));
+    }
+
+    /* The threshold is real too: at 900000 nothing in this shop qualifies,
+       so the order above was charged despite being over the old 5,000. */
+    check('nothing qualified for free delivery at that threshold',
+          priced.status !== 200 || priced.body.data.order.shipping > 0);
+
+    /* --- put the shop back exactly as it was ---------------------------- */
+
+    const back = await call('PATCH', '/api/admin/settings', {
+      token: owner.token,
+      body: {
+        store: {
+          /* Sent only where there is something to send: the endpoint
+             requires a name when one is given, and this row may never have
+             had one. */
+          tagline: wasSettings.store.tagline,
+          phone: wasSettings.store.phone,
+          address: wasSettings.store.address,
+          city: wasSettings.store.city,
+          lowStockAt: wasSettings.store.lowStockAt,
+          shipping: wasSettings.store.shipping
+        }
+      }
+    });
+
+    check('the settings are put back as they were found',
+          back.status === 200 &&
+          back.body.data.settings.store.shipping.flat === wasSettings.store.shipping.flat &&
+          back.body.data.settings.store.shipping.freeOver === wasSettings.store.shipping.freeOver &&
+          back.body.data.settings.store.lowStockAt === wasSettings.store.lowStockAt,
+          back.status + ' ' + JSON.stringify(back.body.data && back.body.data.settings.store));
+
+    /* The name and the support address are cleared straight through the
+       service key: the endpoint will not take an empty name, deliberately,
+       and this run must not leave "Verify Shop" as the shop's name. */
+    await admin.from('settings').update({
+      store: wasSettings.store.name || wasSettings.store.supportEmail
+        ? {
+            name: wasSettings.store.name,
+            tagline: wasSettings.store.tagline,
+            supportEmail: wasSettings.store.supportEmail,
+            phone: wasSettings.store.phone,
+            address: wasSettings.store.address,
+            city: wasSettings.store.city,
+            lowStockAt: wasSettings.store.lowStockAt,
+            shipping: wasSettings.store.shipping
+          }
+        : { shipping: wasSettings.store.shipping,
+            lowStockAt: wasSettings.store.lowStockAt },
+      notifications: wasSettings.notifications.sendTo ? wasSettings.notifications : {}
+    }).eq('id', true);
+
+    const finally_ = await call('GET', '/api/admin/settings', owner);
+
+    check('AND THE SHOP IS NOT LEFT NAMED AFTER A TEST RUN',
+          (finally_.body.data.settings.store.name || '').indexOf('Verify Shop') < 0,
+          finally_.body.data.settings.store.name);
+  }
+
 } catch (err) {
   fail('the run stopped: ' + err.message);
 } finally {

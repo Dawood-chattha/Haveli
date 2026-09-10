@@ -670,14 +670,22 @@ window.ZB = window.ZB || {};
   /* Everything above that reads rows waits for them first. The filtering,
      the sorting and the tiles were written against an array that was simply
      there; they did not need to change for it to arrive over the network,
-     they needed to happen afterwards. */
+     they needed to happen afterwards.
+
+     THE SETTINGS ARE WAITED FOR TOO, AND FOR THE SAME REASON
+     Every row on this screen is labelled 'out', 'low' or 'in', and where
+     'low' begins is now a number in the database rather than one in a file
+     the browser already had. Drawing before it arrives would label the
+     whole list against the fallback of ten and never correct itself — the
+     rows are painted once. Both requests go out together, so waiting for
+     the second costs nothing. */
   ['facets', 'list', 'summary'].forEach(function (name) {
     var counted = Repo.inventory[name];
 
     Repo.inventory[name] = function () {
       var args = arguments;
 
-      return loadStock().then(function () {
+      return Promise.all([loadStock(), loadSettings()]).then(function () {
         return counted.apply(Repo.inventory, args);
       });
     };
@@ -2845,18 +2853,30 @@ window.ZB = window.ZB || {};
      them together makes the second ship with the first.
 
      SOME OF THESE ARE ALREADY IN FORCE AND SOME ARE ONLY RECORDED
-     Only part of a settings screen can do anything in a build with no
-     server, and which part is not obvious from looking at it:
+     Which part does something is still not obvious from looking at it, and
+     the page still marks each group, because a switch that looks like it
+     turns email on and does not is worse than no switch at all:
 
-       store.lowStockAt   in force  — two screens read it below
+       store.shipping     in force  — public.place_order prices every order
+                                      from it, and the checkout page quotes
+                                      it before anybody orders
+       store.lowStockAt   in force  — the product list and the inventory
+                                      screen read it through lowStockAt()
        profile.name       in force  — the sidebar redraws from it
        appearance.*       in force  — but owned by the shell, not by this
                                       module; see the next note
-       everything else    recorded  — kept, shown, and waiting for a backend
+       everything else    recorded  — saved, shown, and read by nothing yet
 
-     That difference is not hidden. The page marks each group, because a
-     switch that looks like it turns email on and does not is worse than no
-     switch at all.
+     WHAT CHANGED IN PHASE 7
+     "Recorded" used to mean a variable in this file that a reload emptied.
+     It now means a row in the settings table, through
+     /api/admin/settings. Nothing else about the distinction moved: no mail
+     is sent, no shop page shows the support address yet, and the screen
+     must not start claiming otherwise.
+
+     The delivery charge is the one that matters. It decides money, in SQL,
+     inside place_order — and until Phase 7 the shop's owner had no way to
+     set it. The seed wrote 250 and 5,000 and there it stayed.
 
      WHY APPEARANCE IS NOT A SECTION OF THIS RECORD
      Store details, the profile and the notification choices describe the
@@ -2885,26 +2905,59 @@ window.ZB = window.ZB || {};
      module ever appears to grant one, it is lying.
      ----------------------------------------------------------------------- */
 
-  /* Changed values, by section. Same seam as every other section here: the
-     defaults are never mutated, so `reset` has something to go back to. */
-  var stEdited = { store: {}, notifications: {} };
+  /* -----------------------------------------------------------------------
+     WHERE A SETTING COMES FROM
 
-  /* The profile is written straight back to ZB.adminUser — see above — so
-     the only thing tracked here is whether it has been touched at all. */
+     The settings table, through /api/admin/settings. It used to be
+     data/admin/admin-settings.js with an in-memory overlay on top, which
+     meant every change was forgotten on reload and none of it was ever
+     the same record the checkout reads.
+
+     THE DEFAULTS FILE IS STILL HERE, AND IS NOT A FALLBACK FOR SHOP DATA
+     ZB.adminSettings keeps the currency description and the appearance
+     starting values — vocabulary the page and the shell have to agree on.
+     It no longer supplies the shop's name, address or support mailbox.
+     Those were placeholder text invented to build the screen against, and
+     showing them in a form the owner is about to save would put a shop
+     address nobody chose into the database.
+
+     An empty box the owner fills in once is the honest version.
+     ----------------------------------------------------------------------- */
+
+  var stCache = null;
+  var stLoad = null;
+
+  function loadSettings() {
+    if (!stLoad) {
+      stLoad = Api.get('/api/admin/settings').then(function (data) {
+        stCache = data.settings;
+      }).catch(function (err) {
+        /* Not remembered as the answer: the next read is a fresh attempt. */
+        stLoad = null;
+        throw err;
+      });
+    }
+
+    return stLoad;
+  }
+
+  function forgetSettings() {
+    stCache = null;
+    stLoad = null;
+  }
+
+  /** The profile is ZB.adminUser — see above — so only the flag lives here. */
   var stProfileEdited = false;
 
   function stDefaults() {
     return (ZB.adminSettings) || {};
   }
 
-  /** Defaults with this session's changes applied, for one section. */
+  /** One section of what the server last said, as a copy. */
   function stSection(name) {
-    var base = stDefaults()[name] || {};
+    var base = (stCache && stCache[name]) || {};
     var out = {};
     Object.keys(base).forEach(function (key) { out[key] = base[key]; });
-    Object.keys(stEdited[name] || {}).forEach(function (key) {
-      out[key] = stEdited[name][key];
-    });
     return out;
   }
 
@@ -2913,14 +2966,18 @@ window.ZB = window.ZB || {};
    *
    * A function rather than the constant this used to be, so the threshold
    * has exactly one home and the settings screen can move it. The product
-   * list's stock pill, the inventory filter and the dashboard's alert all
-   * arrive here, which is the point: a threshold that means ten in one
-   * place and five in another is a bug nobody notices until something sells
-   * out under a badge that said it was fine.
+   * list's stock pill and the inventory filter both arrive here, which is
+   * the point: a threshold that means ten in one place and five in another
+   * is a bug nobody notices until something sells out under a badge that
+   * said it was fine.
    *
-   * A missing or nonsensical value falls back to ten rather than throwing.
-   * A settings file somebody mistyped should cost a wrong threshold, not a
-   * dead inventory screen.
+   * READ FROM THE CACHE, NOT AWAITED
+   * Every caller is inside a render, which cannot wait — so this reads what
+   * loadSettings() last fetched and falls back to ten when it has fetched
+   * nothing. The screens that draw a stock level wait for the settings
+   * before they draw, which is arranged at the bottom of the inventory
+   * section; the fallback is for the case where that request failed, and
+   * costs a wrong threshold rather than a dead screen.
    */
   function lowStockAt() {
     var value = Number(stSection('store').lowStockAt);
@@ -3002,17 +3059,19 @@ window.ZB = window.ZB || {};
 
     /** The whole record, as a copy. Nothing internal is ever handed out. */
     get: function () {
-      var user = ZB.adminUser || {};
+      return loadSettings().then(function () {
+        var user = ZB.adminUser || {};
 
-      return Repo.defer({
-        store: stSection('store'),
-        profile: {
-          name: user.name || '',
-          email: user.email || '',
-          role: user.role || '',
-          initials: user.initials || ''
-        },
-        notifications: stSection('notifications')
+        return {
+          store: stSection('store'),
+          profile: {
+            name: user.name || '',
+            email: user.email || '',
+            role: user.role || '',
+            initials: user.initials || ''
+          },
+          notifications: stSection('notifications')
+        };
       });
     },
 
@@ -3026,16 +3085,21 @@ window.ZB = window.ZB || {};
     update: function (name, values) {
       if (name === 'profile') return Repo.settings.updateProfile(values);
 
-      var base = stDefaults()[name];
-      if (!base) return Promise.reject({ message: 'There is no such settings group.' });
+      if (name !== 'store' && name !== 'notifications') {
+        return Promise.reject({ message: 'There is no such settings group.' });
+      }
 
-      Object.keys(values || {}).forEach(function (key) {
-        if (Object.prototype.hasOwnProperty.call(base, key)) {
-          stEdited[name][key] = values[key];
-        }
+      var body = {};
+      body[name] = name === 'store' ? storeBody(values) : values || {};
+
+      return Api.send('PATCH', '/api/admin/settings', body).then(function (result) {
+        stCache = result.settings;
+        stLoad = Promise.resolve();
+
+        /* The threshold may have moved, and the screens that draw a stock
+           level read it from the copy above. Nothing else caches it. */
+        return stSection(name);
       });
-
-      return Repo.defer(stSection(name));
     },
 
     /**
@@ -3069,32 +3133,74 @@ window.ZB = window.ZB || {};
       });
     },
 
-    /** Put one section back to what the panel opened with. */
+    /**
+     * Read one section again from the database.
+     *
+     * It used to mean "throw away this session's unsaved changes", which
+     * was possible when the changes lived in this file. There is nothing
+     * unsaved now — a save reaches the settings table or it fails — so what
+     * is useful here is a fresh read, for a screen that has been open long
+     * enough to be stale.
+     */
     reset: function (name) {
       if (name === 'profile') {
         return Promise.reject({
-          message: 'The profile has no defaults to return to — it is the signed-in account.'
+          message: 'The profile is the signed-in account, not a saved setting.'
         });
       }
-      if (!stEdited[name]) {
+      if (name !== 'store' && name !== 'notifications') {
         return Promise.reject({ message: 'There is no such settings group.' });
       }
 
-      stEdited[name] = {};
-      return Repo.defer(stSection(name));
+      forgetSettings();
+      return loadSettings().then(function () { return stSection(name); });
     },
 
-    /** Whether a single section differs from the defaults. */
-    isEdited: function (name) {
-      if (name === 'profile') return stProfileEdited;
-      return Object.keys(stEdited[name] || {}).length > 0;
+    /** Always false: every change above reaches the database. */
+    isEdited: function () {
+      return false;
     },
 
     hasUnsavedEdits: function () {
-      return stProfileEdited || ['store', 'notifications']
-        .some(function (name) { return Repo.settings.isEdited(name); });
+      return false;
     }
   };
+
+  /**
+   * The store form's field names, translated to the API's.
+   *
+   * The screen collects one flat set of boxes, because that is one card on
+   * one form. The record keeps the two delivery numbers together under
+   * `shipping`, because they are one rule and place_order reads them as
+   * one. This is where the two shapes meet, so neither side has to learn
+   * the other's.
+   *
+   * Only what the form sent is passed on. A caller changing the delivery
+   * charge alone must not clear the shop's phone number, and the endpoint
+   * merges on the same principle.
+   */
+  function storeBody(values) {
+    var data = values || {};
+    var has = function (key) {
+      return Object.prototype.hasOwnProperty.call(data, key) && data[key] !== undefined;
+    };
+
+    var body = {};
+
+    ['name', 'tagline', 'supportEmail', 'phone', 'address', 'city'].forEach(function (key) {
+      if (has(key)) body[key] = data[key];
+    });
+
+    if (has('lowStockAt')) body.lowStockAt = Number(data.lowStockAt);
+
+    var shipping = {};
+    if (has('shippingFlat')) shipping.flat = Number(data.shippingFlat);
+    if (has('shippingFreeOver')) shipping.freeOver = Number(data.shippingFreeOver);
+
+    if (Object.keys(shipping).length) body.shipping = shipping;
+
+    return body;
+  }
 
   ZB.repo = Repo;
 

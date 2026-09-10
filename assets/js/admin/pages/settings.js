@@ -187,6 +187,11 @@ window.ZB.adminPages = window.ZB.adminPages || {};
     var money = ZB.repo.settings.currency();
     var s = record.store;
 
+    /* The endpoint always sends both numbers, with the same fallbacks
+       db/checkout.sql uses. This is for the case where it somehow did not:
+       an empty box is a box that saves a delivery charge of nothing. */
+    if (!s.shipping) s.shipping = { flat: 250, freeOver: 5000 };
+
     var body = '' +
       '<form class="a-set__form" id="a-set-store-form" novalidate>' +
         f.store.text({ name: 'name', label: 'Store name', value: s.name }) +
@@ -211,6 +216,28 @@ window.ZB.adminPages = window.ZB.adminPages || {};
 
         '<hr class="a-set__rule">' +
 
+        /* THESE TWO DECIDE WHAT A CUSTOMER PAYS
+           Not a preference. public.place_order reads them, in SQL, at the
+           moment an order is priced, and the checkout page quotes them
+           before anybody orders. Everything above this rule is the shop
+           describing itself; everything below it does something. */
+        '<div class="a-form__row">' +
+          f.store.text({ name: 'shippingFlat', label: 'Delivery charge', type: 'number',
+                       min: 0, max: 100000, step: '1', prefix: 'PKR',
+                       value: s.shipping.flat,
+                       help: 'Added to every order that does not qualify for free ' +
+                             'delivery. Zero means the shop always delivers free.' }) +
+
+          f.store.text({ name: 'shippingFreeOver', label: 'Free delivery over', type: 'number',
+                       min: 0, max: 10000000, step: '1', prefix: 'PKR',
+                       value: s.shipping.freeOver,
+                       /* "0" in a box labelled "free delivery over" reads as
+                          "always free", and it means the opposite. Said here
+                          rather than left to be discovered on an order. */
+                       help: 'Measured on the goods after any discount. Zero here ' +
+                             'means never — delivery is charged on every order.' }) +
+        '</div>' +
+
         f.store.text({ name: 'lowStockAt', label: 'Low stock at', type: 'number',
                      min: 1, max: 999, step: '1', value: s.lowStockAt,
                      help: 'This one is live. A product with fewer than this many ' +
@@ -231,9 +258,11 @@ window.ZB.adminPages = window.ZB.adminPages || {};
 
     return card({
       id: 'store', title: 'Store', icon: 'store', effect: 'part',
-      blurb: 'The shop’s own details, and the stock level that counts as low. ' +
-             '<strong>Low stock at</strong> takes effect across the panel; the ' +
-             'details above it are recorded and wait for a backend to use them.',
+      blurb: 'The shop’s own details, what delivery costs, and the stock level ' +
+             'that counts as low. <strong>Delivery</strong> and <strong>Low ' +
+             'stock at</strong> are live — delivery is what customers are ' +
+             'charged at checkout. The details above them are saved and are not ' +
+             'shown anywhere yet.',
       body: body,
       foot: saveRow('store', 'Save store details')
     });
@@ -387,7 +416,9 @@ window.ZB.adminPages = window.ZB.adminPages || {};
         phone: f.store.valueOf(form, 'phone'),
         address: f.store.valueOf(form, 'address'),
         city: f.store.valueOf(form, 'city'),
-        lowStockAt: f.store.valueOf(form, 'lowStockAt')
+        lowStockAt: f.store.valueOf(form, 'lowStockAt'),
+        shippingFlat: f.store.valueOf(form, 'shippingFlat'),
+        shippingFreeOver: f.store.valueOf(form, 'shippingFreeOver')
       };
     }
 
@@ -436,6 +467,25 @@ window.ZB.adminPages = window.ZB.adminPages || {};
          somebody made, not a format this shop uses. */
       if (data.phone && !/\d/.test(data.phone)) {
         errors.phone = 'A phone number needs some digits.';
+      }
+
+      /* The two that decide money. Checked here so the message lands under
+         the box while it is still on screen, and again on the server,
+         because a check a browser can skip is not a check. */
+      if (data.shippingFlat === '') {
+        errors.shippingFlat = 'Set what delivery costs. Enter 0 if it is always free.';
+      } else if (!/^\d+$/.test(data.shippingFlat)) {
+        errors.shippingFlat = 'Use a whole number of rupees.';
+      } else if (Number(data.shippingFlat) > 100000) {
+        errors.shippingFlat = 'That is more than any delivery in this shop — check the figure.';
+      }
+
+      if (data.shippingFreeOver === '') {
+        errors.shippingFreeOver = 'Set the order size that earns free delivery, or 0 for never.';
+      } else if (!/^\d+$/.test(data.shippingFreeOver)) {
+        errors.shippingFreeOver = 'Use a whole number of rupees.';
+      } else if (Number(data.shippingFreeOver) > 10000000) {
+        errors.shippingFreeOver = 'That is higher than any order here, so nothing would qualify.';
       }
 
       if (data.lowStockAt === '') errors.lowStockAt = 'Set the level a product counts as low at.';
@@ -597,8 +647,10 @@ window.ZB.adminPages = window.ZB.adminPages || {};
    *
    * Deliberately not "reset to defaults": somebody who typed into the wrong
    * field wants their last saved values back, not the values the panel
-   * shipped with. Reaching the original defaults means saving nothing and
-   * reloading, which this build does anyway.
+   * shipped with. Those values are what is in the settings table, so this
+   * refills the form from what the last save returned — and reloading the
+   * page reaches the same place, because that is where the record lives
+   * now rather than in this browser.
    */
   function undo(id) {
     if (!saved[id]) return;
@@ -732,11 +784,12 @@ window.ZB.adminPages = window.ZB.adminPages || {};
           ui.icon('warn') +
           '<p>' +
             'Each section says what it can actually do. ' +
-            '<strong>In force</strong> means saving it changes the panel, ' +
+            '<strong>In force</strong> means saving it changes the shop, ' +
             '<strong>partly in force</strong> means some of its fields do and the ' +
             'card names them, and <strong>recorded only</strong> means the choice ' +
-            'is kept and nothing acts on it yet. There is no server in this build, ' +
-            'so no address, message or preference here reaches anyone.' +
+            'is saved and nothing acts on it yet. Everything except Appearance is ' +
+            'stored in the shop’s database — but nothing here can send a message, ' +
+            'so no notification reaches anyone.' +
           '</p>' +
         '</div>' +
 
@@ -771,6 +824,38 @@ window.ZB.adminPages = window.ZB.adminPages || {};
         });
 
         bind(host);
+      }).catch(function (failure) {
+        if (!document.body.contains(host)) return;
+
+        /* This used to be a read of an object the browser already had, and
+           so could not fail. It is a request now, and a request that fails
+           without saying so leaves the word "Loading…" on screen for as
+           long as somebody is willing to look at it. */
+        host.setAttribute('aria-busy', 'false');
+        host.innerHTML =
+          '<div class="a-blank">' +
+            '<p class="a-blank__title">The settings did not load</p>' +
+            '<p class="a-blank__body">' +
+              ui.esc(failure && failure.message
+                ? failure.message
+                : 'The shop’s settings could not be read just now.') +
+            '</p>' +
+            '<button class="a-btn a-btn--primary" type="button" data-set-retry>' +
+              'Try again' +
+            '</button>' +
+          '</div>';
+
+        var retry = host.querySelector('[data-set-retry]');
+        if (retry) {
+          retry.addEventListener('click', function () {
+            host.setAttribute('aria-busy', 'true');
+            host.innerHTML =
+              '<div class="a-blank a-blank--loading">' +
+                '<p class="a-blank__title">Loading…</p>' +
+              '</div>';
+            ZB.adminPages.settings.mount();
+          });
+        }
       });
     }
   };
