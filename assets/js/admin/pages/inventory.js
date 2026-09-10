@@ -430,10 +430,7 @@ window.ZB.adminPages = window.ZB.adminPages || {};
     if (note) {
       var dirty = ZB.repo.inventory.hasUnsavedEdits();
       note.hidden = !dirty;
-      note.textContent = dirty
-        ? 'Stock changes are held in this tab only and are lost on reload — ' +
-          'there is no database yet.'
-        : '';
+      note.textContent = dirty ? 'Some stock changes have not been saved.' : '';
     }
   }
 

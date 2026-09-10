@@ -160,8 +160,13 @@ async function loadEndpoint(file) {
 }
 
 /**
- * Read and parse a JSON body, the way Vercel's Node runtime does, so that
- * `req.body` is an object by the time an endpoint sees it.
+ * Read the request body the way Vercel's Node runtime does.
+ *
+ * JSON becomes an object, text stays a string, and ANYTHING ELSE STAYS A
+ * BUFFER. That last part is not a detail: this used to decode every body as
+ * UTF-8, which is correct for JSON and destroys an image. A photograph
+ * arrived at the upload endpoint already corrupted, and the only sign was
+ * that the file it stored would not open.
  */
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -170,9 +175,11 @@ function readBody(req) {
 
     req.on('data', (chunk) => {
       size += chunk.length;
-      /* A body this large is not something any endpoint here accepts, and
-         reading it would only be a way to exhaust memory. */
-      if (size > 2 * 1024 * 1024) {
+
+      /* A little above what the upload endpoint accepts, so an oversized
+         file is refused by that endpoint with a sentence rather than by
+         this one with a dropped connection. */
+      if (size > 5 * 1024 * 1024) {
         reject(new Error('body too large'));
         req.destroy();
         return;
@@ -181,11 +188,13 @@ function readBody(req) {
     });
 
     req.on('end', () => {
-      const raw = Buffer.concat(chunks).toString('utf8');
-      if (!raw) return resolve(undefined);
+      const buffer = Buffer.concat(chunks);
+      if (!buffer.length) return resolve(undefined);
 
       const type = req.headers['content-type'] || '';
+
       if (type.includes('application/json')) {
+        const raw = buffer.toString('utf8');
         try {
           resolve(JSON.parse(raw));
         } catch {
@@ -193,7 +202,13 @@ function readBody(req) {
         }
         return;
       }
-      resolve(raw);
+
+      if (type.startsWith('text/') || type.includes('x-www-form-urlencoded')) {
+        resolve(buffer.toString('utf8'));
+        return;
+      }
+
+      resolve(buffer);
     });
 
     req.on('error', reject);

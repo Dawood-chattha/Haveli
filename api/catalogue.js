@@ -72,6 +72,18 @@ module.exports = respond.handler(['GET'], async function (req, res) {
       .from('products')
       .select(shape.PRODUCT_SELECT)
       .order('created_at', { ascending: false })
+  /* AND THEN BY ID, WHICH IS NOT A DETAIL
+   *
+   * Postgres breaks ties in whatever order it likes, and it does not have
+   * to pick the same order twice. Five hundred and sixty products seeded in
+   * one statement share a created_at to the microsecond, so paging by that
+   * alone returned some rows on two pages and others on none — the list
+   * looked right, the totals were right, and five products were missing
+   * from a walk through all of them.
+   *
+   * An id is unique, so adding it makes the ordering total: every row has
+   * exactly one place, and page two begins where page one ended. */
+      .order('id', { ascending: true })
       .range(from, from + PAGE - 1);
 
     if (page.error) throw Errors.internal().causedBy(new Error(page.error.message));

@@ -148,6 +148,10 @@ module.exports = respond.handler(['GET'], async function (req) {
   var order = SORTS[sort] || SORTS.newest;
   query = query.order(order.column, { ascending: order.ascending });
 
+  /* A total ordering, so paging cannot repeat a row or skip one. See the
+     note in api/admin/products/index.js. */
+  query = query.order('id', { ascending: true });
+
   var from = (page - 1) * perPage;
   query = query.range(from, from + perPage - 1);
 

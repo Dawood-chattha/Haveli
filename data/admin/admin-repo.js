@@ -67,109 +67,6 @@ window.ZB = window.ZB || {};
   };
 
   /* -----------------------------------------------------------------------
-     Shaping
-
-     The storefront's catalogue product is built for a shop: it knows about
-     badges, related items and popularity. An admin row wants different
-     things — status, SKU, whether it is featured. This is where one becomes
-     the other, so the pages downstream see a stable shape no matter what is
-     underneath.
-     ----------------------------------------------------------------------- */
-
-  function toRow(product) {
-    return {
-      id: product.id,
-      title: product.title,
-      image: product.images && product.images[0],
-      dept: product.dept,
-      deptLabel: product.deptLabel,
-      category: product.category,
-      categoryLabel: product.categoryLabel,
-      price: product.price,
-      compareAt: product.compareAt,
-      colour: product.colour,
-      sizes: product.sizes,
-      inStock: product.inStock,
-      /* Derived from the id so they never change between renders, the same
-         way the catalogue derives everything else. */
-      sku: skuFor(product),
-      stock: stockFor(product),
-      status: product.inStock ? 'active' : 'out-of-stock',
-      description: product.description || '',
-      featured: false,
-      storefrontPath: product.path
-    };
-  }
-
-  /**
-   * A stock quantity for a product the catalogue only knows as in or out of
-   * stock. Out of stock is zero; everything else gets a stable number from
-   * its own id, with a slice of the range low enough that the inventory
-   * page has genuine "running out" rows to warn about.
-   */
-  function stockFor(product) {
-    if (!product.inStock) return 0;
-
-    var n = 0;
-    var id = String(product.id);
-    for (var i = 0; i < id.length; i++) n = (n * 31 + id.charCodeAt(i)) >>> 0;
-
-    /* One in six sits under ten; the rest spread up to about ninety. */
-    return (n % 6 === 0) ? 1 + (n % 9) : 10 + (n % 80);
-  }
-
-  /** 'HAV-M-POLO-0031' — readable, stable, and unique per product. */
-  function skuFor(product) {
-    var dept = String(product.dept || '').slice(0, 1).toUpperCase();
-    var cat = String(product.category || 'gen').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
-    var tail = String(product.id).replace(/[^a-zA-Z0-9]/g, '').slice(-4).toUpperCase();
-    return 'HAV-' + dept + '-' + cat + '-' + tail;
-  }
-
-  /* -----------------------------------------------------------------------
-     THE OVERLAY, AND WHAT IS LEFT OF IT
-
-     Every write on this page used to land here: an edit was held in memory
-     on top of the generated catalogue and lost on reload, because there was
-     nothing to save to. Products and categories now save to the database,
-     and this remains for the one section that has not been connected yet.
-
-     Inventory reads currentRows(), which is built from ZB.catalogue — the
-     storefront's own list, keyed by slug rather than by the database id the
-     product endpoints take. Connecting it is a step of its own, and until
-     then its stock changes are held here exactly as they were, with the
-     page still saying so.
-     ----------------------------------------------------------------------- */
-
-  var edited = {};     /* id -> the fields that were changed */
-
-  /** The catalogue as the admin currently sees it. */
-  function currentRows() {
-    /* ALWAYS A COPY, EVEN WHEN THERE IS NOTHING TO MERGE
-       The obvious shortcut is to return `row` untouched when it has no
-       overlay entry. It is wrong: handing out the object means a caller
-       holds a live reference into the repo's own state. Two things then go
-       wrong. A page can change the store by accident, without going through
-       a write method. And a value read a moment ago silently changes under
-       whoever is still holding it — which is not how a value fetched from a
-       server behaves.
-
-       A shallow copy is enough: writes replace whole fields. */
-    return ZB.catalogue.all().map(toRow).map(function (row) {
-      var merged = {};
-      Object.keys(row).forEach(function (key) { merged[key] = row[key]; });
-
-      if (edited[row.id]) {
-        Object.keys(edited[row.id]).forEach(function (key) {
-          merged[key] = edited[row.id][key];
-        });
-      }
-
-      return merged;
-    });
-  }
-
-  /* -----------------------------------------------------------------------
      Talking to the API
 
      Everything below this line that concerns products or categories is a
@@ -246,6 +143,69 @@ window.ZB = window.ZB || {};
   };
 
   Repo.api = Api;
+
+  /**
+   * Send one picture, and get back the URL it now lives at.
+   *
+   * The file itself is the request body. A multipart form is what a browser
+   * sends by default and reading one needs a parser — a dependency this
+   * project does not have, or a hundred lines of boundary-splitting written
+   * by hand. `body: file` needs neither, and fetch sets the Content-Type
+   * from the file.
+   *
+   * Nothing about the file is trusted on the far side: api/admin/uploads.js
+   * reads the first bytes to see what it actually is, checks the size, and
+   * decides the name itself.
+   */
+  Repo.uploadImage = function (file, kind) {
+    if (!file) return Promise.reject(new Error('No file was chosen.'));
+
+    return fetch(Api.query('/api/admin/uploads', { for: kind || 'products' }), {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': file.type || 'application/octet-stream'
+      },
+      body: file
+    }).then(function (res) {
+      return res.json().catch(function () {
+        throw new Error('The server did not answer properly (' + res.status + ').');
+      }).then(function (payload) {
+        if (res.ok && payload && payload.ok) return payload.data;
+
+        var error = new Error((payload && payload.error && payload.error.message) ||
+                              'That picture could not be saved.');
+        error.status = res.status;
+        throw error;
+      });
+    });
+  };
+
+  /**
+   * Every page of a paged endpoint, up to a limit, as one array.
+   *
+   * Used where a screen's own question needs the whole set rather than a
+   * page of it — an inventory total, a report's period, a sort by something
+   * the database cannot order by. Each of those says why at its own call.
+   */
+  function loadAll(path, cap) {
+    var out = [];
+
+    var next = function (page) {
+      return Api.get(Api.query(path, { page: page, perPage: 100 }))
+        .then(function (result) {
+          out = out.concat(result.items || []);
+
+          if (out.length >= cap) return out.slice(0, cap);
+          if (page >= result.pages) return out;
+
+          return next(page + 1);
+        });
+    };
+
+    return next(1);
+  }
 
   /* -----------------------------------------------------------------------
      Products
@@ -404,25 +364,6 @@ window.ZB = window.ZB || {};
   };
 
   /**
-   * Write a change into the in-memory overlay currentRows() reads.
-   *
-   * What Repo.products.update used to be, and all that is left of it. Only
-   * inventory uses it now, for the reason given at its setStock; the
-   * product list and the product form both write to the database.
-   */
-  function overlayEdit(id, data) {
-    var exists = currentRows().some(function (row) { return row.id === id; });
-    if (!exists) {
-      return Promise.reject(new Error('That product no longer exists.'));
-    }
-
-    edited[id] = edited[id] || {};
-    Object.keys(data).forEach(function (key) { edited[id][key] = data[key]; });
-
-    return Repo.defer(currentRows().filter(function (row) { return row.id === id; })[0]);
-  }
-
-  /**
    * Turn what the product form collected into what the API accepts.
    *
    * The form has always worked in `dept` + `category` slugs, because that
@@ -467,15 +408,52 @@ window.ZB = window.ZB || {};
      Inventory
 
      NOT A SECOND LIST OF PRODUCTS
-     Inventory reads currentRows() — the same products, through the same
-     overlay, as the product list. It is a different question asked of the
-     same records: the product screen asks "what do we sell", this one asks
+     The same rows the product screen shows, from the same endpoint, asked a
+     different question: that screen asks "what do we sell", this one asks
      "what is about to run out". Two lists would be two places for a stock
      number to live, and they would disagree the first time one was edited.
 
-     A stock change made here therefore shows on the product list, and the
-     other way round, without either screen knowing the other exists.
+     IT USED TO READ THE STOREFRONT'S CATALOGUE, WHICH WAS WRONG
+     currentRows() was built from ZB.catalogue — the shop's own list, which
+     holds only active products. So the one screen whose job is finding what
+     has run out could not see a draft, and its rows were keyed by the
+     storefront slug rather than by the id the product endpoints take, which
+     is why its stock changes were still being held in memory.
+
+     It reads /api/admin/products now, whole, because every figure the screen
+     shows is over all of them: how many are out, how many are low, what the
+     shelf is worth. A page of twenty cannot answer any of those.
      ----------------------------------------------------------------------- */
+
+  /* Where loading the catalogue whole stops being reasonable. The screen
+     would still work past this; the totals above it would quietly be totals
+     of the first five thousand. */
+  var STOCK_MAX = 5000;
+
+  var stockCache = null;
+  var stockLoad = null;
+
+  function loadStock() {
+    if (!stockLoad) {
+      stockLoad = loadAll('/api/admin/products', STOCK_MAX)
+        .then(function (rows) { stockCache = rows; })
+        .catch(function (err) {
+          /* A failure must not be remembered as the answer. */
+          stockLoad = null;
+          throw err;
+        });
+    }
+
+    return stockLoad;
+  }
+
+  /** Throw the snapshot away — after a stock change, or a product edit. */
+  function forgetStock() {
+    stockCache = null;
+    stockLoad = null;
+  }
+
+  function currentRows() { return stockCache || []; }
 
   /**
    * Below this, a product is "low" rather than merely in stock.
@@ -627,63 +605,83 @@ window.ZB = window.ZB || {};
       });
     },
 
-    /* -- writes. Straight through to the product overlay. -- */
+    /* -- writes -- */
 
     /**
      * Set one product's stock.
      *
-     * Also settles the two fields that have to move with it. A product on
-     * the shelf that says "Out of stock", or a sold-out one still marked
-     * active, is a row that contradicts itself — and the storefront reads
-     * `inStock` to decide whether the buy button works.
+     * Also settles the status that has to move with it. A product on the
+     * shelf that says "Out of stock", or a sold-out one still offered, is a
+     * row that contradicts itself — and the storefront reads stock to decide
+     * whether the buy button works.
      *
      * A draft stays a draft: it is hidden from the shop for a reason that
      * has nothing to do with stock, and restocking it must not publish it.
+     * So is an archived product, which was deliberately taken out of the
+     * shop and does not come back because somebody counted it.
      */
     setStock: function (id, stock) {
-      var quantity = Math.max(0, Math.round(Number(stock)));
-      if (!isFinite(quantity)) {
-        return Promise.reject({ message: 'That is not a quantity.' });
+      var quantity = Math.round(Number(stock));
+
+      if (!isFinite(quantity) || quantity < 0) {
+        return Promise.reject(new Error('That is not a quantity.'));
       }
 
-      var row = currentRows().filter(function (r) { return r.id === id; })[0];
-      if (!row) return Promise.reject({ message: 'That product no longer exists.' });
+      return loadStock().then(function () {
+        var row = currentRows().filter(function (r) { return r.id === id; })[0];
+        if (!row) throw new Error('That product no longer exists.');
 
-      var change = { stock: quantity, inStock: quantity > 0 };
+        var change = { stock: quantity };
 
-      if (row.status !== 'draft') {
-        change.status = quantity > 0 ? 'active' : 'out-of-stock';
-      }
+        /* 'out-of-stock' is not a status the database has and never was —
+           it is stock being zero, which the line above has just set. Writing
+           one would be a second copy of the same fact, free to disagree with
+           the first. */
+        if (row.status === 'draft' || row.status === 'archived') {
+          /* left alone, deliberately — see above */
+        } else {
+          change.status = 'active';
+        }
 
-      /* STILL THE IN-MEMORY OVERLAY, DELIBERATELY
-       *
-       * Inventory reads currentRows(), which is built from ZB.catalogue —
-       * so its rows are keyed by the storefront slug, not by the database
-       * id the product endpoints take. Sending a slug to
-       * /api/admin/products/:id would be a 400 on every save.
-       *
-       * Connecting inventory properly is its own step: it needs the rows
-       * to come from /api/admin/products so that drafts and out-of-stock
-       * items are in the list at all, which changes what the page counts
-       * and what its filters mean. Until then this keeps working the way
-       * it worked yesterday, and the page still says the change is not
-       * saved. What it must not do is silently fail. */
-      return overlayEdit(id, change);
+        return Api.send('PATCH', '/api/admin/products/' + encodeURIComponent(id), change);
+      }).then(function (result) {
+        forgetStock();
+        if (Repo.metrics) Repo.metrics.forget();
+        return result.product;
+      });
     },
 
     /** Add to or take from what is there. Never goes below zero. */
     adjustStock: function (id, delta) {
-      var row = currentRows().filter(function (r) { return r.id === id; })[0];
-      if (!row) return Promise.reject({ message: 'That product no longer exists.' });
+      return loadStock().then(function () {
+        var row = currentRows().filter(function (r) { return r.id === id; })[0];
+        if (!row) throw new Error('That product no longer exists.');
 
-      return Repo.inventory.setStock(id, row.stock + delta);
+        return Repo.inventory.setStock(id, Math.max(0, row.stock + delta));
+      });
     },
 
+    /** Always false: every change above reaches the database. */
     hasUnsavedEdits: function () {
-      /* Its own overlay, not the product endpoints' — see setStock. */
-      return Object.keys(edited).length > 0;
+      return false;
     }
   };
+
+  /* Everything above that reads rows waits for them first. The filtering,
+     the sorting and the tiles were written against an array that was simply
+     there; they did not need to change for it to arrive over the network,
+     they needed to happen afterwards. */
+  ['facets', 'list', 'summary'].forEach(function (name) {
+    var counted = Repo.inventory[name];
+
+    Repo.inventory[name] = function () {
+      var args = arguments;
+
+      return loadStock().then(function () {
+        return counted.apply(Repo.inventory, args);
+      });
+    };
+  });
 
   /* -----------------------------------------------------------------------
      Orders
@@ -1454,10 +1452,9 @@ window.ZB = window.ZB || {};
      Banners
 
      WHERE A BANNER COMES FROM
-     The same place the shop's homepage gets it: ZB.heroSlides. Exactly the
-     reasoning the category section uses — the storefront already holds this
-     list, and a second one kept here would let the panel and the shop
-     disagree about what the homepage is currently showing.
+     The banners table, through /api/admin/banners. It used to be
+     ZB.heroSlides — the file the storefront's homepage read — with an
+     overlay on top, so an edit made here never reached the shop at all.
 
      WHY ORDER IS A FIRST-CLASS OPERATION AND NOT A SORT
      A carousel is an ordered thing. Slide one is what almost everybody
@@ -1466,26 +1463,55 @@ window.ZB = window.ZB || {};
      control — there is a way to move a slide up and down, and the list is
      always in the order the shop plays them.
 
-     THE LINK CHECK
-     Every slide carries a call to action, and a call to action that lands
-     on "page not found" is the most expensive broken thing a storefront
-     can have: it is on the homepage, above the fold, and it is the button
-     the campaign was bought to make people press. So the destination is
-     checked against the routes the storefront actually serves rather than
-     merely stored, and a slide pointing nowhere is marked as such. The
-     check reads the same catalogue and navigation the shop's own pages
-     resolve against, so it cannot go out of step with them.
+     THE LINK CHECK STAYS IN THE BROWSER
+     Every slide carries a call to action, and one that lands on "page not
+     found" is the most expensive broken thing a storefront can have: it is
+     on the homepage, above the fold, and it is the button the campaign was
+     bought to make people press. So the destination is checked against the
+     routes the storefront actually serves rather than merely stored.
+
+     That check reads ZB.navigation and ZB.catalogue — the same lists the
+     shop's own pages resolve against, in the same browser. A server
+     answering it would be keeping a second copy of the shop's routes, going
+     stale on its own schedule.
      ----------------------------------------------------------------------- */
 
-  var bnEdited = {};     /* id -> changed fields */
-  var bnRemoved = {};    /* id -> true */
-  var bnAdded = [];      /* created this session */
-  var bnSequence = null; /* explicit order, once anything has been moved */
-  var bnNextId = 1;
+  /**
+   * The category tree flattened into rows, for the link picker.
+   *
+   * This used to be a function shared with the categories section, and that
+   * section stopped needing it when it moved to the API — so it went, and
+   * took the banner link picker with it. Nothing said so: checkLink and
+   * linkOptions were left calling a function that no longer existed, which
+   * is a ReferenceError the moment somebody opens a slide.
+   *
+   * It reads ZB.navigation, which is the menu as the shop is actually
+   * serving it — so a category the owner added a moment ago is somewhere a
+   * slide can point.
+   */
+  function navigationRows() {
+    var slug = ZB.ui.slug;
+    var rows = [];
 
-  /* The storefront routes that take no parameters, from assets/js/routes.js.
-     Kept beside the ones that do, below, so the whole answer to "does this
-     link work" is in one place. */
+    (ZB.navigation || []).forEach(function (dept) {
+      (dept.items || []).forEach(function (item) {
+        rows.push({
+          dept: dept.id, deptLabel: dept.label,
+          slug: slug(item.label), label: item.label, level: 1
+        });
+
+        (item.children || []).forEach(function (child) {
+          rows.push({
+            dept: dept.id, deptLabel: dept.label,
+            slug: slug(child.label), label: child.label, level: 2
+          });
+        });
+      });
+    });
+
+    return rows;
+  }
+
   var FLAT_ROUTES = [
     '/', '/search', '/cart', '/wishlist', '/account', '/stores', '/tracking',
     '/careers', '/faqs', '/how-to-buy', '/payment', '/shipping', '/returns',
@@ -1554,66 +1580,50 @@ window.ZB = window.ZB || {};
     return { ok: false, reason: 'Nothing in the shop answers that address.' };
   }
 
-  /** ZB.heroSlides, flattened into rows with an id. */
-  function heroRows() {
-    return (ZB.heroSlides || []).map(function (slide, i) {
-      return {
-        id: 'hero-' + (i + 1),
-        image: slide.image,
-        alt: slide.alt,
-        eyebrow: slide.eyebrow,
-        headline: slide.headline,
-        body: slide.body,
-        cta: slide.cta,
-        href: slide.href,
-        proof: slide.proof,
-        status: 'active',
-        source: 'hero'
-      };
-    });
-  }
+  /* The whole run is fetched at once and cached until something writes: a
+     carousel is a handful of slides, and every question this screen asks —
+     how many are hidden, which one is third — is about all of them. */
 
-  /** The carousel as the admin currently sees it, in playing order. */
-  function currentBanners() {
-    var rows = heroRows().concat(bnAdded);
+  var bannerCache = null;
+  var bannerLoad = null;
 
-    rows = rows
-      .filter(function (row) { return !bnRemoved[row.id]; })
-      .map(function (row) {
-        var merged = {};
-        Object.keys(row).forEach(function (key) { merged[key] = row[key]; });
-
-        if (bnEdited[row.id]) {
-          Object.keys(bnEdited[row.id]).forEach(function (key) {
-            merged[key] = bnEdited[row.id][key];
-          });
-        }
-
-        var link = checkLink(merged.href);
-        merged.linkOk = link.ok;
-        merged.linkReason = link.reason;
-        return merged;
-      });
-
-    /* An explicit sequence only exists once something has been moved.
-       Until then the file's own order is the answer, and an id the
-       sequence has never heard of — one added since — goes to the end
-       rather than disappearing. */
-    if (bnSequence) {
-      var at = {};
-      bnSequence.forEach(function (id, i) { at[id] = i; });
-      rows.sort(function (a, b) {
-        var ai = at[a.id] === undefined ? 9999 : at[a.id];
-        var bi = at[b.id] === undefined ? 9999 : at[b.id];
-        return ai - bi;
+  function loadBanners() {
+    if (!bannerLoad) {
+      bannerLoad = Api.get('/api/admin/banners').then(function (data) {
+        bannerCache = data;
+      }).catch(function (err) {
+        bannerLoad = null;
+        throw err;
       });
     }
 
+    return bannerLoad;
+  }
+
+  function forgetBanners() {
+    bannerCache = null;
+    bannerLoad = null;
+  }
+
+  /** The slides, each told where it plays and whether its link goes anywhere. */
+  function currentBanners() {
+    var rows = ((bannerCache && bannerCache.items) || []).map(function (row) {
+      var out = {};
+      Object.keys(row).forEach(function (key) { out[key] = row[key]; });
+
+      var link = checkLink(out.href);
+      out.linkOk = link.ok;
+      out.linkReason = link.reason;
+
+      return out;
+    });
+
     /* Position is what a shopper experiences, so it counts only the slides
-       that actually play. A hidden slide keeps its place in the list — it
-       is easier to bring back where it was — but is not given a number in
-       a run it is not part of. */
+       that actually play. A hidden slide keeps its place in the list — it is
+       easier to bring back where it was — but is not given a number in a run
+       it is not part of. */
     var seen = 0;
+
     rows.forEach(function (row, i) {
       row.index = i;
       row.position = row.status === 'active' ? ++seen : 0;
@@ -1639,40 +1649,46 @@ window.ZB = window.ZB || {};
      */
     list: function (options) {
       options = options || {};
-      var all = currentBanners();
 
-      var rows = all.filter(function (row) {
-        if (options.view === 'active') return row.status === 'active';
-        if (options.view === 'hidden') return row.status !== 'active';
-        if (options.view === 'broken') return !row.linkOk;
-        return true;
-      });
+      return loadBanners().then(function () {
+        var all = currentBanners();
 
-      return Repo.defer({
-        items: rows,
-        total: rows.length,
-        active: all.filter(function (row) { return row.status === 'active'; }).length,
-        hidden: all.filter(function (row) { return row.status !== 'active'; }).length,
-        broken: all.filter(function (row) { return !row.linkOk; }).length
+        var rows = all.filter(function (row) {
+          if (options.view === 'active') return row.status === 'active';
+          if (options.view === 'hidden') return row.status !== 'active';
+          if (options.view === 'broken') return !row.linkOk;
+          return true;
+        });
+
+        return {
+          items: rows,
+          total: rows.length,
+          active: all.filter(function (row) { return row.status === 'active'; }).length,
+          hidden: all.filter(function (row) { return row.status !== 'active'; }).length,
+          broken: all.filter(function (row) { return !row.linkOk; }).length
+        };
       });
     },
 
     get: function (id) {
-      var hit = currentBanners().filter(function (row) { return row.id === id; })[0];
-      return Repo.defer(hit || null);
+      return loadBanners().then(function () {
+        return currentBanners().filter(function (row) { return row.id === id; })[0] || null;
+      });
     },
 
     summary: function () {
-      var rows = currentBanners();
-      var live = rows.filter(function (row) { return row.status === 'active'; });
+      return loadBanners().then(function () {
+        var rows = currentBanners();
+        var live = rows.filter(function (row) { return row.status === 'active'; });
 
-      return Repo.defer({
-        total: rows.length,
-        active: live.length,
-        hidden: rows.length - live.length,
-        /* Counted across every slide, not only the live ones: a broken
-           link on a hidden slide is a trap set for whoever turns it on. */
-        broken: rows.filter(function (row) { return !row.linkOk; }).length
+        return {
+          total: rows.length,
+          active: live.length,
+          hidden: rows.length - live.length,
+          /* Counted across every slide, not only the live ones: a broken
+             link on a hidden slide is a trap set for whoever turns it on. */
+          broken: rows.filter(function (row) { return !row.linkOk; }).length
+        };
       });
     },
 
@@ -1686,7 +1702,7 @@ window.ZB = window.ZB || {};
      * shop has is knowable, and typing a path by hand is how the broken
      * ones got there in the first place. A current value that is not in
      * the list is added to it, so opening a slide that already points
-     * somewhere odd does not silently rewrite where it goes.
+     * somewhere odd does not silently move it.
      */
     linkOptions: function (current) {
       var options = [{ id: '/', label: 'Homepage' }];
@@ -1694,7 +1710,7 @@ window.ZB = window.ZB || {};
       navigationRows().forEach(function (row) {
         options.push({
           id: '/category/' + row.dept + '/' + row.slug,
-          label: row.deptLabel + ' → ' + row.label +
+          label: row.deptLabel + ' \u2192 ' + row.label +
                  (row.level === 1 ? ' (all)' : '')
         });
       });
@@ -1707,53 +1723,47 @@ window.ZB = window.ZB || {};
 
       var known = options.some(function (item) { return item.id === current; });
       if (current && !known) {
-        options.unshift({ id: current, label: current + ' — as it is set now' });
+        options.unshift({ id: current, label: current + ' \u2014 as it is set now' });
       }
 
       return options;
     },
 
-    /* -- writes. In memory only, exactly like products and categories. -- */
+    /** Upload a picture and get back the URL it now lives at. */
+    upload: function (file) { return Repo.uploadImage(file, 'banners'); },
+
+    /* -- writes -- */
 
     create: function (data) {
-      var row = {
-        id: 'new-banner-' + (bnNextId++),
-        image: data.image || '',
-        alt: data.alt || '',
-        eyebrow: data.eyebrow || '',
-        headline: data.headline || '',
-        body: data.body || '',
-        cta: data.cta || '',
+      return Api.send('POST', '/api/admin/banners', {
+        image: data.image,
+        alt: data.alt,
+        eyebrow: data.eyebrow || undefined,
+        headline: data.headline || undefined,
+        body: data.body || undefined,
+        cta: data.cta || undefined,
+        proof: data.proof || undefined,
         href: data.href || '/',
-        proof: data.proof || '',
-        status: data.status || 'active',
-        source: 'new'
-      };
-
-      bnAdded.push(row);
-      /* A new slide goes at the end of the run. Said in both places so the
-         two orderings cannot disagree about where it landed. */
-      if (bnSequence) bnSequence.push(row.id);
-
-      return Repo.defer(row);
+        status: data.status || 'active'
+      }).then(function (result) {
+        forgetBanners();
+        return result.banner;
+      });
     },
 
     update: function (id, data) {
-      var exists = currentBanners().some(function (row) { return row.id === id; });
-      if (!exists) {
-        return Promise.reject({ message: 'That banner no longer exists.' });
-      }
+      var patch = {};
 
-      var own = bnAdded.filter(function (row) { return row.id === id; })[0];
+      ['image', 'alt', 'eyebrow', 'headline', 'body', 'cta', 'proof', 'href', 'status']
+        .forEach(function (key) {
+          if (Object.prototype.hasOwnProperty.call(data, key)) patch[key] = data[key];
+        });
 
-      if (own) {
-        Object.keys(data).forEach(function (key) { own[key] = data[key]; });
-      } else {
-        bnEdited[id] = bnEdited[id] || {};
-        Object.keys(data).forEach(function (key) { bnEdited[id][key] = data[key]; });
-      }
-
-      return Repo.banners.get(id);
+      return Api.send('PATCH', '/api/admin/banners/' + encodeURIComponent(id), patch)
+        .then(function (result) {
+          forgetBanners();
+          return result.banner;
+        });
     },
 
     /**
@@ -1761,77 +1771,93 @@ window.ZB = window.ZB || {};
      *
      * By one, and never by drag: a drag needs a pointer, a steady hand and
      * a list that fits on screen, and it has no keyboard at all. Two
-     * buttons work with a thumb, with a keyboard and with a screen reader
-     * — and for a run of seven slides, one place at a time is not slow.
+     * buttons work with a thumb, with a keyboard and with a screen reader —
+     * and for a run of seven slides, one place at a time is not slow.
      *
      * `delta` is -1 or +1. Moving past either end does nothing rather than
      * wrapping, because a slide jumping from first to last is not what
      * anybody pressing "up" meant.
+     *
+     * The whole running order is what gets sent, not the move. See
+     * api/admin/banners/index.js for why.
      */
     move: function (id, delta) {
-      var order = bannerIds();
-      var from = order.indexOf(id);
-      var to = from + (delta < 0 ? -1 : 1);
+      return loadBanners().then(function () {
+        var order = bannerIds();
+        var from = order.indexOf(id);
+        var to = from + (delta < 0 ? -1 : 1);
 
-      if (from < 0 || to < 0 || to >= order.length) {
-        return Repo.defer({ moved: false, order: order });
-      }
+        if (from < 0 || to < 0 || to >= order.length) {
+          return { moved: false, order: order };
+        }
 
-      order.splice(to, 0, order.splice(from, 1)[0]);
-      bnSequence = order;
+        order.splice(to, 0, order.splice(from, 1)[0]);
 
-      return Repo.defer({ moved: true, from: from, to: to, order: order });
+        return Repo.banners.setOrder(order).then(function () {
+          return { moved: true, from: from, to: to, order: order };
+        });
+      });
     },
 
-    /** Put the whole run back the way it was. Used by undo. */
+    /** Put the whole run in a given order. Used by move and by undo. */
     setOrder: function (order) {
-      bnSequence = order ? order.slice() : null;
-      return Repo.defer(true);
+      if (!order || !order.length) return Promise.resolve(false);
+
+      return Api.send('PATCH', '/api/admin/banners', { order: order })
+        .then(function () {
+          forgetBanners();
+          return true;
+        });
     },
 
+    /**
+     * Remove a slide.
+     *
+     * The token carries the slide's own fields and the running order, which
+     * is what restore() needs: putting slide three back at the end of the
+     * run is not putting it back.
+     */
     remove: function (id) {
-      var row = currentBanners().filter(function (item) { return item.id === id; })[0];
-      if (!row) return Repo.defer(null);
+      return loadBanners().then(function () {
+        var row = currentBanners().filter(function (item) { return item.id === id; })[0];
+        if (!row) return null;
 
-      /* The order is captured too. Deleting slide three and undoing it has
-         to put it back at three, not at the end of the run. */
-      var undo = {
-        id: id,
-        order: bannerIds(),
-        row: null,
-        wasRemoved: false,
-        edits: bnEdited[id] || null
-      };
+        var undo = { id: id, row: row, order: bannerIds() };
 
-      var own = bnAdded.filter(function (item) { return item.id === id; })[0];
-      if (own) {
-        undo.row = own;
-        bnAdded = bnAdded.filter(function (item) { return item.id !== id; });
-      } else {
-        undo.wasRemoved = true;
-        bnRemoved[id] = true;
-      }
-
-      if (bnEdited[id]) delete bnEdited[id];
-
-      return Repo.defer(undo);
+        return Api.send('DELETE', '/api/admin/banners/' + encodeURIComponent(id))
+          .then(function () {
+            forgetBanners();
+            return undo;
+          });
+      });
     },
 
+    /**
+     * Put back what remove() took.
+     *
+     * A deleted row is gone, so this creates it again from what was
+     * captured — same picture, same words, same place in the run. It comes
+     * back with a new id, which nothing outside this file can tell and
+     * nothing inside it depends on.
+     */
     restore: function (undo) {
-      if (!undo) return Repo.defer(false);
+      if (!undo || !undo.row) return Promise.resolve(false);
 
-      if (undo.row) bnAdded.push(undo.row);
-      if (undo.wasRemoved) delete bnRemoved[undo.id];
-      if (undo.edits) bnEdited[undo.id] = undo.edits;
-      if (undo.order) bnSequence = undo.order.slice();
+      return Repo.banners.create(undo.row).then(function (created) {
+        if (!undo.order) return true;
 
-      return Repo.defer(true);
+        /* The old order, with the new id where the old one stood. */
+        var order = undo.order.map(function (id) {
+          return id === undo.id ? created.id : id;
+        });
+
+        return Repo.banners.setOrder(order).then(function () { return true; });
+      });
     },
 
+    /** Always false: every change above reaches the database. */
     hasUnsavedEdits: function () {
-      return bnAdded.length > 0 || bnSequence !== null ||
-             Object.keys(bnEdited).length > 0 ||
-             Object.keys(bnRemoved).length > 0;
+      return false;
     }
   };
 
@@ -1863,21 +1889,10 @@ window.ZB = window.ZB || {};
      here, so that file cannot go stale — see the note beside them.
      ----------------------------------------------------------------------- */
 
-  var cpEdited = {};
-  var cpRemoved = {};
-  var cpAdded = [];
-  var cpNextId = 1;
-
   /** Midnight today, so a coupon ending "today" lasts the whole day. */
   function startOfToday() {
     var now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  }
-
-  function dayOffset(days) {
-    var day = startOfToday();
-    day.setDate(day.getDate() + days);
-    return day;
   }
 
   /** Whole days from today. Negative is in the past. */
@@ -1937,15 +1952,26 @@ window.ZB = window.ZB || {};
 
     var today = startOfToday().getTime();
 
-    out.startsInDays = daysFromToday(out.startsAt);
-    out.endsInDays = daysFromToday(out.expiresAt);
+    /* Null where there is no date, rather than the number of days since
+       1970 — which is what `new Date(null)` quietly produces, and what a
+       coupon with no end date would otherwise have said it ended. */
+    out.startsInDays = out.startsAt == null ? null : daysFromToday(out.startsAt);
+    out.endsInDays = out.expiresAt == null ? null : daysFromToday(out.expiresAt);
     out.limitReached = !!out.usageLimit && out.used >= out.usageLimit;
 
-    if (out.disabled)                    out.state = 'off';
-    else if (out.startsAt > today)       out.state = 'scheduled';
-    else if (out.expiresAt < today)      out.state = 'expired';
-    else if (out.limitReached)           out.state = 'used-up';
-    else                                 out.state = 'running';
+    /* NULL IS NOT A DATE IN THE PAST
+       Both dates are optional in the database: a coupon with no start runs
+       from the moment it exists, and one with no end does not stop. Compared
+       directly, null becomes zero — so every open-ended coupon read as
+       expired in 1970, which is the sort of wrong that looks deliberate. */
+    var starts = out.startsAt === null || out.startsAt === undefined ? null : out.startsAt;
+    var ends = out.expiresAt === null || out.expiresAt === undefined ? null : out.expiresAt;
+
+    if (out.disabled)                        out.state = 'off';
+    else if (starts !== null && starts > today) out.state = 'scheduled';
+    else if (ends !== null && ends < today)     out.state = 'expired';
+    else if (out.limitReached)               out.state = 'used-up';
+    else                                     out.state = 'running';
 
     /* "Live" is the question that matters at a glance: would a shopper
        typing this code right now have it accepted. Four of the five states
@@ -1965,43 +1991,49 @@ window.ZB = window.ZB || {};
     return out;
   }
 
-  /** The seed rows, with their day offsets turned into real dates. */
-  function seedCoupons() {
-    return ((ZB.adminSeed && ZB.adminSeed.coupons) || []).map(function (seed, i) {
-      return {
-        id: 'coupon-' + (i + 1),
-        code: seed.code,
-        note: seed.note,
-        type: seed.type,
-        value: seed.value,
-        minSpend: seed.minSpend,
-        startsAt: dayOffset(seed.startsIn).getTime(),
-        expiresAt: dayOffset(seed.endsIn).getTime(),
-        usageLimit: seed.limit,
-        used: seed.used,
-        disabled: seed.disabled,
-        source: 'seed'
-      };
-    });
+  /* -----------------------------------------------------------------------
+     WHERE A COUPON COMES FROM
+
+     The coupons table, through /api/admin/coupons. It used to be a seed
+     file with an overlay, which meant the panel could describe a discount
+     the checkout had never heard of.
+
+     The checkout has been reading this table since Phase 5 — the dates, the
+     minimum spend, the usage limit, whether it is switched off — and there
+     was no way to put a row in it. Now there is, and the two are the same
+     rows.
+
+     THE STATE IS DECIDED HERE, THE REFUSAL IS NOT
+     Whether a coupon reads as running, scheduled, expired, used up or
+     switched off follows from its dates against *today*, and today is the
+     reader's. What a shopper's code actually does is decided in SQL, inside
+     place_order, at the moment of ordering. This is a description; that is
+     the decision. They agree because they read the same columns.
+     ----------------------------------------------------------------------- */
+
+  var couponCache = null;
+  var couponLoad = null;
+
+  function loadCoupons() {
+    if (!couponLoad) {
+      couponLoad = Api.get('/api/admin/coupons').then(function (data) {
+        couponCache = data.items || [];
+      }).catch(function (err) {
+        couponLoad = null;
+        throw err;
+      });
+    }
+
+    return couponLoad;
+  }
+
+  function forgetCoupons() {
+    couponCache = null;
+    couponLoad = null;
   }
 
   function currentCoupons() {
-    var rows = cpAdded.concat(seedCoupons());
-
-    return rows
-      .filter(function (row) { return !cpRemoved[row.id]; })
-      .map(function (row) {
-        var merged = {};
-        Object.keys(row).forEach(function (key) { merged[key] = row[key]; });
-
-        if (cpEdited[row.id]) {
-          Object.keys(cpEdited[row.id]).forEach(function (key) {
-            merged[key] = cpEdited[row.id][key];
-          });
-        }
-
-        return shapeCoupon(merged);
-      });
+    return (couponCache || []).map(shapeCoupon);
   }
 
   var COUPON_SORTS = {
@@ -2010,7 +2042,12 @@ window.ZB = window.ZB || {};
          fall — "ending soonest" is a question about live ones, and an
          expired code at the top of that list answers nothing. */
       if (a.live !== b.live) return a.live ? -1 : 1;
-      return a.expiresAt - b.expiresAt;
+
+      /* A coupon with no end date never ends, so it sorts last among the
+         live ones rather than first — which is where a null would have put
+         it, ahead of everything with an actual deadline. */
+      var ends = function (row) { return row.expiresAt == null ? Infinity : row.expiresAt; };
+      return ends(a) - ends(b);
     },
     'code-asc':   function (a, b) { return a.code.localeCompare(b.code); },
     'used-desc':  function (a, b) { return b.used - a.used; },
@@ -2101,7 +2138,7 @@ window.ZB = window.ZB || {};
          expiring on Friday is the only thing on this screen with a
          deadline, and it is the reason to open it on a Monday. */
       var soon = live.filter(function (row) {
-        return row.endsInDays >= 0 && row.endsInDays <= 7;
+        return row.endsInDays !== null && row.endsInDays >= 0 && row.endsInDays <= 7;
       });
 
       return Repo.defer({
@@ -2128,85 +2165,107 @@ window.ZB = window.ZB || {};
     fromDateInput: function (value) { return fromDateInput(value); },
     daysFromToday: function (value) { return daysFromToday(value); },
 
-    /* -- writes. In memory only. -- */
+    /* -- writes -- */
 
+    /**
+     * What the form sends, in the field names the API takes.
+     *
+     * The panel has always worked in minSpend, usageLimit and milliseconds;
+     * the table is min_spend, usage_limit and timestamps. One translation,
+     * here, so neither side has to learn the other's vocabulary.
+     */
     create: function (data) {
-      var row = {
-        id: 'new-coupon-' + (cpNextId++),
-        code: String(data.code || '').trim().toUpperCase(),
-        note: data.note || '',
-        type: data.type || 'percent',
-        value: Number(data.value) || 0,
-        minSpend: Number(data.minSpend) || 0,
-        startsAt: data.startsAt,
-        expiresAt: data.expiresAt,
-        usageLimit: Number(data.usageLimit) || 0,
-        /* A coupon created here has never been redeemed, and that is not a
-           field on the form: typing a redemption count would be inventing
-           a sale that did not happen. */
-        used: 0,
-        disabled: !!data.disabled,
-        source: 'new'
-      };
-
-      cpAdded.unshift(row);
-      return Repo.defer(shapeCoupon(row));
+      return Api.send('POST', '/api/admin/coupons', couponBody(data))
+        .then(function (result) {
+          forgetCoupons();
+          return shapeCoupon(result.coupon);
+        });
     },
 
     update: function (id, data) {
-      var exists = currentCoupons().some(function (row) { return row.id === id; });
-      if (!exists) {
-        return Promise.reject({ message: 'That coupon no longer exists.' });
-      }
-
-      var own = cpAdded.filter(function (row) { return row.id === id; })[0];
-
-      var patch = {};
-      Object.keys(data).forEach(function (key) { patch[key] = data[key]; });
-      if (patch.code !== undefined) patch.code = String(patch.code).trim().toUpperCase();
-
-      if (own) {
-        Object.keys(patch).forEach(function (key) { own[key] = patch[key]; });
-      } else {
-        cpEdited[id] = cpEdited[id] || {};
-        Object.keys(patch).forEach(function (key) { cpEdited[id][key] = patch[key]; });
-      }
-
-      return Repo.coupons.get(id);
+      return Api.send('PATCH', '/api/admin/coupons/' + encodeURIComponent(id),
+                      couponBody(data))
+        .then(function (result) {
+          forgetCoupons();
+          return shapeCoupon(result.coupon);
+        });
     },
 
+    /**
+     * Delete a coupon.
+     *
+     * Refused by the server if any order used it — an order records which
+     * coupon it took, and deleting the row would leave that record pointing
+     * at nothing. The message says to switch it off instead, which stops
+     * the code working immediately and loses nobody's history.
+     */
     remove: function (id) {
-      var undo = { id: id, row: null, wasRemoved: false, edits: cpEdited[id] || null };
+      return loadCoupons().then(function () {
+        var row = currentCoupons().filter(function (item) { return item.id === id; })[0];
 
-      var own = cpAdded.filter(function (row) { return row.id === id; })[0];
-      if (own) {
-        undo.row = own;
-        cpAdded = cpAdded.filter(function (row) { return row.id !== id; });
-      } else {
-        undo.wasRemoved = true;
-        cpRemoved[id] = true;
-      }
-
-      if (cpEdited[id]) delete cpEdited[id];
-
-      return Repo.defer(undo);
+        return Api.send('DELETE', '/api/admin/coupons/' + encodeURIComponent(id))
+          .then(function () {
+            forgetCoupons();
+            return { id: id, row: row || null };
+          });
+      });
     },
 
+    /**
+     * Put back what remove() took.
+     *
+     * A deleted coupon is gone, so this creates it again from what the
+     * screen captured — same code, same terms. It cannot have been redeemed
+     * (the server refuses to delete one that has been), so nothing about its
+     * history is lost in the round trip.
+     */
     restore: function (undo) {
-      if (!undo) return Repo.defer(false);
+      if (!undo || !undo.row) return Promise.resolve(false);
 
-      if (undo.row) cpAdded.unshift(undo.row);
-      if (undo.wasRemoved) delete cpRemoved[undo.id];
-      if (undo.edits) cpEdited[undo.id] = undo.edits;
-
-      return Repo.defer(true);
+      return Repo.coupons.create(undo.row).then(function () { return true; });
     },
 
+    /** Always false: every change above reaches the database. */
     hasUnsavedEdits: function () {
-      return cpAdded.length > 0 || Object.keys(cpEdited).length > 0 ||
-             Object.keys(cpRemoved).length > 0;
+      return false;
     }
   };
+
+  /** The panel's field names, translated to the API's. */
+  function couponBody(data) {
+    var body = {};
+    var has = function (key) {
+      return Object.prototype.hasOwnProperty.call(data, key) && data[key] !== undefined;
+    };
+
+    if (has('code')) body.code = data.code;
+    if (has('type')) body.type = data.type;
+    if (has('note')) body.note = data.note;
+    if (has('value')) body.value = Number(data.value) || 0;
+    if (has('minSpend')) body.minSpend = Number(data.minSpend) || 0;
+    if (has('usageLimit')) body.usageLimit = Number(data.usageLimit) || 0;
+    if (has('disabled')) body.disabled = !!data.disabled;
+    if (has('startsAt')) body.startsAt = data.startsAt;
+    if (has('expiresAt')) body.expiresAt = data.expiresAt;
+
+    return body;
+  }
+
+  /* The list, the tiles and the filters all count over every coupon, so they
+     wait for the whole set. codeTaken is deliberately not among them: the
+     form calls it while somebody is typing, and it reads what the list on
+     the same screen has already loaded. */
+  ['facets', 'list', 'get', 'summary'].forEach(function (name) {
+    var counted = Repo.coupons[name];
+
+    Repo.coupons[name] = function () {
+      var args = arguments;
+
+      return loadCoupons().then(function () {
+        return counted.apply(Repo.coupons, args);
+      });
+    };
+  });
 
   /* -----------------------------------------------------------------------
      Reports
@@ -2255,24 +2314,6 @@ window.ZB = window.ZB || {};
      to count in the database, not to raise this. */
   var REPORT_MAX = 5000;
 
-  /** Every page of something, up to a limit, as one array. */
-  function loadAll(path, cap) {
-    var out = [];
-
-    var next = function (page) {
-      return Api.get(Api.query(path, { page: page, perPage: 100 }))
-        .then(function (result) {
-          out = out.concat(result.items || []);
-
-          if (out.length >= cap) return out.slice(0, cap);
-          if (page >= result.pages) return out;
-
-          return next(page + 1);
-        });
-    };
-
-    return next(1);
-  }
 
   function loadReportData() {
     if (!reportLoad) {

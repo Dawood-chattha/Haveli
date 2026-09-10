@@ -418,7 +418,7 @@ window.ZB.adminPages = window.ZB.adminPages || {};
       var dirty = ZB.repo.coupons.hasUnsavedEdits();
       note.hidden = !dirty;
       note.textContent = dirty
-        ? 'Changes are held in this tab only — there is no database yet.'
+        ? 'Some changes have not been saved.'
         : '';
     }
   }
@@ -443,6 +443,13 @@ window.ZB.adminPages = window.ZB.adminPages || {};
 
     if (row.state === 'used-up') {
       return 'All ' + row.usageLimit.toLocaleString('en-US') + ' uses have gone.';
+    }
+
+    /* A coupon does not have to have an end date. The table allows none and
+       the checkout treats that as "does not stop"; saying "runs until" of a
+       coupon with nothing to run until would be inventing a deadline. */
+    if (row.expiresAt === null || row.expiresAt === undefined) {
+      return 'Runs until it is switched off.';
     }
 
     return 'Runs until ' + ui.date(row.expiresAt) + ' — ' + relative(row.endsInDays) + '.';
@@ -819,8 +826,8 @@ window.ZB.adminPages = window.ZB.adminPages || {};
   function openAdd() {
     ZB.adminModal.form({
       title: 'Add a coupon',
-      intro: 'It appears in this list straight away. Being accepted at a ' +
-             'checkout needs a backend, which this build does not have yet.',
+      intro: 'It is saved straight away, and a shopper can use the code at ' +
+             'the checkout as soon as it starts running.',
       submitLabel: 'Add coupon',
       body: formBody(null),
 
@@ -960,7 +967,8 @@ window.ZB.adminPages = window.ZB.adminPages || {};
         body += ' It is running right now, so anybody holding the code loses it.';
       }
 
-      body += ' This build has no database, so the change lasts until reload.';
+      body += ' A coupon that has been used cannot be deleted -- switch it ' +
+              'off instead, which stops the code working straight away.';
 
       ZB.adminModal.confirm({
         title: 'Delete this coupon?',

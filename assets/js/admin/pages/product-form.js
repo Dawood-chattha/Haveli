@@ -44,6 +44,10 @@ window.ZB.adminPages = window.ZB.adminPages || {};
    * that was really being asked, and the endpoint answers it with stock = 0.
    * Archived is not offered either: a product gets there by being deleted,
    * and comes back the same way. */
+  /* What the API accepts on one product. Stated here so the form can say so
+     before somebody chooses nine files and is refused by the server. */
+  var MAX_IMAGES = 12;
+
   var STATUSES = [
     { id: 'active', label: 'Active — visible in the store' },
     { id: 'draft', label: 'Draft — hidden from the store' }
@@ -218,8 +222,8 @@ window.ZB.adminPages = window.ZB.adminPages || {};
                 '<span class="a-filepick__face">' + ui.icon('image') + ' Choose images</span>' +
               '</label>' +
               '<p class="a-field__help">' +
-                'Nothing is uploaded. There is no server in this build, so a chosen ' +
-                'file is read in the browser and shown here only.' +
+                'JPEG, PNG or WebP, up to 4 MB each. A picture is uploaded as ' +
+                'soon as it is chosen; the product itself is saved separately.' +
               '</p>' +
             '</div>' +
           '</section>' +
@@ -417,19 +421,55 @@ window.ZB.adminPages = window.ZB.adminPages || {};
       });
     }
 
-    /* Read locally and previewed; nothing is sent anywhere. */
+    /* THE PICTURE IS UPLOADED, NOT READ INTO THE PAGE
+     *
+     * It used to be read with FileReader and kept as a data: URL — two
+     * million characters of base64 in the form's draft. That was harmless
+     * while nothing was saved. Once products began saving, the API stored
+     * it in a column capped at a thousand characters, so an owner attached
+     * a photograph, pressed save, and got a broken image with no warning
+     * anywhere.
+     *
+     * Now each file goes to /api/admin/uploads, which checks what it
+     * actually is and where it lands, and what the form keeps is the URL. */
     var file = document.getElementById('pf-file');
     if (file) {
       file.addEventListener('change', function () {
-        Array.prototype.forEach.call(file.files || [], function (chosen) {
-          var reader = new FileReader();
-          reader.onload = function () {
-            draft.images.push(reader.result);
-            paintImages();
-          };
-          reader.readAsDataURL(chosen);
-        });
+        var chosen = Array.prototype.slice.call(file.files || []);
         file.value = '';
+
+        if (!chosen.length) return;
+
+        if (draft.images.length + chosen.length > MAX_IMAGES) {
+          ZB.adminToast.error('A product can have up to ' + MAX_IMAGES + ' pictures.');
+          return;
+        }
+
+        var host = document.getElementById('pf-images');
+        if (host) host.setAttribute('aria-busy', 'true');
+
+        /* One after another rather than all at once: a slow connection
+           uploading six photographs in parallel is six requests competing
+           for the same pipe, and the first one to arrive is what the owner
+           is waiting to see. */
+        var next = function (i) {
+          if (i >= chosen.length) {
+            if (host) host.setAttribute('aria-busy', 'false');
+            return;
+          }
+
+          return ZB.repo.uploadImage(chosen[i], 'products').then(function (result) {
+            draft.images.push(result.url);
+            paintImages();
+            return next(i + 1);
+          }).catch(function (failure) {
+            if (host) host.setAttribute('aria-busy', 'false');
+            ZB.adminToast.error((failure && failure.message) ||
+                                'That picture could not be saved.');
+          });
+        };
+
+        next(0);
       });
     }
 

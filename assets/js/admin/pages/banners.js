@@ -284,10 +284,7 @@ window.ZB.adminPages = window.ZB.adminPages || {};
     if (note) {
       var dirty = ZB.repo.banners.hasUnsavedEdits();
       note.hidden = !dirty;
-      note.textContent = dirty
-        ? 'Changes are held in this tab only and do not reach the homepage — ' +
-          'there is no database yet.'
-        : '';
+      note.textContent = dirty ? 'Some changes have not been saved.' : '';
     }
   }
 
@@ -537,19 +534,31 @@ window.ZB.adminPages = window.ZB.adminPages || {};
   /**
    * The fields, for both callers.
    *
-   * The image is a path and not an upload, because an upload needs a
-   * server to receive it and this build has none. Saying that in the help
-   * text is better than a file picker that silently does nothing.
+   * Both ways of getting a picture in: choose a file, or type the path of
+   * one already in the site. The upload fills the same box the path goes
+   * in, so there is one value and one preview whichever route was taken —
+   * and the slides this shop opened with, which are files in assets/, keep
+   * working without being re-uploaded.
    */
   function formBody(row) {
     row = row || {};
 
     return '' +
+      '<div class="a-field">' +
+        '<label class="a-filepick">' +
+          '<input type="file" id="bn-file" accept="image/jpeg,image/png,image/webp">' +
+          '<span class="a-filepick__face">' + ui.icon('image') + ' Choose a picture</span>' +
+        '</label>' +
+        '<p class="a-field__help" data-upload-note role="status">' +
+          'JPEG, PNG or WebP, up to 4 MB.' +
+        '</p>' +
+      '</div>' +
+
       fields.text({
         name: 'image', label: 'Image',
-        value: row.image || 'assets/img/hero/',
-        help: 'A path inside the site. Uploading a file needs a backend, ' +
-              'which this build does not have yet.'
+        value: row.image || '',
+        help: 'Filled in by the upload above, or type the path of a picture ' +
+              'already in the site.'
       }) +
 
       '<div class="a-field">' +
@@ -640,6 +649,35 @@ window.ZB.adminPages = window.ZB.adminPages || {};
     }, 350);
 
     input.addEventListener('input', check);
+
+    /* The upload writes into the same box, then asks the preview to look
+       at it — so a chosen file and a typed path end up in one place, and
+       the "does this load" answer is the same answer either way. */
+    var picker = form.querySelector('#bn-file');
+    var uploadNote = form.querySelector('[data-upload-note]');
+
+    if (picker) {
+      picker.addEventListener('change', function () {
+        var chosen = picker.files && picker.files[0];
+        picker.value = '';
+        if (!chosen) return;
+
+        if (uploadNote) uploadNote.textContent = 'Uploading…';
+        report('waiting', 'Loading…');
+
+        ZB.repo.banners.upload(chosen).then(function (result) {
+          input.value = result.url;
+          if (uploadNote) uploadNote.textContent = 'Uploaded.';
+          check();
+        }).catch(function (failure) {
+          if (uploadNote) {
+            uploadNote.textContent = (failure && failure.message) ||
+                                     'That picture could not be saved.';
+          }
+          report('bad', 'Nothing was uploaded.');
+        });
+      });
+    }
 
     if (!input.value.trim()) report('empty', 'No image set.');
     else if (img.complete && img.naturalWidth) {
@@ -807,7 +845,8 @@ window.ZB.adminPages = window.ZB.adminPages || {};
       if (row.status === 'active') {
         body += ' The slides after it move up one.';
       }
-      body += ' This build has no database, so the change lasts until reload.';
+      body += ' The picture itself stays in storage, so a slide put back ' +
+              'still has it.';
 
       ZB.adminModal.confirm({
         title: 'Delete this slide?',

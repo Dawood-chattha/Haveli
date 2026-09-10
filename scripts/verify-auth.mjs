@@ -334,10 +334,81 @@ try {
     owner.from('profiles').update({ role: 'admin' }).eq('id', people.other.id));
 
   /* ---------------------------------------------------------------------
+     The picture bucket
+
+     api/admin/uploads.js refuses a customer before it reaches storage, and
+     that refusal is the one people see. This is the other one — the bucket's
+     own policy, in db/storage.sql, which is what holds if that endpoint is
+     ever wrong or is ever bypassed. The anon key is public, printed in every
+     request anyone can read in a network tab, so "the browser cannot get a
+     key that writes here" is not a thing this shop can say. It has to be
+     that the key does not carry the permission.
+
+     Reading is deliberately open: these are the pictures on the shop's own
+     pages, and every visitor's browser fetches them with no key at all.
+     --------------------------------------------------------------------- */
+
+  console.log('\n5. THE PICTURE BUCKET — public to read, admin to write');
+
+  {
+    const BUCKET = 'shop-images';
+
+    /* A real one-pixel PNG. Storage does not inspect it, but a zero-length
+       body is refused before any policy is consulted, which would pass this
+       check for the wrong reason. */
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64');
+
+    const put = (client, name) =>
+      client.storage.from(BUCKET).upload('products/' + name + '-' + stamp + '.png', png,
+                                         { contentType: 'image/png', upsert: false });
+
+    {
+      const { error } = await put(anon, 'visitor');
+      if (error) pass('a signed-out visitor cannot put a file in the bucket');
+      else fail('A SIGNED-OUT VISITOR WROTE TO THE BUCKET — anyone can fill it');
+    }
+
+    {
+      const { error } = await put(customer, 'customer');
+      if (error) pass('A CUSTOMER CANNOT PUT A FILE IN THE BUCKET');
+      else fail('A CUSTOMER WROTE TO THE BUCKET — the anon key is public, so this is everyone');
+    }
+
+    const mine = await put(owner, 'owner');
+
+    if (mine.error) {
+      fail('the owner could NOT upload a picture — ' + mine.error.message);
+    } else {
+      pass('the owner can');
+
+      /* What the bucket being public actually means, tested the way the
+         shop's own pages do it: a plain fetch, no key, no headers. */
+      const { data: link } = anon.storage.from(BUCKET).getPublicUrl(mine.data.path);
+      const seen = await fetch(link.publicUrl);
+
+      if (seen.status === 200) pass('and anyone can read it back, with no key');
+      else fail('the picture is not publicly readable — the shop\'s pages would show gaps (' +
+                seen.status + ')');
+
+      {
+        const { error } = await customer.storage.from(BUCKET).remove([mine.data.path]);
+        const still = await fetch(link.publicUrl);
+
+        if (error || still.status === 200) pass('a customer cannot delete the owner\'s picture');
+        else fail('A CUSTOMER DELETED A PICTURE OFF THE SHOP\'S PAGES');
+      }
+
+      await admin.storage.from(BUCKET).remove([mine.data.path]);
+    }
+  }
+
+  /* ---------------------------------------------------------------------
      A blocked administrator is not an administrator
      --------------------------------------------------------------------- */
 
-  console.log('\n5. BLOCKED — a suspended admin loses the office');
+  console.log('\n6. BLOCKED — a suspended admin loses the office');
 
   await admin.from('profiles').update({ blocked: true }).eq('id', people.admin.id);
 
@@ -346,6 +417,7 @@ try {
     owner.from('products').insert({
       category_id: realCategory, title: 'x', slug: 'blocked-' + stamp, price: 1
     }));
+
 
 } catch (err) {
   fail('the run stopped: ' + err.message);

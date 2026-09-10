@@ -450,10 +450,7 @@ window.ZB.adminPages = window.ZB.adminPages || {};
     if (note) {
       var dirty = ZB.repo.orders.hasUnsavedEdits();
       note.hidden = !dirty;
-      note.textContent = dirty
-        ? 'Status changes are held in this tab only and are lost on reload — ' +
-          'there is no database yet.'
-        : '';
+      note.textContent = dirty ? 'Some changes have not been saved.' : '';
     }
   }
 

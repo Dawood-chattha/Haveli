@@ -56,6 +56,69 @@ create sequence if not exists public.order_ref_seq start with 1001;
 
 
 -- -----------------------------------------------------------------------------
+-- A THIRD KIND OF COUPON: FREE DELIVERY
+--
+-- The panel's coupon form has always offered three kinds — a percentage off,
+-- an amount off, and free delivery — and the table accepted only the first
+-- two. So an owner could choose "Free delivery", fill in the form, and be
+-- refused by a constraint with a message written for a developer.
+--
+-- A free-delivery coupon does not discount the goods. It sets the delivery
+-- charge to nothing, which is a different line on the order and a different
+-- number in the arithmetic; place_order below treats it that way.
+--
+-- The old constraints are found rather than named. A check constraint written
+-- inline on a column is named by Postgres, and guessing that name is how a
+-- migration silently does nothing.
+-- -----------------------------------------------------------------------------
+
+do $$
+declare
+  c record;
+begin
+  for c in
+    select conname
+      from pg_constraint
+     where conrelid = 'public.coupons'::regclass
+       and contype = 'c'
+       and pg_get_constraintdef(oid) ilike '%type%'
+  loop
+    execute format('alter table public.coupons drop constraint %I', c.conname);
+  end loop;
+end $$;
+
+alter table public.coupons
+  add constraint coupons_type_allowed
+  check (type in ('percent', 'fixed', 'shipping'));
+
+alter table public.coupons
+  add constraint coupons_percent_within_100
+  check (type <> 'percent' or value <= 100);
+
+-- A free-delivery coupon has no amount, so the "greater than zero" rule that
+-- makes sense for the other two would refuse it.
+do $$
+declare
+  c record;
+begin
+  for c in
+    select conname
+      from pg_constraint
+     where conrelid = 'public.coupons'::regclass
+       and contype = 'c'
+       and pg_get_constraintdef(oid) ilike '%value%'
+       and pg_get_constraintdef(oid) not ilike '%type%'
+  loop
+    execute format('alter table public.coupons drop constraint %I', c.conname);
+  end loop;
+end $$;
+
+alter table public.coupons
+  add constraint coupons_value_sensible
+  check ((type = 'shipping' and value >= 0) or value > 0);
+
+
+-- -----------------------------------------------------------------------------
 -- Shipping, as a setting rather than a number in the code
 --
 -- Filled in only if it is absent, so re-running this never overwrites what the
@@ -300,6 +363,10 @@ begin
 
     if v_coupon.type = 'percent' then
       v_discount := (v_subtotal * v_coupon.value) / 100;
+    elsif v_coupon.type = 'shipping' then
+      -- It discounts the delivery, not the goods. The shipping section below
+      -- is where it takes effect.
+      v_discount := 0;
     else
       v_discount := v_coupon.value;
     end if;
@@ -340,6 +407,13 @@ begin
     v_shipping := 0;
   else
     v_shipping := v_ship_flat;
+  end if;
+
+  -- A free-delivery coupon, which is the whole of what it does. Applied after
+  -- the rule above rather than instead of it, so an order that was already
+  -- over the free threshold is not charged for using one.
+  if v_coupon.type = 'shipping' then
+    v_shipping := 0;
   end if;
 
   -- ---------------------------------------------------------------------------

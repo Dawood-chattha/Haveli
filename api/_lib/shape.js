@@ -511,11 +511,103 @@ function adminCustomer(row, stats, city) {
   };
 }
 
+/* -------------------------------------------------------------------------
+   Banners
+   ------------------------------------------------------------------------- */
+
+var BANNER_SELECT =
+  'id, image, alt, eyebrow, headline, body, cta, href, proof, status, sort, created_at';
+
+/**
+ * A slide as the banners screen knows it.
+ *
+ * Almost a straight copy of the row, because the screen was built against a
+ * seed file with the same field names — which is not a coincidence: the
+ * table in db/schema.sql was written from that file.
+ *
+ * `linkOk` is deliberately absent. Whether a slide's destination exists is a
+ * question about the storefront's own routes, and the browser is where those
+ * are known; the repository answers it there. A server that guessed would be
+ * a second list of the shop's pages, going stale on its own schedule.
+ */
+function adminBanner(row) {
+  return {
+    id: row.id,
+    image: row.image,
+    alt: row.alt,
+    eyebrow: row.eyebrow || '',
+    headline: row.headline || '',
+    body: row.body || '',
+    cta: row.cta || '',
+    href: row.href || '/',
+    proof: row.proof || '',
+    status: row.status,
+    sort: row.sort,
+    source: 'database'
+  };
+}
+
+/* -------------------------------------------------------------------------
+   Coupons
+   ------------------------------------------------------------------------- */
+
+var COUPON_SELECT =
+  'id, code, note, type, value, min_spend, starts_at, expires_at,' +
+  ' usage_limit, used_count, disabled, created_at';
+
+/** A timestamp as milliseconds, or null. */
+function millis(value) {
+  if (!value) return null;
+  var at = new Date(value).getTime();
+  return isNaN(at) ? null : at;
+}
+
+/**
+ * A coupon in the shape the coupons screen reads.
+ *
+ * WHAT IS NOT DECIDED HERE
+ * Whether a coupon is running, scheduled, expired, used up or switched off.
+ * That follows from its dates against *today*, and today is the reader's,
+ * not the server's — a shop in Karachi looking at a coupon that expires
+ * tonight should be told what its own clock says. The repository works it
+ * out, in one function, so the list and the dialog above it can never
+ * disagree.
+ *
+ * What matters is that place_order does not consult any of that either: it
+ * checks the dates itself, in SQL, at the moment of ordering. The state
+ * shown here is a description; the refusal is the decision.
+ */
+function adminCoupon(row) {
+  return {
+    id: row.id,
+    code: row.code,
+    note: row.note || '',
+    type: row.type,
+    value: row.value,
+    minSpend: row.min_spend,
+
+    /* Milliseconds, which is what the screen's date helpers have always
+       taken. Null where there is no date at all — a coupon with no start
+       runs from the moment it exists, and one with no end does not stop. */
+    startsAt: millis(row.starts_at),
+    expiresAt: millis(row.expires_at),
+
+    usageLimit: row.usage_limit || 0,
+    used: row.used_count || 0,
+    disabled: !!row.disabled,
+
+    created: row.created_at,
+    source: 'database'
+  };
+}
+
 module.exports = {
   PRODUCT_SELECT: PRODUCT_SELECT,
   CATEGORY_SELECT: CATEGORY_SELECT,
   ORDER_SELECT: ORDER_SELECT,
   CUSTOMER_SELECT: CUSTOMER_SELECT,
+  BANNER_SELECT: BANNER_SELECT,
+  COUPON_SELECT: COUPON_SELECT,
 
   storefrontProduct: storefrontProduct,
   adminProduct: adminProduct,
@@ -525,6 +617,8 @@ module.exports = {
   adminOrder: adminOrder,
   customerOrder: customerOrder,
   adminCustomer: adminCustomer,
+  adminBanner: adminBanner,
+  adminCoupon: adminCoupon,
 
   STATUS_LABELS: STATUS_LABELS,
   PAYMENT_LABELS: PAYMENT_LABELS,

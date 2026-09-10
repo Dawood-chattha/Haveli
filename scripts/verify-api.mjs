@@ -51,17 +51,24 @@ function check(label, condition, detail) {
    ------------------------------------------------------------------------- */
 
 async function call(method, path, opts) {
-  const { token, cookie, body } = opts || {};
+  const { token, cookie, body, bytes, type } = opts || {};
 
   const headers = {};
   if (token) headers.Authorization = 'Bearer ' + token;
   if (cookie) headers.Cookie = cookie;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
+  /* An upload is the file itself — raw bytes with the picture's own type in
+     the header, which is what api/admin/uploads.js reads and what the panel
+     sends. See the note at the top of that file for why it is not a form. */
+  if (bytes !== undefined) headers['Content-Type'] = type || 'application/octet-stream';
+
   const res = await fetch(BASE + path, {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body)
+    body: bytes !== undefined ? bytes
+        : body === undefined ? undefined
+        : JSON.stringify(body)
   });
 
   const text = await res.text();
@@ -99,6 +106,8 @@ const madeCategories = [];
 const madeProducts = [];
 const madeOrders = [];
 const madeCoupons = [];
+const madeBanners = [];
+const madeUploads = [];
 
 try {
   /* Nothing below means anything if the server is not the one being tested. */
@@ -981,6 +990,360 @@ try {
   await expectStatus('a customer cannot read the dashboard', 403, 'GET',
                      '/api/admin/metrics', shopper);
 
+  /* =====================================================================
+     13. Uploads
+     ---------------------------------------------------------------------
+     The panel used to turn a chosen picture into a data URI and put it in
+     a column capped at a thousand characters, which stored the first
+     thousand characters of it and said nothing. These endpoints are the
+     replacement, and the question here is whether a file that is not a
+     picture, or is not from the owner, can reach the bucket.
+     ===================================================================== */
+
+  console.log('\n13. UPLOADS — the bytes decide what a file is, not its header');
+
+  /* A real one-pixel PNG and a real one-pixel JPEG. Small enough to sit in
+     this file, genuine enough that the signature check has something to
+     read. */
+  const onePixelPng = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64');
+
+  const onePixelJpeg = Buffer.from(
+    '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a' +
+    'HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAA' +
+    'AAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==',
+    'base64');
+
+  await expectStatus('a signed-out visitor cannot upload', 401, 'POST',
+                     '/api/admin/uploads', { bytes: onePixelPng, type: 'image/png' });
+
+  await expectStatus('A CUSTOMER CANNOT UPLOAD', 403, 'POST', '/api/admin/uploads',
+                     { token: shopper.token, bytes: onePixelPng, type: 'image/png' });
+
+  await expectStatus('a file that is not a picture', 400, 'POST', '/api/admin/uploads',
+                     { token: owner.token,
+                       bytes: Buffer.from('<?php echo "hello"; ?>            '),
+                       type: 'image/png' });
+
+  await expectStatus('nothing at all', 400, 'POST', '/api/admin/uploads',
+                     { token: owner.token, bytes: Buffer.alloc(0), type: 'image/png' });
+
+  await expectStatus('a folder this endpoint does not file into', 400, 'POST',
+                     '/api/admin/uploads?for=%2Fetc',
+                     { token: owner.token, bytes: onePixelPng, type: 'image/png' });
+
+  const upload = await expectStatus('the owner uploads a picture', 200, 'POST',
+                                    '/api/admin/uploads?for=products',
+                                    { token: owner.token, bytes: onePixelPng,
+                                      type: 'image/png' });
+
+  let bannerImageUrl = 'https://example.invalid/slide.png';
+
+  if (upload.status === 200) {
+    const file = upload.body.data;
+    madeUploads.push(file.path);
+
+    check('it comes back with a URL, a path, a type and a size',
+          keysOf(file) === 'bytes,path,type,url', keysOf(file));
+    check('it was filed under products/',
+          /^products\/[0-9a-f-]{36}\.png$/.test(file.path), file.path);
+    check('the name is the endpoint’s, not the caller’s',
+          file.path.indexOf('..') < 0 && file.path.indexOf(' ') < 0, file.path);
+    check('the size is the file’s own', file.bytes === onePixelPng.length,
+          'said ' + file.bytes + ', sent ' + onePixelPng.length);
+
+    /* The point of a public bucket: the shop's own pages read these with no
+       key at all, exactly as a visitor's browser will. */
+    const fetched = await fetch(file.url);
+
+    check('AND THE PICTURE IS READABLE BY ANYONE, WITH NO KEY',
+          fetched.status === 200, 'got ' + fetched.status);
+    check('served as the image it is',
+          (fetched.headers.get('content-type') || '').indexOf('image/png') === 0,
+          fetched.headers.get('content-type'));
+  }
+
+  {
+    /* A JPEG sent under a PNG header. The header is a claim by whoever made
+       the request; the first three bytes are the evidence. */
+    const lied = await expectStatus('a JPEG announced as a PNG', 200, 'POST',
+                                    '/api/admin/uploads',
+                                    { token: owner.token, bytes: onePixelJpeg,
+                                      type: 'image/png' });
+
+    if (lied.status === 200) {
+      madeUploads.push(lied.body.data.path);
+      check('IS STORED AS THE JPEG IT ACTUALLY IS',
+            lied.body.data.type === 'image/jpeg' && /\.jpg$/.test(lied.body.data.path),
+            lied.body.data.type + ' ' + lied.body.data.path);
+    }
+  }
+
+  {
+    const banner = await expectStatus('a banner picture', 200, 'POST',
+                                      '/api/admin/uploads?for=banners',
+                                      { token: owner.token, bytes: onePixelPng,
+                                        type: 'image/png' });
+
+    if (banner.status === 200) {
+      madeUploads.push(banner.body.data.path);
+      bannerImageUrl = banner.body.data.url;
+
+      check('is filed apart from the products',
+            banner.body.data.path.indexOf('banners/') === 0, banner.body.data.path);
+    }
+  }
+
+  /* =====================================================================
+     14. The carousel
+     ---------------------------------------------------------------------
+     The slides used to be a file the storefront read with an overlay on
+     top, so an edit here never reached the shop. Now there is one table.
+     What matters below is the order, because the order is most of what a
+     carousel screen is for.
+     ===================================================================== */
+
+  console.log('\n14. BANNERS — one list, in the order it plays');
+
+  await expectStatus('a customer cannot read the carousel', 403, 'GET',
+                     '/api/admin/banners', shopper);
+
+  await expectStatus('nor rearrange it', 403, 'PATCH', '/api/admin/banners',
+                     { token: shopper.token, body: { order: [randomUUID()] } });
+
+  const before = await expectStatus('GET /api/admin/banners', 200, 'GET',
+                                    '/api/admin/banners', owner);
+
+  const beforeIds = ((before.body.data && before.body.data.items) || []).map((s) => s.id);
+
+  check('the slides arrive in playing order',
+        ((before.body.data && before.body.data.items) || [])
+          .every((s, i, a) => i === 0 || a[i - 1].sort <= s.sort),
+        JSON.stringify(((before.body.data && before.body.data.items) || []).map((s) => s.sort)));
+
+  await expectStatus('a slide that links off this site', 400, 'POST',
+                     '/api/admin/banners',
+                     { token: owner.token,
+                       body: { image: bannerImageUrl, alt: 'Verify',
+                               href: 'https://elsewhere.invalid/sale' } });
+
+  await expectStatus('or to a protocol-relative address', 400, 'POST',
+                     '/api/admin/banners',
+                     { token: owner.token,
+                       body: { image: bannerImageUrl, alt: 'Verify',
+                               href: '//elsewhere.invalid/sale' } });
+
+  const madeSlide = await expectStatus('the owner adds a slide', 200, 'POST',
+                                       '/api/admin/banners', {
+    token: owner.token,
+    body: { image: bannerImageUrl, alt: 'Verify slide ' + stamp,
+            headline: 'Verify ' + stamp, href: '/shop', status: 'active' }
+  });
+
+  if (madeSlide.status === 200) {
+    const slide = madeSlide.body.data.banner;
+    madeBanners.push(slide.id);
+
+    check('it carries the picture that was uploaded', slide.image === bannerImageUrl);
+    check('IT GOES TO THE END OF THE RUN, NOT THE FRONT',
+          slide.sort >= beforeIds.length,
+          'sort ' + slide.sort + ' with ' + beforeIds.length + ' slides before it');
+
+    const after = await call('GET', '/api/admin/banners', owner);
+
+    check('and the list has grown by one',
+          after.body.data.items.length === beforeIds.length + 1,
+          after.body.data.items.length + ' vs ' + beforeIds.length);
+    check('with it last',
+          after.body.data.items[after.body.data.items.length - 1].id === slide.id);
+
+    /* --- the running order ---------------------------------------------- */
+
+    const reordered = await expectStatus('the whole order is sent, and taken', 200, 'PATCH',
+                                         '/api/admin/banners',
+                                         { token: owner.token,
+                                           body: { order: [slide.id].concat(beforeIds) } });
+
+    if (reordered.status === 200) {
+      check('THE NEW SLIDE IS NOW FIRST',
+            reordered.body.data.items[0].id === slide.id,
+            reordered.body.data.items[0].id);
+      check('and the rest kept their order among themselves',
+            reordered.body.data.items.slice(1).map((s) => s.id).join(',') === beforeIds.join(','));
+    }
+
+    /* Put back the way it was found, so a failure later in this file does
+       not leave the shop's own homepage rearranged. */
+    if (beforeIds.length) {
+      await expectStatus('and back again', 200, 'PATCH', '/api/admin/banners',
+                         { token: owner.token,
+                           body: { order: beforeIds.concat([slide.id]) } });
+    }
+
+    await expectStatus('an order naming a slide that is not there', 409, 'PATCH',
+                       '/api/admin/banners',
+                       { token: owner.token,
+                         body: { order: beforeIds.concat([randomUUID()]) } });
+
+    await expectStatus('an order of nothing', 400, 'PATCH', '/api/admin/banners',
+                       { token: owner.token, body: { order: [] } });
+
+    /* --- hiding, and removing ------------------------------------------- */
+
+    const hidden = await expectStatus('a slide is taken off the homepage', 200, 'PATCH',
+                                      '/api/admin/banners/' + slide.id,
+                                      { token: owner.token, body: { status: 'hidden' } });
+
+    if (hidden.status === 200) {
+      check('it reads as hidden', hidden.body.data.banner.status === 'hidden');
+
+      const counted = await call('GET', '/api/admin/banners', owner);
+      check('and is counted among the hidden ones', counted.body.data.hidden >= 1,
+            'hidden ' + counted.body.data.hidden);
+    }
+
+    await expectStatus('a customer cannot remove one', 403, 'DELETE',
+                       '/api/admin/banners/' + slide.id, shopper);
+
+    await expectStatus('the owner removes it', 200, 'DELETE',
+                       '/api/admin/banners/' + slide.id, owner);
+
+    await expectStatus('and it is gone', 404, 'GET',
+                       '/api/admin/banners/' + slide.id, owner);
+
+    /* Deleted above, so the cleanup has nothing left to do. */
+    madeBanners.length = 0;
+  }
+
+  await expectStatus('a slide id that is not an id', 400, 'GET',
+                     '/api/admin/banners/not-a-uuid', owner);
+
+  /* =====================================================================
+     15. Coupons
+     ---------------------------------------------------------------------
+     place_order has been reading this table since Phase 5 and there was no
+     way to put a row in it. These endpoints are that way. The check that
+     matters is the one in the middle: a code created here has to change
+     what the checkout charges, or the two are not the same rows after all.
+     ===================================================================== */
+
+  console.log('\n15. COUPONS — created here, applied in SQL');
+
+  await expectStatus('a customer cannot read the coupons', 403, 'GET',
+                     '/api/admin/coupons', shopper);
+
+  await expectStatus('nor create one', 403, 'POST', '/api/admin/coupons',
+                     { token: shopper.token,
+                       body: { code: 'VERIFYFREE' + stamp, type: 'percent', value: 90 } });
+
+  await expectStatus('more than a hundred per cent', 400, 'POST', '/api/admin/coupons',
+                     { token: owner.token,
+                       body: { code: 'VERIFYBAD' + stamp, type: 'percent', value: 150 } });
+
+  await expectStatus('a discount of nothing', 400, 'POST', '/api/admin/coupons',
+                     { token: owner.token,
+                       body: { code: 'VERIFYBAD' + stamp, type: 'fixed', value: 0 } });
+
+  await expectStatus('an end date before the start', 400, 'POST', '/api/admin/coupons',
+                     { token: owner.token,
+                       body: { code: 'VERIFYBAD' + stamp, type: 'fixed', value: 100,
+                               startsAt: Date.now(), expiresAt: Date.now() - 86400000 } });
+
+  await expectStatus('a code with a space in it', 400, 'POST', '/api/admin/coupons',
+                     { token: owner.token,
+                       body: { code: 'VERIFY BAD', type: 'fixed', value: 100 } });
+
+  /* --- free delivery ----------------------------------------------------- */
+
+  const shipCode = 'VERIFYSHIP' + stamp;
+
+  const shipping = await expectStatus('a free-delivery coupon', 200, 'POST',
+                                      '/api/admin/coupons', {
+    token: owner.token,
+    body: { code: shipCode.toLowerCase(), type: 'shipping', value: 4321,
+            minSpend: 0, usageLimit: 0, note: 'Verify run' }
+  });
+
+  if (shipping.status === 200) {
+    const made = shipping.body.data.coupon;
+    madeCoupons.push(made.code);
+
+    check('the code is stored the way it is meant to be read out',
+          made.code === shipCode, made.code);
+    check('FREE DELIVERY HAS NO AMOUNT, WHATEVER THE FORM SENT',
+          made.value === 0, 'value ' + made.value);
+    check('and nobody has used it yet', made.used === 0, 'used ' + made.used);
+
+    await expectStatus('the same code twice', 409, 'POST', '/api/admin/coupons',
+                       { token: owner.token,
+                         body: { code: shipCode, type: 'fixed', value: 100 } });
+
+    /* --- and now the only question that matters -------------------------- */
+
+    const free = await expectStatus('a small order with the free-delivery code',
+                                    200, 'POST', '/api/checkout', {
+      token: shopper.token,
+      body: buy([{ productId: cheap.id, qty: 1 }], { coupon: shipCode })
+    });
+
+    if (free.status === 200) {
+      const o = free.body.data.order;
+      madeOrders.push(o.id);
+
+      check('THE DELIVERY CHARGE IS GONE', o.shipping === 0, 'shipping ' + o.shipping);
+      check('and nothing came off the goods', o.discount === 0, 'discount ' + o.discount);
+      check('so the total is the subtotal', o.total === o.subtotal,
+            o.total + ' vs ' + o.subtotal);
+    }
+
+    const counted = await call('GET', '/api/admin/coupons/' + made.id, owner);
+    check('the coupon counted the redemption',
+          counted.body.data.coupon.used === 1, 'used ' + counted.body.data.coupon.used);
+
+    /* Used, so it cannot be deleted: the order would be left holding a
+       discount from a code that no longer exists. */
+    await expectStatus('A COUPON THAT HAS BEEN USED CANNOT BE DELETED', 409, 'DELETE',
+                       '/api/admin/coupons/' + made.id, owner);
+
+    const off = await expectStatus('but it can be switched off', 200, 'PATCH',
+                                   '/api/admin/coupons/' + made.id,
+                                   { token: owner.token, body: { disabled: true } });
+
+    if (off.status === 200) check('and reads as off', off.body.data.coupon.disabled === true);
+
+    await expectStatus('after which the checkout refuses it', 400, 'POST', '/api/checkout',
+                       { token: shopper.token,
+                         body: buy([{ productId: cheap.id, qty: 1 }], { coupon: shipCode }) });
+  }
+
+  /* --- one nobody used --------------------------------------------------- */
+
+  const spare = await expectStatus('a coupon nobody has used', 200, 'POST',
+                                   '/api/admin/coupons', {
+    token: owner.token,
+    body: { code: 'VERIFYSPARE' + stamp, type: 'percent', value: 10, minSpend: 500 }
+  });
+
+  if (spare.status === 200) {
+    const id = spare.body.data.coupon.id;
+    madeCoupons.push(spare.body.data.coupon.code);
+
+    const listed = await expectStatus('GET /api/admin/coupons', 200, 'GET',
+                                      '/api/admin/coupons', owner);
+
+    check('it is in the list', (listed.body.data.items || []).some((c) => c.id === id));
+
+    await expectStatus('a customer cannot delete one', 403, 'DELETE',
+                       '/api/admin/coupons/' + id, shopper);
+
+    await expectStatus('and this one can be deleted', 200, 'DELETE',
+                       '/api/admin/coupons/' + id, owner);
+
+    await expectStatus('after which it is gone', 404, 'GET',
+                       '/api/admin/coupons/' + id, owner);
+  }
+
 } catch (err) {
   fail('the run stopped: ' + err.message);
 } finally {
@@ -996,6 +1359,15 @@ try {
   }
   for (const code of madeCoupons) {
     await admin.from('coupons').delete().eq('code', code);
+  }
+  for (const id of madeBanners) {
+    await admin.from('banners').delete().eq('id', id);
+  }
+  /* The pictures this run put in the bucket. Nothing else removes them: a
+     slide's delete deliberately leaves its file alone, because two slides
+     can name the same one. */
+  if (madeUploads.length) {
+    await admin.storage.from('shop-images').remove(madeUploads).catch(() => {});
   }
   for (const id of madeProducts) {
     await admin.from('product_images').delete().eq('product_id', id);

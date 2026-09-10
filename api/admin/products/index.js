@@ -146,6 +146,19 @@ async function list(req, client) {
   var order = SORTS[sort] || SORTS.newest;
   query = query.order(order.column, { ascending: order.ascending });
 
+  /* AND THEN BY ID, WHICH IS NOT A DETAIL
+   *
+   * Postgres breaks ties in whatever order it likes, and it does not have
+   * to pick the same order twice. Five hundred and sixty products seeded in
+   * one statement share a created_at to the microsecond, so paging by that
+   * alone returned some rows on two pages and others on none — the list
+   * looked right, the totals were right, and five products were missing
+   * from a walk through all of them.
+   *
+   * An id is unique, so adding it makes the ordering total: every row has
+   * exactly one place, and page two begins where page one ended. */
+  query = query.order('id', { ascending: true });
+
   var from = (page - 1) * perPage;
   query = query.range(from, from + perPage - 1);
 
