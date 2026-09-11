@@ -91,6 +91,60 @@ function identify(buffer) {
   return null;
 }
 
+/**
+ * The uploaded file, as bytes, whoever is running this.
+ *
+ * req.body IS NOT RELIABLY A BUFFER, AND THAT COST AN AFTERNOON
+ * dev/server.mjs reads the request itself and hands over a Buffer for
+ * anything that is not text or JSON — see readBody there, and the note about
+ * an image that was silently corrupted by being decoded as UTF-8. Vercel's
+ * Node runtime parses a body of its own accord and does not promise a Buffer
+ * for an arbitrary image type, so every upload in production was refused with
+ * "No file arrived" while every upload locally worked.
+ *
+ * So the Buffer is taken when it is offered and the request is read directly
+ * when it is not. Reading directly is the general case and the one that needs
+ * the care: a stream that has already been consumed will never emit 'end'
+ * again, and waiting for it would turn a refused upload into a function that
+ * hangs until the platform kills it. `complete` says whether that has already
+ * happened, and is checked before anything is waited on.
+ *
+ * The cap is the same one the endpoint applies below, enforced here as well
+ * so that an oversized upload is dropped as it arrives rather than being held
+ * in memory first and measured afterwards.
+ */
+function bytesOf(req) {
+  if (Buffer.isBuffer(req.body)) return Promise.resolve(req.body);
+
+  /* A string or a parsed object means the runtime decided what this was.
+     Handing it back unchanged lets the caller say which happened. */
+  if (typeof req.body === 'string') return Promise.resolve(req.body);
+  if (req.body && typeof req.body === 'object') return Promise.resolve(null);
+
+  if (req.complete || req.readableEnded) return Promise.resolve(Buffer.alloc(0));
+
+  return new Promise(function (resolve, reject) {
+    var chunks = [];
+    var size = 0;
+
+    req.on('data', function (chunk) {
+      size += chunk.length;
+
+      if (size > MAX_BYTES + 1024) {
+        /* Stopped at the door. The endpoint's own check reports it. */
+        req.destroy();
+        resolve(Buffer.alloc(0));
+        return;
+      }
+
+      chunks.push(chunk);
+    });
+
+    req.on('end', function () { resolve(Buffer.concat(chunks)); });
+    req.on('error', reject);
+  });
+}
+
 module.exports = respond.handler(['POST'], async function (req) {
   await auth.requireAdmin(req);
 
@@ -98,7 +152,7 @@ module.exports = respond.handler(['POST'], async function (req) {
   var kind = v.oneOf('for', Object.keys(FOLDERS), { optional: true, fallback: 'products' });
   v.done();
 
-  var body = req.body;
+  var body = await bytesOf(req);
 
   /* A string here means something upstream decoded the bytes — see
      readBody in dev/server.mjs, where exactly that used to happen and
@@ -110,7 +164,24 @@ module.exports = respond.handler(['POST'], async function (req) {
   }
 
   if (!Buffer.isBuffer(body) || !body.length) {
-    throw Errors.badRequest('No file arrived. Choose a picture and try again.');
+    /* THE SHAPE IS NAMED, BECAUSE THE ONLY CALLER IS THE SHOP'S OWNER
+       requireAdmin has already run, so this message reaches one person: the
+       person who would otherwise have to open a hosting dashboard and read a
+       log to find out why their photograph did not arrive. It says what the
+       body turned out to be and nothing about how anything works. */
+    var shape = Buffer.isBuffer(body) ? 'empty bytes'
+              : body === undefined ? 'nothing'
+              : body === null ? 'nothing'
+              : typeof body;
+
+    log.error('the upload body was not bytes', null, {
+      shape: shape,
+      type: req.headers['content-type'] || 'none'
+    });
+
+    throw Errors.badRequest(
+      'No file arrived (the request carried ' + shape + '). ' +
+      'Choose a picture and try again.');
   }
 
   if (body.length > MAX_BYTES) {
