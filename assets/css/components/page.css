@@ -334,6 +334,56 @@
 .panel__links a:hover { opacity: 1; }
 
 /* -------------------------------------------------------------------------
+   THE ACCOUNT PANEL'S TWO STATES
+
+   The panel sits on the dark ground every drawer uses, so everything here
+   is written against that rather than against the page's paper.
+   ------------------------------------------------------------------------- */
+
+/* "Don't have an account? Register" — the line under the sign-in form.
+   Its own row rather than a third entry in .panel__links, because it is a
+   sentence with a link in it and those are a list of destinations. */
+.panel__aside {
+  margin: 0;
+  padding: 0 var(--sp-4) var(--sp-4);
+  font-size: var(--fs-xs);
+  color: rgb(255 255 255 / .7);
+}
+
+.panel__aside a {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Why a sign-in was refused. Hidden until there is something to say. */
+.panel__error {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-3xs);
+  font-weight: var(--fw-medium);
+  color: #ff9b9b;
+}
+
+/* Who is signed in, where the form would otherwise be. */
+.panel__who {
+  margin: 0;
+  padding: var(--sp-5) var(--sp-4) var(--sp-3);
+  font-size: var(--fs-xs);
+  color: rgb(255 255 255 / .7);
+}
+
+.panel__who strong {
+  display: block;
+  margin-top: 2px;
+  font-weight: var(--fw-medium);
+  color: #fff;
+  overflow-wrap: anywhere;
+}
+
+[data-account-in] .btn { margin: var(--sp-2) var(--sp-4) var(--sp-4); width: auto; }
+[data-account-in] .btn--block { width: calc(100% - var(--sp-4) * 2); }
+
+/* -------------------------------------------------------------------------
    REDUCED MOTION
    ------------------------------------------------------------------------- */
 

@@ -454,37 +454,79 @@ window.ZB.pages = window.ZB.pages || {};
         });
       }
 
-      /* Already known, or answered a moment later — either way the same
-         branch. `loaded` distinguishes "signed out" from "not asked yet", so
-         the forms are not flashed at somebody who turns out to be signed in. */
-      if (ZB.auth.user) { showSignedIn(ZB.auth.user); return; }
+      /* Already known, or answered a moment later, or answered by somebody
+         signing in from the header's account panel while this page is open —
+         all the same branch, because all three are ZB.auth changing.
 
-      if (!ZB.auth.loaded) {
-        ZB.auth.load().then(function (user) {
-          if (user && document.getElementById('account-root') === root) showSignedIn(user);
-        });
-      }
+         SUBSCRIBED RATHER THAN ASKED ONCE
+         Asking once left this page showing a sign-in form to a customer who
+         had just signed in through the drawer: the session was real, the
+         header knew, and only this page did not. Which reads as the sign-in
+         not having worked.
+
+         `loaded` still distinguishes "signed out" from "not asked yet", so
+         the forms are not flashed at somebody who turns out to be signed
+         in. */
+      var stop = ZB.auth.subscribe(function (user) {
+        /* The route may have changed since this subscription was made —
+           mount() runs again on every navigation and each run subscribes.
+           When the page is gone, so is this listener. */
+        if (document.getElementById('account-root') !== root) {
+          if (stop) stop();
+          return;
+        }
+
+        if (user) showSignedIn(user);
+      });
+
+      if (!ZB.auth.loaded) ZB.auth.load();
 
       /* -------------------------------------------------------------------
-         Tabs — unchanged
+         Tabs
          ------------------------------------------------------------------- */
+
+      /* What the big heading says for each tab.
+
+         It used to say "Sign in" whatever was showing, so somebody on the
+         Register tab was filling in a form under a heading for the other
+         one. A heading that does not match the form under it is the kind of
+         wrong that makes a shop look unfinished. */
+      var HEADINGS = { signin: 'Sign in', register: 'Create an account' };
+
+      /**
+       * Show one tab, by name.
+       *
+       * A function rather than only a click handler, because registering
+       * moves to the sign-in tab without anybody clicking it — see the
+       * submit handler below.
+       */
+      function showTab(name) {
+        Array.prototype.forEach.call(tabs, function (t) {
+          var on = t.getAttribute('data-tab') === name;
+          t.classList.toggle('is-active', on);
+          t.setAttribute('aria-selected', String(on));
+        });
+
+        Array.prototype.forEach.call(forms, function (form) {
+          form.hidden = form.getAttribute('data-form') !== name;
+        });
+
+        var heading = document.querySelector('.page-head__title');
+        if (heading && HEADINGS[name]) heading.textContent = HEADINGS[name];
+      }
 
       root.addEventListener('click', function (e) {
         var tab = e.target.closest('.account__tab');
         if (!tab) return;
 
-        var name = tab.getAttribute('data-tab');
-
-        Array.prototype.forEach.call(tabs, function (t) {
-          var on = t === tab;
-          t.classList.toggle('is-active', on);
-          t.setAttribute('aria-selected', String(on));
-        });
-
-        Array.prototype.forEach.call(forms, function (f) {
-          f.hidden = f.getAttribute('data-form') !== name;
-        });
+        showTab(tab.getAttribute('data-tab'));
       });
+
+      /* The account panel's "Register" link arrives at /account?register=1,
+         because a drawer is where a returning customer signs in and a new
+         one deserves the whole page. Opening on the right tab is the whole
+         of what that parameter does. */
+      if (/[?&]register=1(&|$)/.test(window.location.search)) showTab('register');
 
       /* -------------------------------------------------------------------
          Submitting
@@ -545,25 +587,38 @@ window.ZB.pages = window.ZB.pages || {};
 
           ZB.auth.signUp(email, password, String(data.get('name') || '').trim())
             .then(function (result) {
-              /* REGISTERING SIGNS YOU IN
-                 The server sets the session cookies when the account is
-                 usable straight away, so there is nothing left to do but
-                 draw the signed-in page. Making somebody type the password
-                 they chose four seconds ago into the form next door is a
-                 step that existed only because the two endpoints were
-                 written separately.
+              busy(form, false, 'Create account');
+              form.reset();
 
-                 Whether a confirmation email is required is the project's
-                 setting, not this page's business. The server says which,
-                 by whether it sent a user back. */
-              if (result && result.user) {
-                showSignedIn(result.user);
+              /* REGISTERING TAKES YOU TO THE SIGN-IN FORM
+                 Nobody has to find the Sign in tab and press it. The
+                 account exists, the next thing to do is sign in, so the
+                 page moves there and fills in the address that was just
+                 registered — leaving one box to fill and the cursor in it.
+
+                 When the project requires a confirmation email there is
+                 nothing to sign in to yet, so the message stays on the
+                 register form instead and says to check the inbox. The
+                 server decides which by sending `ready`. */
+              if (!result || !result.ready) {
+                say(form, (result && result.message) ||
+                          'Account created. Check your email, then sign in.');
                 return;
               }
 
-              busy(form, false, 'Create account');
-              say(form, result.message || 'Account created.');
-              form.reset();
+              showTab('signin');
+
+              var signin = root.querySelector('[data-form="signin"]');
+
+              if (signin) {
+                var address = signin.querySelector('[name="email"]');
+                var secret = signin.querySelector('[name="password"]');
+
+                if (address && result.email) address.value = result.email;
+                if (secret) secret.focus();
+
+                say(signin, result.message || 'Account created. Sign in to continue.');
+              }
             })
             .catch(function (failure) {
               busy(form, false, 'Create account');

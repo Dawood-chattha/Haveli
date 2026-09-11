@@ -20,22 +20,20 @@
    towards reusing the one string that satisfies every site they have met.
    Length is what actually costs an attacker time.
 
-   REGISTERING SIGNS YOU IN
-   When the account is usable immediately — which it is, because this
-   project has email confirmation switched off — the cookies are set here
-   and the caller comes back signed in. Making somebody type the password
-   they chose four seconds ago, into a second form, is a step that exists
-   only because two endpoints were written separately.
+   REGISTERING DOES NOT SIGN YOU IN, AND THAT IS THE SHOP OWNER'S CHOICE
+   This endpoint creates the account and sets no cookies. Supabase does hand
+   back a session when there is nothing to confirm, and an earlier version
+   of this file used it to sign the new customer straight in.
 
-   It is the same session either way. Supabase issues one from signUp when
-   there is nothing to confirm, and it is the same kind of token
-   /api/auth/login hands out; this sets the same cookies through the same
-   Cookies.setSession, so nothing downstream can tell how a visitor arrived.
+   The owner asked for the other behaviour: after registering, the customer
+   is taken to the sign-in form and signs in there. So the session is
+   deliberately dropped, and `ready` in the answer is how the page knows
+   whether signing in will work yet.
 
-   With confirmation ON there is no session to set, and the answer is
-   unchanged: the account exists and cannot be used until the link is
-   followed. That branch is kept rather than assumed away, because the
-   setting is a checkbox in a dashboard and can be turned back on.
+   There is a reason to prefer it beyond being asked. Typing the password
+   once more, into the form they will use every time afterwards, is where
+   somebody finds out they mistyped it — and a first sign-in that works is
+   worth more than a step saved.
 
    WHY THE ANSWER IS THE SAME WHETHER OR NOT THE ADDRESS IS TAKEN
    Supabase deliberately returns a normal-looking result for an address that
@@ -50,14 +48,13 @@
 
 var respond = require('../_lib/respond');
 var validate = require('../_lib/validate');
-var Cookies = require('../_lib/cookies');
 var Errors = require('../_lib/errors');
 var db = require('../_lib/supabase');
 var log = require('../_lib/log');
 
 var MIN_PASSWORD = 8;
 
-module.exports = respond.handler(['POST'], async function (req, res) {
+module.exports = respond.handler(['POST'], async function (req) {
 
   var v = validate.body(req);
   var email = v.email('email');
@@ -92,54 +89,25 @@ module.exports = respond.handler(['POST'], async function (req, res) {
   }
 
   /* A session comes back only when the project has email confirmation turned
-     off. With it on the account exists but cannot be used until the link is
-     followed, and the caller is told so — because "nothing happened" is the
-     worst possible outcome of pressing a signup button. */
-  var session = result.data.session;
+     off. It is not used — see the note at the top — but whether there was
+     one is exactly the question the page needs answered: can this person
+     sign in now, or do they have to find an email first?
 
-  if (!session) {
-    return {
-      needsConfirmation: true,
-      user: null,
-      message: 'Check your email for a confirmation link.'
-    };
-  }
-
-  var user = result.data.user;
-
-  /* The profile is written by the handle_new_user trigger the moment the
-     account exists, so this is a read of something that is already there.
-     Its absence means the trigger is missing, not that the caller is new. */
-  var profile = await db.asAdmin()
-    .from('profiles')
-    .select('name, role, blocked')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  if (profile.error || !profile.data) {
-    log.error('signed up but no profile row', profile.error, { userId: user.id });
-    throw Errors.internal();
-  }
-
-  /* Blocked at the moment of creation should be impossible — the trigger
-     writes false — but the check costs nothing and this is the one place
-     where setting a cookie first and refusing after would leave a usable
-     token in a browser. The same order as api/auth/login.js, deliberately. */
-  if (profile.data.blocked) {
-    throw Errors.forbidden('This account has been suspended.');
-  }
-
-  Cookies.setSession(req, res, session);
+     "nothing happened" is the worst possible outcome of pressing a signup
+     button, so the answer always says which. */
+  var ready = !!result.data.session;
 
   return {
-    needsConfirmation: false,
-    user: {
-      id: user.id,
-      email: user.email,
-      name: profile.data.name || null,
-      role: profile.data.role,
-      isAdmin: profile.data.role === 'admin'
-    },
-    message: 'Welcome to HAVELI.'
+    ready: ready,
+
+    /* The address that was just registered, so the sign-in form the page
+       moves to can be filled in with it. Nothing secret: it is what the
+       caller sent a moment ago. */
+    email: email,
+
+    needsConfirmation: !ready,
+    message: ready
+      ? 'Account created. Sign in to continue.'
+      : 'Check your email for a confirmation link, then sign in.'
   };
 });

@@ -2204,18 +2204,20 @@ try {
   }
 
   /* =====================================================================
-     21. Registering signs you in
+     21. Registering
      ---------------------------------------------------------------------
-     Somebody who has just chosen a password should not have to type it
-     into a second form four seconds later. The account is usable the
-     moment it exists — this project has email confirmation off — so the
-     cookies are set by the signup endpoint itself.
+     Creating an account does NOT sign anybody in, and the first checks
+     below are there to keep it that way. An earlier version of this
+     endpoint set the session cookies itself; the shop's owner asked for
+     the other behaviour — register, then sign in on the form — so a
+     Set-Cookie here is now a regression rather than a feature, and is
+     asserted against.
 
-     The check that matters is not the convenience one. It is the last
-     three: a signup body cannot ask for a role, however it asks.
+     The checks that matter most are the last three, and they did not
+     change: a signup body cannot ask for a role, however it asks.
      ===================================================================== */
 
-  console.log('\n21. REGISTERING — and being signed in by it');
+  console.log('\n21. REGISTERING — which does not sign you in');
 
   {
     const email = 'newcomer-' + stamp + '@verify.invalid';
@@ -2235,37 +2237,47 @@ try {
     if (res.status === 200 && payload.ok) {
       const data = payload.data;
 
-      check('IT COMES BACK SIGNED IN', data.needsConfirmation === false && !!data.user,
-            JSON.stringify(data).slice(0, 140));
-
-      check('as a customer, whatever was asked for',
-            data.user.role === 'customer' && data.user.isAdmin === false,
-            data.user.role);
-
-      check('with the name that was given', data.user.name === 'New Comer', data.user.name);
-
-      /* The cookies are the point: without them the answer is a claim. */
-      const jar = (typeof res.headers.getSetCookie === 'function'
+      /* NO COOKIES. This is the whole of what the owner asked for, and the
+         only way to be sure of it is to look at the headers. */
+      const raw = typeof res.headers.getSetCookie === 'function'
         ? res.headers.getSetCookie()
-        : [res.headers.get('set-cookie')].filter(Boolean))
-        .map((c) => String(c).split(';')[0]).join('; ');
+        : [res.headers.get('set-cookie')].filter(Boolean);
 
-      check('AND THE SESSION COOKIES ARE SET', /zb_at=/.test(jar), jar.slice(0, 40));
-      check('the token is not readable by script',
-            /HttpOnly/i.test(String((typeof res.headers.getSetCookie === 'function'
-              ? res.headers.getSetCookie()
-              : [res.headers.get('set-cookie')]).join(' '))));
+      check('IT DOES NOT SIGN ANYBODY IN',
+            !raw.some((c) => /zb_at=|zb_rt=/.test(String(c))),
+            raw.join(' ').slice(0, 80));
 
-      /* And the cookie actually works, which is the only proof that matters. */
-      const whoami = await call('GET', '/api/auth/me', { cookie: jar });
+      check('and hands back no user to draw a signed-in page with',
+            !data.user, JSON.stringify(data).slice(0, 120));
 
-      check('THE COOKIE IS A WORKING SESSION',
-            whoami.status === 200 && whoami.body.data.user &&
-            whoami.body.data.user.email === email,
-            whoami.status + ' ' + JSON.stringify(whoami.body.data).slice(0, 100));
+      /* What it does say is whether signing in will work yet, which is
+         what the page needs in order to know where to send somebody. */
+      check('it says the account is ready to sign in to',
+            data.ready === true && data.needsConfirmation === false,
+            JSON.stringify(data).slice(0, 120));
 
-      const mine = await call('GET', '/api/account/orders', { cookie: jar });
-      check('and it reaches the account pages', mine.status === 200, mine.status);
+      check('and gives back the address, to fill the sign-in form in with',
+            data.email === email, data.email);
+
+      /* The account is real, which is proved by signing in to it the
+         ordinary way — the step the customer is now sent to take. */
+      const signedIn = await call('POST', '/api/auth/login', {
+        body: { email: email, password: password }
+      });
+
+      check('THE ACCOUNT IS REAL AND CAN BE SIGNED IN TO', signedIn.status === 200,
+            signedIn.status + ' ' + JSON.stringify(signedIn.body).slice(0, 120));
+
+      if (signedIn.status === 200) {
+        check('as a customer, whatever was asked for',
+              signedIn.body.data.user.role === 'customer' &&
+              signedIn.body.data.user.isAdmin === false,
+              signedIn.body.data.user.role);
+
+        check('with the name that was given',
+              signedIn.body.data.user.name === 'New Comer',
+              signedIn.body.data.user.name);
+      }
 
       /* Cleaned up by id, through the service key, because this account was
          made by the endpoint rather than by the setup at the top. */
@@ -2288,12 +2300,7 @@ try {
 
     check('a signup asking to be an admin — 200', tried.status === 200, tried.status);
 
-    if (tried.status === 200 && tried.body.data.user) {
-      check('IS A CUSTOMER ANYWAY',
-            tried.body.data.user.role === 'customer' &&
-            tried.body.data.user.isAdmin === false,
-            JSON.stringify(tried.body.data.user));
-
+    if (tried.status === 200) {
       const { data: found2 } = await admin.auth.admin.listUsers({ perPage: 200 });
       const sneak = (found2.users || []).filter((u) => u.email === sneaky)[0];
 

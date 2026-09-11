@@ -149,7 +149,17 @@
 </aside>
 
 <!-- =====================================================================
-     ACCOUNT PANEL — interface only, no authentication
+     ACCOUNT PANEL
+
+     Two states, and assets/js/account-panel.js decides which is shown:
+     a sign-in form for a visitor, and who you are for somebody already
+     signed in. Both are in the markup so the panel is complete before a
+     single script has run, and neither is drawn from a template string
+     assembled in JavaScript.
+
+     It used to be one state — a form with onsubmit="return false" and a
+     note admitting it signed nobody in — which meant a customer who had
+     already signed in opened this and was asked to sign in again.
      ===================================================================== -->
 <aside class="panel panel--right" id="account-panel" data-panel="account"
        aria-hidden="true" aria-label="Account">
@@ -161,18 +171,44 @@
     </button>
   </div>
 
-  <form class="panel__form" onsubmit="return false">
-    <input class="field" type="email" placeholder="Email" autocomplete="email" data-panel-autofocus>
-    <input class="field" type="password" placeholder="Password" autocomplete="current-password">
-    <button class="btn btn--primary btn--block" type="submit">Sign in</button>
-  </form>
+  <!-- Signed out -->
+  <div data-account-out hidden>
+    <form class="panel__form" id="account-panel-form" novalidate>
+      <label class="visually-hidden" for="account-panel-email">Email</label>
+      <input class="field" id="account-panel-email" name="email" type="email"
+             placeholder="Email" autocomplete="email" required data-panel-autofocus>
 
-  <div class="panel__links">
-    <a href="/account">Full account page</a>
-    <a href="/wishlist">Wishlist</a>
+      <label class="visually-hidden" for="account-panel-password">Password</label>
+      <input class="field" id="account-panel-password" name="password" type="password"
+             placeholder="Password" autocomplete="current-password" required>
+
+      <button class="btn btn--primary btn--block" type="submit">Sign in</button>
+      <p class="panel__error" role="alert" data-account-error hidden></p>
+    </form>
+
+    <p class="panel__aside">
+      Don’t have an account?
+      <a href="/account?register=1" data-account-register>Register</a>
+    </p>
+
+    <div class="panel__links">
+      <a href="/wishlist">Wishlist</a>
+    </div>
   </div>
 
-  <p class="panel__note">Interface only — this form does not sign anyone in.</p>
+  <!-- Signed in -->
+  <div data-account-in hidden>
+    <p class="panel__who">
+      Signed in as <strong data-account-email></strong>
+    </p>
+
+    <div class="panel__links">
+      <a href="/account">Your orders</a>
+      <a href="/wishlist">Wishlist</a>
+    </div>
+
+    <button class="btn btn--block" type="button" data-account-signout>Sign out</button>
+  </div>
 
 </aside>
 
@@ -268,6 +304,7 @@
 
 <!-- Components -->
 <script src="assets/js/header.js"></script>
+<script src="assets/js/account-panel.js"></script>
 <script src="assets/js/hero.js"></script>
 <script src="assets/js/collections.js"></script>
 <script src="assets/js/catalogue.js"></script>

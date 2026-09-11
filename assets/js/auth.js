@@ -153,34 +153,17 @@ window.ZB = window.ZB || {};
     },
 
     /**
-     * Create an account, and be signed in to it.
+     * Create an account. This does not sign anybody in.
      *
-     * The server sets the session cookies when the account is usable
-     * straight away, so a `user` in the answer means this browser is
-     * already signed in and everything watching — the header's badges, the
-     * cart sync in assets/js/store-sync.js — has to be told.
-     *
-     * With email confirmation switched on there is no session and no user,
-     * and this resolves with the message saying so. The caller checks which
-     * by looking for the user rather than by knowing the project's setting.
+     * No cookies come back and nothing here changes — the new customer
+     * signs in through the form, which is what the shop's owner asked for.
+     * The answer carries `ready`, saying whether that will work yet, and
+     * the address to fill the form in with.
      */
     signUp: function (email, password, name) {
       return call('/api/auth/signup', {
         method: 'POST',
         body: { email: email, password: password, name: name || '' }
-      }).then(function (data) {
-        if (data && data.user) {
-          Auth.user = data.user;
-          Auth.loaded = true;
-
-          /* So a later load() does not undo this by resolving an older
-             promise made before the account existed. */
-          Auth.ready = Promise.resolve(Auth.user);
-
-          emit();
-        }
-
-        return data;
       });
     },
 
