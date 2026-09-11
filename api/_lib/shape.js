@@ -102,7 +102,7 @@ function deptLabel(labels, dept) {
  * Matches what assets/js/catalogue.js used to generate, field for field. The
  * two exceptions are noted where they occur.
  */
-function storefrontProduct(row, labels) {
+function storefrontProduct(row, labels, sold) {
   var category = row.categories || {};
   var parent = category.parent || null;
 
@@ -161,14 +161,18 @@ function storefrontProduct(row, labels) {
        must agree eventually disagree. */
     inStock: (row.stock || 0) > 0,
 
-    /* NOT REAL YET, AND NOT INVENTED.
-       The generator produced a number from the product's own id, which made
-       the "Best selling" sort return a stable but meaningless order. There
-       is nothing to count until orders exist, so this is zero for every
-       product and that sort falls back to the catalogue's own order. It
-       becomes a count of order_items in Phase 8. Zero is the honest answer;
-       a made-up ranking in a real shop is not. */
-    popularity: 0,
+    /* HOW MANY HAVE ACTUALLY SOLD.
+       Units, from public.product_sales — a view over order_items that skips
+       cancelled orders. It used to be zero for everything, which was the
+       honest answer while there were no orders to count and left the
+       storefront's "Best selling" sort returning the catalogue in its own
+       order. Before that the generator made a number up from the product's
+       own id, which ranked products by nothing at all.
+
+       Zero is still the answer for a product nobody has bought, and that is
+       different from a product nobody has bought YET being given a
+       plausible-looking figure. */
+    popularity: (sold && sold[row.id]) || 0,
 
     addedDaysAgo: daysSince(row.created_at),
 

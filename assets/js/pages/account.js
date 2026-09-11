@@ -545,11 +545,23 @@ window.ZB.pages = window.ZB.pages || {};
 
           ZB.auth.signUp(email, password, String(data.get('name') || '').trim())
             .then(function (result) {
-              busy(form, false, 'Create account');
+              /* REGISTERING SIGNS YOU IN
+                 The server sets the session cookies when the account is
+                 usable straight away, so there is nothing left to do but
+                 draw the signed-in page. Making somebody type the password
+                 they chose four seconds ago into the form next door is a
+                 step that existed only because the two endpoints were
+                 written separately.
 
-              /* Whether a confirmation email is required is the project's
-                 setting, not this page's business — the server says which,
-                 and the message it sends is shown as it is. */
+                 Whether a confirmation email is required is the project's
+                 setting, not this page's business. The server says which,
+                 by whether it sent a user back. */
+              if (result && result.user) {
+                showSignedIn(result.user);
+                return;
+              }
+
+              busy(form, false, 'Create account');
               say(form, result.message || 'Account created.');
               form.reset();
             })

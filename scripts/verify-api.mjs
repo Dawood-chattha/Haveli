@@ -2203,6 +2203,191 @@ try {
     await call('PUT', '/api/account/wishlist', { token: shopper.token, body: { items: [] } });
   }
 
+  /* =====================================================================
+     21. Registering signs you in
+     ---------------------------------------------------------------------
+     Somebody who has just chosen a password should not have to type it
+     into a second form four seconds later. The account is usable the
+     moment it exists — this project has email confirmation off — so the
+     cookies are set by the signup endpoint itself.
+
+     The check that matters is not the convenience one. It is the last
+     three: a signup body cannot ask for a role, however it asks.
+     ===================================================================== */
+
+  console.log('\n21. REGISTERING — and being signed in by it');
+
+  {
+    const email = 'newcomer-' + stamp + '@verify.invalid';
+    const password = randomBytes(24).toString('hex');
+
+    const res = await fetch(BASE + '/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, password: password, name: 'New Comer' })
+    });
+
+    const payload = await res.json();
+
+    check('POST /api/auth/signup — 200', res.status === 200, res.status + ' ' +
+          JSON.stringify(payload).slice(0, 140));
+
+    if (res.status === 200 && payload.ok) {
+      const data = payload.data;
+
+      check('IT COMES BACK SIGNED IN', data.needsConfirmation === false && !!data.user,
+            JSON.stringify(data).slice(0, 140));
+
+      check('as a customer, whatever was asked for',
+            data.user.role === 'customer' && data.user.isAdmin === false,
+            data.user.role);
+
+      check('with the name that was given', data.user.name === 'New Comer', data.user.name);
+
+      /* The cookies are the point: without them the answer is a claim. */
+      const jar = (typeof res.headers.getSetCookie === 'function'
+        ? res.headers.getSetCookie()
+        : [res.headers.get('set-cookie')].filter(Boolean))
+        .map((c) => String(c).split(';')[0]).join('; ');
+
+      check('AND THE SESSION COOKIES ARE SET', /zb_at=/.test(jar), jar.slice(0, 40));
+      check('the token is not readable by script',
+            /HttpOnly/i.test(String((typeof res.headers.getSetCookie === 'function'
+              ? res.headers.getSetCookie()
+              : [res.headers.get('set-cookie')]).join(' '))));
+
+      /* And the cookie actually works, which is the only proof that matters. */
+      const whoami = await call('GET', '/api/auth/me', { cookie: jar });
+
+      check('THE COOKIE IS A WORKING SESSION',
+            whoami.status === 200 && whoami.body.data.user &&
+            whoami.body.data.user.email === email,
+            whoami.status + ' ' + JSON.stringify(whoami.body.data).slice(0, 100));
+
+      const mine = await call('GET', '/api/account/orders', { cookie: jar });
+      check('and it reaches the account pages', mine.status === 200, mine.status);
+
+      /* Cleaned up by id, through the service key, because this account was
+         made by the endpoint rather than by the setup at the top. */
+      const { data: found } = await admin.auth.admin.listUsers({ perPage: 200 });
+      const made = (found.users || []).filter((u) => u.email === email)[0];
+      if (made) madeUsers.push(made.id);
+    }
+
+    /* --- the one that must never change --------------------------------- */
+
+    const sneaky = 'sneaky-' + stamp + '@verify.invalid';
+
+    const tried = await call('POST', '/api/auth/signup', {
+      body: {
+        email: sneaky, password: randomBytes(24).toString('hex'), name: 'Sneaky',
+        role: 'admin', isAdmin: true,
+        data: { role: 'admin' }, options: { data: { role: 'admin' } }
+      }
+    });
+
+    check('a signup asking to be an admin — 200', tried.status === 200, tried.status);
+
+    if (tried.status === 200 && tried.body.data.user) {
+      check('IS A CUSTOMER ANYWAY',
+            tried.body.data.user.role === 'customer' &&
+            tried.body.data.user.isAdmin === false,
+            JSON.stringify(tried.body.data.user));
+
+      const { data: found2 } = await admin.auth.admin.listUsers({ perPage: 200 });
+      const sneak = (found2.users || []).filter((u) => u.email === sneaky)[0];
+
+      if (sneak) {
+        madeUsers.push(sneak.id);
+
+        const { data: row } = await admin.from('profiles')
+          .select('role').eq('id', sneak.id).maybeSingle();
+
+        check('AND THE DATABASE AGREES, WHICH IS THE ONLY OPINION THAT COUNTS',
+              row && row.role === 'customer', row && row.role);
+      }
+    }
+  }
+
+  /* =====================================================================
+     22. Best selling
+     ---------------------------------------------------------------------
+     The storefront's sort menu has offered this since the day it was built
+     and it has never done anything: every product's popularity was zero,
+     so the sort returned the catalogue in its own order and looked like a
+     sort that had run.
+
+     public.product_sales counts it now — units, over order_items, skipping
+     cancelled orders. This section places an order and watches the number
+     move, then cancels it and watches it move back, because a count that
+     only ever goes up is not a count of sales.
+     ===================================================================== */
+
+  console.log('\n22. BEST SELLING — counted from orders, never stored');
+
+  {
+    const before = await call('GET', '/api/catalogue');
+
+    const findIt = (list, slug) =>
+      (list || []).filter((p) => p.id === slug)[0] || null;
+
+    const was = findIt(before.body.data.products, cheap.slug);
+
+    check('every product carries a popularity',
+          was && typeof was.popularity === 'number',
+          was ? typeof was.popularity : 'not in the catalogue');
+
+    if (was) {
+      const startedAt = was.popularity;
+
+      /* Restocked so this can order regardless of what earlier sections
+         bought. */
+      await call('PATCH', '/api/admin/products/' + cheap.id,
+                 { token: owner.token, body: { stock: 20 } });
+
+      const sale = await call('POST', '/api/checkout', {
+        token: shopper.token,
+        body: buy([{ productId: cheap.id, qty: 7 }])
+      });
+
+      if (sale.status === 200) {
+        madeOrders.push(sale.body.data.order.id);
+
+        const after = await call('GET', '/api/catalogue');
+        const now = findIt(after.body.data.products, cheap.slug);
+
+        check('SELLING SEVEN MOVES IT BY SEVEN',
+              now && now.popularity === startedAt + 7,
+              'was ' + startedAt + ', now ' + (now && now.popularity));
+
+        /* --- and back again ------------------------------------------- */
+
+        await call('PATCH', '/api/admin/orders/' + sale.body.data.order.id,
+                   { token: owner.token, body: { status: 'cancelled' } });
+
+        const undone = await call('GET', '/api/catalogue');
+        const back = findIt(undone.body.data.products, cheap.slug);
+
+        check('AND CANCELLING MOVES IT BACK',
+              back && back.popularity === startedAt,
+              'expected ' + startedAt + ', got ' + (back && back.popularity));
+      } else {
+        fail('the order for the best-selling check was refused — ' +
+             JSON.stringify(sale.body).slice(0, 120));
+      }
+    }
+
+    /* Nothing about this is stored on the product, and nothing may be: a
+       column would be right until an order was cancelled and something
+       forgot to decrement it. */
+    const { data: columns } = await admin.from('products')
+      .select('*').eq('id', cheap.id).maybeSingle();
+
+    check('NOTHING IS STORED ON THE PRODUCT ITSELF',
+          columns && !('units_sold' in columns) && !('popularity' in columns),
+          Object.keys(columns || {}).join(','));
+  }
+
 } catch (err) {
   fail('the run stopped: ' + err.message);
 } finally {

@@ -37,6 +37,7 @@ var respond = require('./_lib/respond');
 var shape = require('./_lib/shape');
 var db = require('./_lib/supabase');
 var Errors = require('./_lib/errors');
+var log = require('./_lib/log');
 
 /* PostgREST answers at most a thousand rows per request whatever is asked
    of it, so a catalogue larger than that arrives in pieces. */
@@ -62,6 +63,42 @@ module.exports = respond.handler(['GET'], async function (req, res) {
 
   var labels = {};
   (deptRows.data || []).forEach(function (row) { labels[row.slug] = row.label; });
+
+  /* -----------------------------------------------------------------------
+     How much of each product has sold
+
+     One aggregate read of public.product_sales, turned into a map, so the
+     shaping below is a lookup rather than a query per product. The view
+     holds a row only for products that have actually been ordered, so this
+     is at most as many rows as the catalogue and usually far fewer.
+
+     READ AS THE SERVER, DELIBERATELY
+     db/sales.sql revokes this view from both roles a browser can present.
+     How much of a product has sold is a fact about the shop, and it is
+     assembled from orders — which are not. Reading it as the caller would
+     mean every shopper's "Best selling" being sorted by their own purchase
+     history, which is a different feature nobody asked for.
+
+     A FAILURE COSTS THE SORT, NOT THE SHOP
+     If this cannot be read — the view not yet created, the database busy —
+     every product's popularity is zero and "Best selling" falls back to the
+     catalogue's own order, which is exactly where it was before. A
+     catalogue that fails to load because a sort could not be prepared would
+     be a far worse trade. ----------------------------------------------- */
+  var sold = {};
+
+  var sales = await db.asAdmin()
+    .from('product_sales')
+    .select('product_id, units');
+
+  if (sales.error) {
+    log.error('the best-selling counts could not be read; the sort will be flat',
+              new Error(sales.error.message));
+  } else {
+    (sales.data || []).forEach(function (row) {
+      sold[row.product_id] = Number(row.units) || 0;
+    });
+  }
 
   /* Products, in pages, until a short page says that was the end. */
   var products = [];
@@ -89,7 +126,9 @@ module.exports = respond.handler(['GET'], async function (req, res) {
     if (page.error) throw Errors.internal().causedBy(new Error(page.error.message));
 
     var rows = page.data || [];
-    rows.forEach(function (row) { products.push(shape.storefrontProduct(row, labels)); });
+    rows.forEach(function (row) {
+      products.push(shape.storefrontProduct(row, labels, sold));
+    });
 
     if (rows.length < PAGE) break;
 
