@@ -26,6 +26,7 @@
 var respond = require('../../_lib/respond');
 var validate = require('../../_lib/validate');
 var shape = require('../../_lib/shape');
+var rows = require('../../_lib/rows');
 var auth = require('../../_lib/auth');
 var db = require('../../_lib/supabase');
 var Errors = require('../../_lib/errors');
@@ -141,28 +142,28 @@ module.exports = respond.handler(['GET'], async function (req) {
 
   var client = db.asUser(req);
 
-  var query = withFilters(
-    client.from('orders').select(shape.ORDER_SELECT, { count: 'exact' }),
-    filters);
+  /* A fresh query each call: rows.paged needs a second one with identical
+     filters when the page asked for is past the end. */
+  function filtered() {
+    var query = withFilters(
+      client.from('orders').select(shape.ORDER_SELECT, { count: 'exact' }),
+      filters);
 
-  var order = SORTS[sort] || SORTS.newest;
-  query = query.order(order.column, { ascending: order.ascending });
+    var order = SORTS[sort] || SORTS.newest;
+    query = query.order(order.column, { ascending: order.ascending });
 
-  /* A total ordering, so paging cannot repeat a row or skip one. See the
-     note in api/admin/products/index.js. */
-  query = query.order('id', { ascending: true });
+    /* A total ordering, so paging cannot repeat a row or skip one. See the
+       note in api/admin/products/index.js. */
+    return query.order('id', { ascending: true });
+  }
 
-  var from = (page - 1) * perPage;
-  query = query.range(from, from + perPage - 1);
+  var got = await rows.paged(filtered, page, perPage);
 
-  var result = await query;
-  if (result.error) throw Errors.internal().causedBy(new Error(result.error.message));
-
-  var total = result.count || 0;
+  var total = got.total;
   var pages = Math.max(1, Math.ceil(total / perPage));
 
   return {
-    items: (result.data || []).map(shape.adminOrder),
+    items: got.rows.map(shape.adminOrder),
     total: total,
     page: Math.min(page, pages),
     pages: pages,

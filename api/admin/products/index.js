@@ -98,9 +98,28 @@ async function list(req, client) {
   var perPage = v.int('perPage', { optional: true, fallback: 20, min: 1, max: 100 });
   v.done();
 
-  var query = client
-    .from('products')
-    .select(shape.PRODUCT_SELECT, { count: 'exact' });
+  /* THE CATEGORY FILTER IS RESOLVED BEFORE THE QUERY IS BUILT
+     It is the one filter that needs a query of its own, and the builder
+     below is called more than once — see rows.paged — so the lookup is done
+     here, once, and its answer is closed over. */
+  var categoryIds = null;
+
+  if (category) {
+    categoryIds = await idsBelow(client, category, dept);
+    if (!categoryIds.length) {
+      return { items: [], total: 0, page: 1, pages: 1, perPage: perPage };
+    }
+  }
+
+  /* A FRESH QUERY EVERY TIME THIS IS CALLED
+     A supabase-js builder cannot be awaited twice, and rows.paged needs a
+     second one with identical filters when the page asked for is past the
+     end of the list. Building it in a function is what keeps the two
+     identical without asking anyone to remember. */
+  function filtered() {
+    var query = client
+      .from('products')
+      .select(shape.PRODUCT_SELECT, { count: 'exact' });
 
   if (search) {
     /* Escaping the characters PostgREST's `or` filter treats as structure.
@@ -113,7 +132,7 @@ async function list(req, client) {
 
   if (dept) query = query.eq('dept', dept);
 
-  /* A CATEGORY FILTER IS RESOLVED TO IDS FIRST, AND HAS TO BE
+  /* A CATEGORY FILTER IS RESOLVED TO IDS, AND HAS TO BE
    *
    * The obvious version of this line is `.eq('categories.slug', category)`,
    * and it is wrong in a way that looks like it works. A filter on an
@@ -122,20 +141,12 @@ async function list(req, client) {
    * regardless. So the panel asked for one category and was handed the whole
    * catalogue with the right total printed underneath it.
    *
-   * Resolving the slug here also fixes two things the embedded filter could
-   * not do: a slug nobody has returns an empty page rather than everything,
-   * and a parent category includes what is beneath it, which is what the
-   * count beside it in the category list already claims.
+   * Resolving the slug also fixes two things the embedded filter could not
+   * do: a slug nobody has returns an empty page rather than everything, and
+   * a parent category includes what is beneath it, which is what the count
+   * beside it in the category list already claims.
    */
-  var categoryIds = null;
-
-  if (category) {
-    categoryIds = await idsBelow(client, category, dept);
-    if (!categoryIds.length) {
-      return { items: [], total: 0, page: 1, pages: 1, perPage: perPage };
-    }
-    query = query.in('category_id', categoryIds);
-  }
+  if (categoryIds) query = query.in('category_id', categoryIds);
 
   /* 'out-of-stock' is not a status in the database and never was — the old
      build derived it from stock because it had no status column. The panel's
@@ -157,21 +168,19 @@ async function list(req, client) {
    *
    * An id is unique, so adding it makes the ordering total: every row has
    * exactly one place, and page two begins where page one ended. */
-  query = query.order('id', { ascending: true });
+    query = query.order('id', { ascending: true });
 
-  var from = (page - 1) * perPage;
-  query = query.range(from, from + perPage - 1);
+    return query;
+  }
 
-  var result = await query;
-  if (result.error) throw Errors.internal().causedBy(new Error(result.error.message));
+  var got = await rows.paged(filtered, page, perPage);
 
   var labels = await deptLabels(client);
-  var total = result.count || 0;
-  var pages = Math.max(1, Math.ceil(total / perPage));
+  var pages = Math.max(1, Math.ceil(got.total / perPage));
 
   return {
-    items: (result.data || []).map(function (row) { return shape.adminProduct(row, labels); }),
-    total: total,
+    items: got.rows.map(function (row) { return shape.adminProduct(row, labels); }),
+    total: got.total,
     page: Math.min(page, pages),
     pages: pages,
     perPage: perPage

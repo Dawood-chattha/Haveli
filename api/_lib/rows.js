@@ -150,9 +150,76 @@ async function uniqueSlug(client, table, base, scope, ignoreId) {
   throw Errors.conflict('Too many items already share that name.');
 }
 
+/* -------------------------------------------------------------------------
+   Paging
+
+   ASKING FOR A PAGE THAT IS NOT THERE USED TO BE A 500
+   PostgREST answers 416 "Requested range not satisfiable" when the offset is
+   past the last row — not an empty list, an error — and every list endpoint
+   turned that into "Something went wrong on our side."
+
+   It stayed hidden for as long as the database had five hundred and sixty
+   demo products in it, because nobody had ever asked for page two of a short
+   list. The moment the placeholder catalogue was removed, page two of the
+   products screen answered 500, and so would the orders screen on any day
+   with few orders. The same would have happened on a live shop the first
+   time an owner deleted enough products to shorten the list while looking at
+   the last page of it.
+
+   THE RIGHT ANSWER IS AN EMPTY PAGE WITH THE REAL TOTAL
+   Empty, because there is genuinely nothing on that page — and the total,
+   because that is what the pager needs in order to offer a page that does
+   exist. Failing tells the screen nothing it can act on.
+
+   WHY THE QUERY IS BUILT BY A FUNCTION
+   A supabase-js query builder cannot be run twice, so recovering from the
+   miss needs a second one carrying exactly the same filters. Taking a
+   `build` function rather than a query is what makes "exactly the same"
+   true by construction instead of by a comment asking someone to keep two
+   places in step.
+   ------------------------------------------------------------------------- */
+
+function isRangeMiss(error) {
+  if (!error) return false;
+  return error.code === 'PGRST103' ||
+         /range not satisfiable/i.test(error.message || '');
+}
+
+/**
+ * One page of rows, plus the total the filters match.
+ *
+ * @param {function} build  Returns a FRESH, fully filtered and ordered query
+ *                          each time it is called.
+ */
+async function paged(build, page, perPage) {
+  var from = (page - 1) * perPage;
+  var result = await build().range(from, from + perPage - 1);
+
+  if (!result.error) {
+    return { rows: result.data || [], total: result.count || 0 };
+  }
+
+  if (!isRangeMiss(result.error)) {
+    throw Errors.internal().causedBy(new Error(result.error.message));
+  }
+
+  /* Past the end. limit(0) asks the same question with no rows attached: it
+     is satisfiable whatever the table holds — including nothing — and the
+     count that comes back is the real one under the same filters. */
+  var counted = await build().limit(0);
+
+  if (counted.error) {
+    throw Errors.internal().causedBy(new Error(counted.error.message));
+  }
+
+  return { rows: [], total: counted.count || 0 };
+}
+
 module.exports = {
   mustAffect: mustAffect,
   mustInsert: mustInsert,
   slugify: slugify,
-  uniqueSlug: uniqueSlug
+  uniqueSlug: uniqueSlug,
+  paged: paged,
+  isRangeMiss: isRangeMiss
 };
