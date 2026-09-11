@@ -48,6 +48,17 @@ function securityHeaders(res) {
 
   res.setHeader('Referrer-Policy', 'no-referrer');
 
+  /* HTTPS ONLY, AND FOR A YEAR
+     Every Vercel deployment is HTTPS, so this costs nothing there and closes
+     the one window that remains: a browser that has been to this site before
+     will refuse to make the first request over http at all, rather than making
+     it, being redirected, and having sent the cookie once in clear.
+
+     A browser ignores this header when it arrives over plain http, which is
+     what makes it safe to send unconditionally — the local development server
+     is not quietly instructing anything. */
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+
   /* API answers are per-user and often per-moment. Caching one at a shared
      hop is how one customer ends up looking at another's cart. */
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');

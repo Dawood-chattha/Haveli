@@ -195,9 +195,20 @@ try {
   const cat = await expectStatus('GET /api/catalogue', 200, 'GET', '/api/catalogue');
   const products = cat.body && cat.body.data ? cat.body.data.products : null;
 
-  check('the catalogue is an array of products',
-        Array.isArray(products) && products.length > 0,
+  /* AN EMPTY CATALOGUE IS NOT A FAILURE
+     This used to require at least one product, which passed for as long as
+     the database held the demo catalogue and failed the moment it was
+     removed — the probe was testing that somebody had run seed:demo, not
+     that the endpoint worked. A shop that has not added its first product
+     yet is an ordinary state, and the storefront has empty states for it.
+     What matters is the shape of the answer. */
+  check('the catalogue is a list', Array.isArray(products),
         'got ' + JSON.stringify(products).slice(0, 80));
+
+  if (Array.isArray(products) && !products.length) {
+    console.log('  note    the shop has no products yet; the checks that need ' +
+                'one use the ones this run creates');
+  }
 
   if (Array.isArray(products) && products.length) {
     const p = products[0];
@@ -437,14 +448,59 @@ try {
   check('and does not find it under the wrong status', wrongStatus.body.data.total === 0,
         'total ' + wrongStatus.body.data.total);
 
+  /* A SECOND PRODUCT, SO THERE IS A SECOND PAGE TO ASK FOR
+     These checks used to lean on the five hundred and sixty demo products
+     being in the database, which made them a test of whether somebody had
+     run seed:demo. A probe that needs two rows makes two rows. */
+  const madeSecond = await call('POST', '/api/admin/products', {
+    token: owner.token,
+    body: {
+      title: 'Verify Paging ' + stamp,
+      categoryId: categoryA.id,
+      price: 1500,
+      stock: 3,
+      status: 'draft'
+    }
+  });
+
+  const productB = madeSecond.body.data && madeSecond.body.data.product;
+  if (productB && productB.id) madeProducts.push(productB.id);
+
+  check('a second product for the paging checks', madeSecond.status === 200,
+        madeSecond.status + ' ' + JSON.stringify(madeSecond.body).slice(0, 120));
+
   const paged = await expectStatus('GET pages', 200, 'GET',
-                                   '/api/admin/products?perPage=5&page=2', owner);
+                                   '/api/admin/products?perPage=1&page=2', owner);
 
   check('a page holds what it was asked for',
-        paged.body.data.items.length <= 5 && paged.body.data.page === 2,
+        paged.body.data.items.length <= 1 && paged.body.data.page === 2,
         JSON.stringify({ n: paged.body.data.items.length, page: paged.body.data.page }));
   check('the pager knows the whole total',
-        paged.body.data.total > 5 && paged.body.data.pages > 1);
+        paged.body.data.total > 1 && paged.body.data.pages > 1,
+        JSON.stringify({ total: paged.body.data.total, pages: paged.body.data.pages }));
+
+  /* ASKING FOR A PAGE THAT IS NOT THERE
+     PostgREST answers 416 when the offset is past the last row, which every
+     list endpoint used to turn into a 500. It went unnoticed for as long as
+     the database held five hundred and sixty demo products, because nobody
+     had ever asked for page two of a short list — and it surfaced the day
+     the placeholder catalogue was removed.
+
+     An owner reaches it by deleting enough products while standing on the
+     last page of the list, which is an ordinary afternoon's work. */
+  const past = await expectStatus('a page past the end of the list', 200, 'GET',
+                                  '/api/admin/products?perPage=20&page=500', owner);
+
+  check('IT IS AN EMPTY PAGE, NOT AN ERROR',
+        Array.isArray(past.body.data.items) && past.body.data.items.length === 0,
+        JSON.stringify(past.body.data).slice(0, 120));
+
+  check('and it still knows the real total, so the pager can go back',
+        past.body.data.total === paged.body.data.total,
+        'past ' + past.body.data.total + ' vs ' + paged.body.data.total);
+
+  await expectStatus('the same for orders', 200, 'GET',
+                     '/api/admin/orders?perPage=20&page=500', owner);
 
   await expectStatus('an unknown sort falls back rather than failing', 200, 'GET',
                      '/api/admin/products?sort=by-vibes', owner);
