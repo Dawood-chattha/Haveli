@@ -12,7 +12,7 @@
 
    This serves the same three things `vercel.json` describes:
 
-     /api/*     handed to api/[...route].js, the same dispatcher Vercel runs
+     /api/*     handed to api/index.js, the same dispatcher Vercel runs
      files      assets/, data/, dev/, admin/ served from disk
      anything   else falls through to index.html, which is what makes the
                 storefront's client-side routes survive a refresh
@@ -170,7 +170,7 @@ function loadDispatcher() {
     if (cached.startsWith(API_DIR)) delete require.cache[cached];
   }
 
-  return require(join(API_DIR, '[...route].js'));
+  return require(join(API_DIR, 'index.js'));
 }
 
 /**

@@ -41,6 +41,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index?route=$1" },
     { "source": "/admin", "destination": "/admin/index.html" },
     { "source": "/admin/(.*)", "destination": "/admin/index.html" },
     { "source": "/((?!api/|assets/|data/|dev/|admin/|favicon\\.ico).*)", "destination": "/index.html" }

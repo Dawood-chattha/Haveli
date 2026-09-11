@@ -1,5 +1,5 @@
 /* =========================================================================
-   api/[...route].js — the only serverless function this project deploys
+   api/index.js — the only serverless function this project deploys
    -------------------------------------------------------------------------
    Every /api/... request arrives here and is handed to the endpoint that
    owns it. The endpoints themselves are unchanged: same files, same
@@ -16,6 +16,21 @@
    thirty-seven paths, and the split was a file layout rather than a design.
    So the files moved under _routes — which Vercel ignores, because of the
    underscore — and this stands in front of them.
+
+   HOW A REQUEST GETS HERE, AND WHY IT IS A REWRITE
+
+   The obvious arrangement is a catch-all file — api/[...route].js — and it
+   does not work. Outside Next.js, Vercel treats a bracketed file name as ONE
+   dynamic segment, so /api/health reached it and /api/auth/login did not:
+   every endpoint one level deep answered 404 at the platform's edge, before
+   any of this code ran. The shop's own pages worked, the sign-in did not, and
+   the panel reported that the server had not answered as expected — which was
+   exactly true.
+
+   So vercel.json rewrites /api/(.*) here and passes the rest of the path as
+   ?route=. This file reads that when it is there and falls back to the URL
+   when it is not, which is how dev/server.mjs reaches it — that one calls
+   this function directly, with the original URL intact.
 
    THE ROUTING IS THE SAME ROUTING, DELIBERATELY
 
@@ -79,12 +94,25 @@ var TABLE = (function () {
 /**
  * The path this request is for, with /api and any query string removed.
  *
- * Taken from the URL rather than from req.query.route. The catch-all
- * parameter is the platform's own decoded copy and would do, but the URL is
- * what actually arrived — and one source is easier to reason about than two
- * that are nearly the same.
+ * TWO SOURCES, IN A FIXED ORDER
+ * On Vercel the rewrite in vercel.json puts the path in ?route=, and req.url
+ * by then is the rewrite's own destination rather than what the visitor
+ * asked for — so the parameter is the only honest answer there. Under
+ * dev/server.mjs this function is called directly with the original URL and
+ * no parameter, so the URL is the answer there. Whichever is present is the
+ * one that describes the request that actually arrived.
  */
 function pathOf(req) {
+  var routed = req.query && req.query.route;
+
+  if (routed) {
+    /* Vercel hands a repeated parameter back as an array. Only the first is
+       meaningful, and a crafted ?route= on top of the rewrite's would arrive
+       as the second. */
+    if (Array.isArray(routed)) routed = routed[0];
+    return String(routed).replace(/^\/+/, '').replace(/\/+$/, '');
+  }
+
   var raw = String(req.url || '');
   var cut = raw.indexOf('?');
   var path = cut > -1 ? raw.slice(0, cut) : raw;
