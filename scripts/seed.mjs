@@ -114,6 +114,17 @@ function loadFrontendData() {
     'data/navigation.js',
     'data/catalogue.js',
     'data/hero.js',
+
+    /* THESE TWO ARE NOT LOADED BY THE STOREFRONT ANY MORE
+       They held the collection rail's ten tiles and the editorial band, both
+       invented, and index.html stopped loading them in Phase 15 — the shop
+       reads all three placements from the banners table now. They are still
+       read HERE, because demo content is exactly what they are for: a
+       developer wiring a screen up needs something on the page, and a command
+       that has to be asked for by name is where that belongs. */
+    'data/collections.js',
+    'data/editorial.js',
+
     'assets/js/catalogue.js'
   ];
 
@@ -247,20 +258,76 @@ function buildProducts(ZB, categoryIds) {
   return { products, images };
 }
 
+/**
+ * The three things the home page shows, as rows of one table.
+ *
+ * A hero slide, a collection tile and the editorial band are the same row
+ * with different parts filled in — see db/homepage.sql — so they are built
+ * together here and told apart by `placement`.
+ *
+ * The ids stay keyed on position within a placement, which is what makes
+ * seed:demo:remove able to recognise its own rows later.
+ */
 function buildBanners(ZB) {
-  return (ZB.heroSlides || []).map((s, i) => ({
-    id: uuid5('banner:' + i),
-    image: s.image,
-    alt: s.alt || s.headline || 'Banner',
-    eyebrow: s.eyebrow || null,
-    headline: s.headline || null,
-    body: s.body || null,
-    cta: s.cta || null,
-    href: s.href || null,
-    proof: s.proof || null,
-    status: 'active',
-    sort: i
-  }));
+  const rows = [];
+
+  (ZB.heroSlides || []).forEach((s, i) => {
+    rows.push({
+      id: uuid5('banner:' + i),
+      placement: 'hero',
+      image: s.image,
+      alt: s.alt || s.headline || 'Banner',
+      eyebrow: s.eyebrow || null,
+      headline: s.headline || null,
+      body: s.body || null,
+      cta: s.cta || null,
+      href: s.href || null,
+      proof: s.proof || null,
+      status: 'active',
+      sort: i
+    });
+  });
+
+  /* A tile's name is its headline and its flag is its eyebrow. The mapping
+     is the same one assets/js/bootstrap.js undoes on the way out, written
+     here so the demo content and the real content are the same shape. */
+  (ZB.collections || []).forEach((c, i) => {
+    rows.push({
+      id: uuid5('collection:' + i),
+      placement: 'collection',
+      image: c.image,
+      alt: c.label || 'Collection',
+      eyebrow: c.badge || null,
+      headline: c.label || null,
+      body: null,
+      cta: null,
+      href: c.href || null,
+      proof: null,
+      status: 'active',
+      sort: i
+    });
+  });
+
+  const feature = ZB.editorial && ZB.editorial.feature;
+
+  if (feature) {
+    rows.push({
+      id: uuid5('feature:0'),
+      placement: 'feature',
+      image: feature.image,
+      alt: feature.title || 'Feature',
+      eyebrow: feature.eyebrow || null,
+      headline: feature.title || null,
+      body: feature.body || null,
+      cta: feature.ctaLabel || null,
+      href: feature.ctaPath || null,
+      proof: null,
+      status: 'active',
+      sort: 0
+    });
+  }
+
+  return rows;
 }
 
 /* -------------------------------------------------------------------------
@@ -463,10 +530,13 @@ if (REMOVE) {
   const p = await sortDemoFromReal('products', 'id, slug, title',
     (row) => (row.slug ? uuid5('product:' + row.slug) : ''));
 
-  /* A banner has no slug to derive from, only the position it was seeded at.
-     A generous ceiling costs nothing: it is arithmetic, not a query. */
+  /* A banner has no slug to derive from, only the placement and position it
+     was seeded at. A generous ceiling costs nothing: it is arithmetic, not a
+     query. */
   const bannerIds = new Set();
-  for (let i = 0; i < 500; i++) bannerIds.add(uuid5('banner:' + i));
+  for (const kind of ['banner', 'collection', 'feature']) {
+    for (let i = 0; i < 500; i++) bannerIds.add(uuid5(kind + ':' + i));
+  }
 
   const b = await sortDemoFromReal('banners', 'id, headline, sort', (row) =>
     bannerIds.has(row.id) ? row.id : '');

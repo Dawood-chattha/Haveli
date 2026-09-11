@@ -1744,6 +1744,10 @@ window.ZB = window.ZB || {};
 
     create: function (data) {
       return Api.send('POST', '/api/admin/banners', {
+        /* Which of the home page's three slots this row is for. The server
+           defaults it to 'hero' when it is absent, which is what a slide
+           added before this field existed was. */
+        placement: data.placement || 'hero',
         image: data.image,
         alt: data.alt,
         eyebrow: data.eyebrow || undefined,
@@ -1762,7 +1766,8 @@ window.ZB = window.ZB || {};
     update: function (id, data) {
       var patch = {};
 
-      ['image', 'alt', 'eyebrow', 'headline', 'body', 'cta', 'proof', 'href', 'status']
+      ['placement', 'image', 'alt', 'eyebrow', 'headline', 'body', 'cta', 'proof',
+       'href', 'status']
         .forEach(function (key) {
           if (Object.prototype.hasOwnProperty.call(data, key)) patch[key] = data[key];
         });

@@ -520,7 +520,39 @@ function adminCustomer(row, stats, city) {
    ------------------------------------------------------------------------- */
 
 var BANNER_SELECT =
-  'id, image, alt, eyebrow, headline, body, cta, href, proof, status, sort, created_at';
+  'id, placement, image, alt, eyebrow, headline, body, cta, href, proof,' +
+  ' status, sort, created_at';
+
+/**
+ * A banner as a visitor sees it.
+ *
+ * ONE SHAPE FOR THREE PLACES, AND THE MAPPING IS THE BROWSER'S JOB
+ * A hero slide, a collection tile and the editorial band are the same row
+ * with different parts filled in, so this hands back the row's own field
+ * names rather than three different shapes. assets/js/bootstrap.js turns
+ * them into what each section expects, because what each section expects is
+ * a fact about the interface and belongs where the interface is.
+ *
+ * No id, no status, no sort. The page draws what it is given in the order it
+ * is given; none of the three has any use for a row's identity, and a status
+ * that is always 'active' is not information.
+ */
+function publicBanner(row) {
+  return {
+    image: row.image,
+    alt: row.alt,
+
+    /* Empty rather than null, because every one of these lands in a template
+       that would otherwise print the word. The storefront treats an empty
+       string as "the owner did not fill this in" and leaves the space out. */
+    eyebrow: row.eyebrow || '',
+    headline: row.headline || '',
+    body: row.body || '',
+    cta: row.cta || '',
+    href: row.href || '',
+    proof: row.proof || ''
+  };
+}
 
 /**
  * A slide as the banners screen knows it.
@@ -537,6 +569,11 @@ var BANNER_SELECT =
 function adminBanner(row) {
   return {
     id: row.id,
+
+    /* Where on the home page this row appears. Defaults in the database to
+       'hero', which is what every row written before db/homepage.sql is. */
+    placement: row.placement || 'hero',
+
     image: row.image,
     alt: row.alt,
     eyebrow: row.eyebrow || '',
@@ -762,6 +799,7 @@ module.exports = {
   customerOrder: customerOrder,
   adminCustomer: adminCustomer,
   adminBanner: adminBanner,
+  publicBanner: publicBanner,
   adminCoupon: adminCoupon,
   customerAddress: customerAddress,
   cartLine: cartLine,

@@ -61,6 +61,12 @@ async function update(req, client) {
 
   var patch = {};
 
+  /* Moving a slide from the carousel to the collection rail is an edit like
+     any other. See db/homepage.sql. */
+  if (has('placement')) {
+    patch.placement = v.oneOf('placement', ['hero', 'collection', 'feature']);
+  }
+
   if (has('image')) patch.image = v.str('image', { max: 1000 });
   if (has('alt')) patch.alt = v.str('alt', { max: 200 });
   if (has('eyebrow')) patch.eyebrow = v.str('eyebrow', { optional: true, max: 60 });

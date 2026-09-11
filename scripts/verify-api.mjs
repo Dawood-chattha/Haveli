@@ -2829,6 +2829,169 @@ try {
     await admin.from('rate_limits').delete().neq('bucket', '');
   }
 
+  /* =====================================================================
+     25. The home page
+     ---------------------------------------------------------------------
+     The banners table, its endpoints and the panel's Banners screen were
+     built in Phase 6, and nothing on the storefront read any of them: the
+     carousel came from data/hero.js, seven invented slides in a file the
+     owner could not reach. This section is the other end of that wire, and
+     the check that would have caught it — that what the panel writes is
+     what the shop serves.
+
+     Three placements, one table. See db/homepage.sql.
+     ===================================================================== */
+
+  console.log('\n25. THE HOME PAGE — what the owner writes is what the shop shows');
+
+  {
+    const made = [];
+
+    const add = async (body) => {
+      const res = await call('POST', '/api/admin/banners',
+                             { token: owner.token, body: body });
+      const row = res.body.data && res.body.data.banner;
+      if (row && row.id) { made.push(row.id); madeBanners.push(row.id); }
+      return { res, row };
+    };
+
+    const heroOne = await add({
+      placement: 'hero', image: 'assets/img/placeholder.svg',
+      alt: 'Verify hero ' + stamp, headline: 'Verify Hero ' + stamp,
+      cta: 'Shop', href: '/'
+    });
+
+    check('a hero slide is created', heroOne.res.status === 200,
+          heroOne.res.status + ' ' + JSON.stringify(heroOne.res.body).slice(0, 140));
+
+    check('and it comes back knowing where it goes',
+          heroOne.row && heroOne.row.placement === 'hero',
+          heroOne.row && heroOne.row.placement);
+
+    const tile = await add({
+      placement: 'collection', image: 'assets/img/placeholder.svg',
+      alt: 'Verify tile ' + stamp, headline: 'Verify Tile ' + stamp,
+      eyebrow: 'Online Only', href: '/'
+    });
+
+    const band = await add({
+      placement: 'feature', image: 'assets/img/placeholder.svg',
+      alt: 'Verify band ' + stamp, headline: 'Verify Band ' + stamp,
+      body: 'Words under the headline.', cta: 'Look', href: '/'
+    });
+
+    check('a collection tile and a wide band too',
+          tile.res.status === 200 && band.res.status === 200,
+          tile.res.status + ' / ' + band.res.status);
+
+    /* A placement the table's check constraint would refuse must be answered
+       as a bad field rather than as a 500 from Postgres. */
+    const nonsense = await call('POST', '/api/admin/banners', {
+      token: owner.token,
+      body: {
+        placement: 'billboard', image: 'assets/img/placeholder.svg',
+        alt: 'no', headline: 'no', cta: 'no', href: '/'
+      }
+    });
+
+    check('A PLACEMENT THAT DOES NOT EXIST IS REFUSED AS A FIELD, NOT A CRASH',
+          nonsense.status === 400, nonsense.status + ' ' +
+          JSON.stringify(nonsense.body).slice(0, 120));
+
+    /* ---- and now the public side ------------------------------------- */
+
+    const shopfront = await call('GET', '/api/banners');
+
+    check('GET /api/banners — 200', shopfront.status === 200, shopfront.status);
+
+    const home = shopfront.body.data || {};
+
+    const named = (list, headline) =>
+      (list || []).filter((b) => b.headline === headline)[0] || null;
+
+    check('THE SLIDE THE PANEL WROTE IS IN THE CAROUSEL',
+          !!named(home.hero, 'Verify Hero ' + stamp),
+          JSON.stringify((home.hero || []).map((b) => b.headline)).slice(0, 140));
+
+    check('the tile is in the collection rail and not in the carousel',
+          !!named(home.collections, 'Verify Tile ' + stamp) &&
+          !named(home.hero, 'Verify Tile ' + stamp),
+          JSON.stringify((home.collections || []).map((b) => b.headline)).slice(0, 140));
+
+    check('and the band is a single row, not a list',
+          home.feature && !Array.isArray(home.feature) &&
+          typeof home.feature === 'object',
+          JSON.stringify(home.feature).slice(0, 120));
+
+    /* The tile's flag travels as the eyebrow — bootstrap.js turns it back
+       into a badge. A shape check, because that mapping is the one thing
+       between the panel's words and the shop's. */
+    const shownTile = named(home.collections, 'Verify Tile ' + stamp);
+    check('a tile keeps the flag that was typed on it',
+          shownTile && shownTile.eyebrow === 'Online Only',
+          shownTile && shownTile.eyebrow);
+
+    check('NO ROW IDENTITY REACHES THE PUBLIC ANSWER',
+          shownTile && !('id' in shownTile) && !('status' in shownTile),
+          Object.keys(shownTile || {}).join(','));
+
+    /* ---- hidden means gone ------------------------------------------- */
+
+    await call('PATCH', '/api/admin/banners/' + heroOne.row.id,
+               { token: owner.token, body: { status: 'hidden' } });
+
+    const afterHiding = await call('GET', '/api/banners');
+
+    check('HIDING A SLIDE TAKES IT OUT OF THE SHOP',
+          !named(afterHiding.body.data.hero, 'Verify Hero ' + stamp),
+          JSON.stringify((afterHiding.body.data.hero || [])
+            .map((b) => b.headline)).slice(0, 140));
+
+    /* Not merely unlisted: the policy in db/policies.sql is what makes it
+       unreachable, so a browser's own key is asked directly. */
+    const browser = createClient(url, anonKey, { auth: { persistSession: false } });
+    const peek = await browser.from('banners').select('id').eq('id', heroOne.row.id);
+
+    check('and a browser cannot read it by asking the database itself',
+          !!peek.error || (peek.data || []).length === 0,
+          peek.error ? peek.error.message : JSON.stringify(peek.data));
+
+    /* ---- moving one between placements ------------------------------- */
+
+    await call('PATCH', '/api/admin/banners/' + tile.row.id,
+               { token: owner.token, body: { placement: 'hero', status: 'active' } });
+
+    const moved = await call('GET', '/api/banners');
+
+    check('a picture can be moved from one part of the page to another',
+          !!named(moved.body.data.hero, 'Verify Tile ' + stamp) &&
+          !named(moved.body.data.collections, 'Verify Tile ' + stamp),
+          JSON.stringify(moved.body.data.hero.map((b) => b.headline)).slice(0, 140));
+
+    /* ---- what an empty shop gets ------------------------------------- */
+
+    /* Everything this section made goes now rather than in the cleanup, so
+       the last check can see the shop as it is on the day it opens. */
+    for (const id of made) {
+      await call('DELETE', '/api/admin/banners/' + id, { token: owner.token });
+    }
+
+    const { data: leftovers } = await admin.from('banners').select('id');
+
+    if ((leftovers || []).length === 0) {
+      const bare = await call('GET', '/api/banners');
+
+      check('A SHOP THAT HAS CHOSEN NOTHING GETS NOTHING, NOT A PLACEHOLDER',
+            bare.status === 200 &&
+            Array.isArray(bare.body.data.hero) && bare.body.data.hero.length === 0 &&
+            bare.body.data.feature === null,
+            JSON.stringify(bare.body.data).slice(0, 140));
+    } else {
+      console.log('  note    the shop has banners of its own; the empty-shop ' +
+                  'check is skipped rather than deleting them');
+    }
+  }
+
 } catch (err) {
   fail('the run stopped: ' + err.message);
 } finally {

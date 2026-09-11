@@ -3,7 +3,18 @@
    -------------------------------------------------------------------------
    Renders the shells for the hero carousel and the ranked collection rail,
    then hands each to its own controller. Both controllers fill their own
-   markup from the data files, so this page only owns the arrangement.
+   markup, so this page only owns the arrangement.
+
+   A SECTION WITH NOTHING IN IT IS NOT DRAWN
+   The hero, the collection rail and the editorial band are the owner's now —
+   they come from the banners table through /api/banners, not from a file of
+   invented copy. A shop that has not chosen a hero picture yet therefore has
+   no hero, and the page closes up around the gap rather than showing an empty
+   carousel with arrows that scroll nothing.
+
+   This is the same rule the rest of the shop follows. An unset field renders
+   as nothing, never as a plausible guess, because a customer cannot tell a
+   guess from a fact.
    ========================================================================= */
 
 window.ZB = window.ZB || {};
@@ -17,16 +28,21 @@ window.ZB.pages = window.ZB.pages || {};
     title: null,   /* the default document title is right for the homepage */
 
     render: function () {
+      var slides = ZB.heroSlides || [];
+      var tiles = ZB.collections || [];
+
       return '' +
         /* HERO — scroll-snap carousel */
+        (!slides.length ? '' :
         '<section class="hero" id="hero" aria-roledescription="carousel" aria-label="Featured collections">' +
           '<div class="hero__track"></div>' +
           '<div class="hero__progress" aria-hidden="true">' +
             '<span class="hero__progress-fill"></span>' +
           '</div>' +
-        '</section>' +
+        '</section>') +
 
         /* RANKED COLLECTIONS */
+        (!tiles.length ? '' :
         '<section class="collections" id="collections" aria-labelledby="collections-title">' +
           '<div class="collections__head">' +
             '<h2 class="collections__title" id="collections-title">The Top 10 Right Now</h2>' +
@@ -40,7 +56,7 @@ window.ZB.pages = window.ZB.pages || {};
               '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>' +
             '</button>' +
           '</div>' +
-        '</section>' +
+        '</section>') +
 
         /* DEPARTMENT RAILS — Women, Men, Scents; filled by ZB.railSections */
         '<div id="rails"></div>' +
@@ -49,10 +65,13 @@ window.ZB.pages = window.ZB.pages || {};
         this.proof();
     },
 
-    /** Full-bleed image-and-text band below the rails. */
+    /** Full-bleed image-and-text band below the rails, or nothing. */
     feature: function () {
       var ui = ZB.ui;
-      var f = ZB.editorial.feature;
+      var f = ZB.editorial && ZB.editorial.feature;
+
+      /* No band chosen in the panel, so no band. */
+      if (!f || !f.image) return '';
 
       return '' +
         '<section class="feature" aria-labelledby="feature-title">' +
@@ -71,9 +90,25 @@ window.ZB.pages = window.ZB.pages || {};
         '</section>';
     },
 
+    /**
+     * The row of figures under the feature band.
+     *
+     * THESE ARE CLAIMS ABOUT A REAL BUSINESS AND MUST NOT BE INVENTED
+     * It used to read from data/editorial.js, which said "120+ Stores across
+     * Pakistan" and "4.6 Average customer rating". Both were written to fill
+     * the layout, and a customer reading them has no way to know that. A shop
+     * that advertises a rating it has never been given is making it up, in
+     * public, on its own front page.
+     *
+     * So there is no source for these yet and the section does not render.
+     * It comes back when the owner has somewhere to type their own figures —
+     * the same course the footer's contact details took.
+     */
     proof: function () {
       var ui = ZB.ui;
-      var p = ZB.editorial.proof;
+      var p = ZB.editorial && ZB.editorial.proof;
+
+      if (!p || !p.stats || !p.stats.length) return '';
 
       var items = p.stats.map(function (stat, i) {
         return '<div class="proof__item reveal" style="--d:' + (i * .06) + 's">' +

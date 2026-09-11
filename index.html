@@ -300,13 +300,32 @@
      here holds a token; see assets/js/auth.js. -->
 <script src="assets/js/auth.js"></script>
 
-<!-- Mock data -->
+<!-- The shop structure, as files -->
+<!-- data/navigation.js is the menu's structure, and is the fallback the
+     drawer keeps when /api/categories cannot be reached — a stale menu is
+     still a menu. data/footer.js is which links the footer has and where they
+     go, which is the shop's genuine shape.
+
+     THE OTHER FIVE ARE NOT LOADED ANY MORE, AND THAT IS THE POINT
+     hero.js, collections.js and editorial.js held invented marketing copy —
+     seven headlines, ten tile names, and a row of figures claiming a hundred
+     and twenty stores and a 4.6 rating. All of it was written to build the
+     interface against, none of it could be reached by the shop's owner, and a
+     customer reading it cannot tell it from fact. The first two now come from
+     the banners table through /api/banners, which the owner edits in the
+     panel; the figures have no honest source yet, so that row is not drawn.
+
+     rails.js is the same kind of content — invented tile names and invented
+     item counts — and has no owner-editable source yet either, so the rails
+     are not drawn. catalogue.js is the generator for the placeholder
+     catalogue; the storefront reads products from /api/catalogue and has not
+     needed it since.
+
+     All five stay in the repository. They are what the seed:demo command builds
+     demo content from, which is exactly the separation they were always meant
+     to have: structure in the database, invented contents behind a command
+     that has to be asked for by name. -->
 <script src="data/navigation.js"></script>
-<script src="data/hero.js"></script>
-<script src="data/collections.js"></script>
-<script src="data/catalogue.js"></script>
-<script src="data/rails.js"></script>
-<script src="data/editorial.js"></script>
 <script src="data/footer.js"></script>
 
 <!-- Components -->

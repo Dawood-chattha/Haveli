@@ -141,11 +141,83 @@ window.ZB = window.ZB || {};
      says the words have not been written. */
   ZB.content = ZB.content || {};
 
+  /**
+   * The home page's pictures and the words on them.
+   *
+   * THE WIRE WAS CONNECTED AT ONE END UNTIL NOW
+   * The banners table, the endpoints that write it and the panel's Banners
+   * screen were all built in Phase 6, and nothing here ever read them. The
+   * carousel at the top of the shop came from data/hero.js — seven invented
+   * slides in a file the owner cannot reach — so slides could be edited all
+   * afternoon and the shop would not change. Two more sections were in the
+   * same position: the collection rail and the editorial band.
+   *
+   * ONE REQUEST, THREE SECTIONS
+   * They are one kind of row shown in three places, so they arrive together
+   * and are split here. See db/homepage.sql.
+   *
+   * THE MAPPING IS DONE HERE AND NOT ON THE SERVER
+   * Each section has field names of its own — a hero slide has a headline,
+   * a collection tile has a label — and which name a section reads is a fact
+   * about the interface. The endpoint hands back the row's own names once;
+   * this turns them into what each section already expects, which is why
+   * none of the three renderers changed.
+   *
+   * AND THERE IS NO FALLBACK TO THE FILE
+   * A shop with no hero slide draws no hero, the same way a shop with no
+   * products draws no products. Falling back would put a headline on the
+   * front page that nobody at this shop wrote — which is the thing this
+   * replaced, not a safety net for it.
+   */
+  function loadHomepage() {
+    return fetch('/api/banners', REQUEST).then(function (res) {
+      if (!res.ok) {
+        throw new Error('The home page could not be loaded (' + res.status + ').');
+      }
+      return res.json();
+    }).then(function (payload) {
+      var data = payload && payload.ok && payload.data;
+      if (!data) return;
+
+      ZB.heroSlides = data.hero || [];
+
+      ZB.collections = (data.collections || []).map(function (row) {
+        return {
+          label: row.headline,
+          /* The tile's corner flag. Empty means the tile has none, which is
+             how most of them are. */
+          badge: row.eyebrow || null,
+          image: row.image,
+          href: row.href
+        };
+      });
+
+      ZB.editorial = ZB.editorial || {};
+
+      ZB.editorial.feature = data.feature ? {
+        eyebrow: data.feature.eyebrow,
+        title: data.feature.headline,
+        body: data.feature.body,
+        ctaLabel: data.feature.cta,
+        ctaPath: data.feature.href,
+        image: data.feature.image
+      } : null;
+    });
+  }
+
+  /* Empty until the answer arrives, and empty for good if it does not — see
+     the note above. Declared here so that a renderer running before the
+     fetch settles finds a list rather than undefined. */
+  ZB.heroSlides = ZB.heroSlides || [];
+  ZB.collections = ZB.collections || [];
+  ZB.editorial = ZB.editorial || { feature: null, proof: null };
+
   ZB.data.ready = Promise.all([
     ZB.catalogue ? ZB.catalogue.load() : Promise.resolve(),
     loadNavigation(),
     loadShop(),
     loadPages(),
+    loadHomepage(),
 
     /* WHO IS SIGNED IN, ON EVERY PAGE AND NOT ONLY TWO
        This used to be asked lazily, by the account page and the checkout,

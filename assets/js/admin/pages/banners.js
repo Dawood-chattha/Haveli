@@ -532,6 +532,27 @@ window.ZB.adminPages = window.ZB.adminPages || {};
   }
 
   /**
+   * The three places on the home page a picture can go.
+   *
+   * WHY THIS SCREEN COVERS ALL THREE
+   * A hero slide, a collection tile and the editorial band are the same
+   * thing — a picture, a short label, a headline, some words and a link —
+   * shown at three sizes. Three screens would have been three copies of this
+   * one, kept in step by hand. See db/homepage.sql.
+   *
+   * The labels say what the owner will SEE rather than what the field is
+   * called, because "placement: feature" means nothing to somebody looking
+   * at their own shop.
+   */
+  function placementOptions() {
+    return [
+      { id: 'hero', label: 'Big carousel at the top' },
+      { id: 'collection', label: 'Collection tile in the rail below it' },
+      { id: 'feature', label: 'Wide band further down the page' }
+    ];
+  }
+
+  /**
    * The fields, for both callers.
    *
    * Both ways of getting a picture in: choose a file, or type the path of
@@ -569,6 +590,13 @@ window.ZB.adminPages = window.ZB.adminPages || {};
           '<p class="a-imgcheck__note" data-img-note role="status"></p>' +
         '</div>' +
       '</div>' +
+
+      fields.select({
+        name: 'placement', label: 'Where it appears',
+        options: placementOptions(), value: row.placement || 'hero',
+        help: 'The wide band uses the first one that is live; the other two ' +
+              'show every live picture, in the order below.'
+      }) +
 
       fields.text({
         name: 'alt', label: 'Alt text', value: row.alt || '',
@@ -724,7 +752,13 @@ window.ZB.adminPages = window.ZB.adminPages || {};
       problems.eyebrow = 'Keep the eyebrow under 40 characters.';
     }
 
-    if (!values.cta) problems.cta = 'Give the button something to say.';
+    /* A COLLECTION TILE HAS NO BUTTON ON IT
+       It is a picture with a name under it and the whole tile is the link, so
+       requiring button text would be asking for a word nobody will read. The
+       carousel and the wide band both draw a real button, and for those it
+       stays required. */
+    if (values.placement === 'collection') { /* no button to label */ }
+    else if (!values.cta) problems.cta = 'Give the button something to say.';
     else if (values.cta.length > 28) {
       problems.cta = 'Keep the button label under 28 characters.';
     }
@@ -738,8 +772,8 @@ window.ZB.adminPages = window.ZB.adminPages || {};
     return problems;
   }
 
-  var FIELD_ORDER = ['image', 'alt', 'eyebrow', 'headline', 'body', 'cta',
-                     'href', 'proof', 'status'];
+  var FIELD_ORDER = ['placement', 'image', 'alt', 'eyebrow', 'headline', 'body',
+                     'cta', 'href', 'proof', 'status'];
 
   /** What the image preview beside the field found out, if anything. */
   function imageStateOf(form) {

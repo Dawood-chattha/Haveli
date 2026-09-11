@@ -100,7 +100,9 @@
 
 <!-- The homepage hero. The banners screen manages exactly these slides, so
      it reads the storefront's own list rather than keeping a second one. -->
-<script src="data/hero.js"></script>
+<!-- data/hero.js was here when the banners screen edited ZB.heroSlides in
+     memory. It reads and writes the banners table through the API now, and
+     nothing in the panel touches that file. -->
 <script src="assets/js/catalogue.js"></script>
 <script src="assets/js/bootstrap.js"></script>
 

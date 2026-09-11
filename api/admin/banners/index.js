@@ -71,6 +71,20 @@ function readSlide(req, required) {
      resend one is not the same as erasing it. */
   var want = function (key) { return required || has(key); };
 
+  /* WHERE ON THE HOME PAGE THIS ROW APPEARS
+     Three places, one table: see db/homepage.sql for why. Absent on a
+     create means 'hero', which is what every row written before that
+     migration is, and what somebody adding a slide almost always means.
+
+     It goes through oneOf rather than being taken as given, so a value the
+     database's own check constraint would refuse is answered with a
+     sentence about the field rather than a 500 from Postgres. */
+  if (has('placement') || required) {
+    patch.placement = has('placement')
+      ? v.oneOf('placement', ['hero', 'collection', 'feature'])
+      : 'hero';
+  }
+
   if (want('image')) patch.image = v.str('image', { max: 1000 });
   if (want('alt')) patch.alt = v.str('alt', { max: 200 });
 
