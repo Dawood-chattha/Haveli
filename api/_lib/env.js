@@ -41,6 +41,7 @@ var REQUIRED = {
 /* Optional, with documented behaviour when unset. */
 var OPTIONAL = {
   ALLOWED_ORIGINS: 'Comma-separated origins allowed to call the API from a browser',
+  SITE_URL: 'This deployment public origin, used to build password-reset links',
   LOG_LEVEL: 'debug | info | error (default: info)'
 };
 
@@ -113,6 +114,29 @@ var Env = {
     if (!raw) return [];
     return raw.split(',').map(function (o) { return o.trim(); })
               .filter(function (o) { return o.length > 0; });
+  },
+
+  /**
+   * The public origin of this deployment — 'https://haveli.example' with no
+   * trailing slash, and an empty string when it is not configured.
+   *
+   * WHY A PASSWORD RESET NEEDS THIS AT ALL
+   * The reset email has to contain a link back to a page on this site, and
+   * the server that sends it has to know that page's address. The obvious
+   * source is the request's own Host header — and that is the classic hole.
+   * A Host header is written by whoever made the request, so a forged one
+   * sends the real customer an email whose link points at the attacker's
+   * copy of the reset page, which then reads the token out of the URL.
+   *
+   * So the configured value wins whenever there is one, and forgot.js falls
+   * back to the request's origin only for local development. That fallback
+   * is not the only thing standing in the way either: Supabase refuses a
+   * redirect target that is not in the project's own Redirect URLs list, so
+   * a forged host is rejected upstream as well. Two guards, because the
+   * consequence of this one being wrong is somebody else's account.
+   */
+  siteUrl: function () {
+    return read('SITE_URL').replace(/\/+$/, '');
   },
 
   logLevel: function () { return read('LOG_LEVEL') || 'info'; },

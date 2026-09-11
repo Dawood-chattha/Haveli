@@ -9,7 +9,12 @@
    verified, which is what lets a real service be connected there without
    this file changing.
 
-   NOTHING HERE SIGNS ANYONE IN, and the screen says so. See admin-auth.js.
+   The "Forgot password?" row talks to the same seam. It used to open a
+   paragraph saying that password recovery needed an authentication service
+   and none was connected; one is, so it opens a field and sends a real
+   email. The link in it lands on /reset-password on the storefront, and the
+   owner returns here to sign in — this screen never learns a password and
+   never sets one.
 
    THE STATES THIS SCREEN HAS TO GET RIGHT
      idle       both fields empty, submit available
@@ -164,11 +169,29 @@ window.ZB.adminPages = window.ZB.adminPages || {};
               '</button>' +
             '</div>' +
 
-            '<p class="auth__forgot-note" id="admin-forgot" hidden>' +
-              'Password recovery needs an authentication service, and none is ' +
-              'connected in this build. Once one is, this is where the reset ' +
-              'email would be requested.' +
-            '</p>' +
+            '<div class="auth__forgot-note" id="admin-forgot" hidden>' +
+              '<p class="auth__forgot-lead">' +
+                'We will email a link for choosing a new password. It works ' +
+                'once and expires after an hour.' +
+              '</p>' +
+
+              '<div class="auth__forgot-row">' +
+                '<label class="visually-hidden" for="admin-forgot-email">' +
+                  'Email address of the account' +
+                '</label>' +
+                /* Deliberately not `required`: this input lives inside the
+                   sign-in form, and a required field in a form is checked
+                   when THAT form is submitted. Marking it would make an
+                   unopened recovery box block an ordinary sign-in. */
+                '<input class="auth__input" id="admin-forgot-email"' +
+                      ' type="email" autocomplete="username" spellcheck="false">' +
+                '<button class="auth__forgot-send" type="button" data-forgot-send>' +
+                  'Send link' +
+                '</button>' +
+              '</div>' +
+
+              '<p class="auth__forgot-said" role="status"></p>' +
+            '</div>' +
 
             '<button class="auth__submit" type="submit" data-submit>' +
               '<span class="auth__submit-label">Sign in</span>' +
@@ -295,10 +318,71 @@ window.ZB.adminPages = window.ZB.adminPages || {};
 
       var forgot = form.querySelector('[data-forgot]');
       var forgotNote = document.getElementById('admin-forgot');
+      var forgotEmail = document.getElementById('admin-forgot-email');
+      var forgotSend = forgotNote.querySelector('[data-forgot-send]');
+      var forgotSaid = forgotNote.querySelector('.auth__forgot-said');
+      var sending = false;
+
       forgot.addEventListener('click', function () {
         var open = forgotNote.hidden;
         forgotNote.hidden = !open;
         forgot.setAttribute('aria-expanded', String(open));
+
+        if (!open) return;
+
+        /* Whatever was already typed above is almost certainly the address
+           being recovered, so it is carried down rather than asked for
+           twice. */
+        if (!forgotEmail.value && email.value) forgotEmail.value = email.value;
+        forgotEmail.focus();
+      });
+
+      function said(message, bad) {
+        /* Emptied first so repeating a message is a fresh insertion and is
+           announced again. */
+        forgotSaid.textContent = '';
+        forgotSaid.textContent = message;
+        forgotSaid.classList.toggle('is-error', !!bad);
+        forgotSaid.setAttribute('role', bad ? 'alert' : 'status');
+      }
+
+      function sendLink() {
+        if (sending) return;
+
+        sending = true;
+        forgotSend.disabled = true;
+        forgotSend.setAttribute('aria-busy', 'true');
+        forgotSend.textContent = 'Sending';
+        said('');
+
+        ZB.adminAuth.requestReset(forgotEmail.value.trim())
+          .then(function (result) {
+            /* The server's own wording, which says "if that address has an
+               account" on purpose — see admin-auth.js. */
+            said((result && result.message) ||
+                 'If that address has an account, a link is on its way.');
+          })
+          .catch(function (failure) {
+            said((failure && failure.message) ||
+                 'That could not be sent. Try again in a moment.', true);
+          })
+          .then(function () {
+            sending = false;
+            forgotSend.disabled = false;
+            forgotSend.removeAttribute('aria-busy');
+            forgotSend.textContent = 'Send link';
+          });
+      }
+
+      forgotSend.addEventListener('click', sendLink);
+
+      /* Enter in this box means "send the link", not "sign in with an empty
+         password" — which is what it would mean by default, because the box
+         sits inside the sign-in form. */
+      forgotEmail.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        sendLink();
       });
 
       /* ---- submit ---- */

@@ -28,6 +28,10 @@ window.ZB = window.ZB || {};
       .add('/order/:ref', pages.order)
       .add('/wishlist', pages.wishlist)
       .add('/account', pages.account)
+      /* The destination of the link in a password-reset email, and also the
+         page somebody reaches from "Forgot password?" before any email has
+         been sent. One route, because it is one errand — see the module. */
+      .add('/reset-password', pages.resetPassword)
       .add('/stores', pages.stores)
       /* Footer destinations. */
       .add('/faqs', pages.faqs)

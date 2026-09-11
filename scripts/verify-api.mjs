@@ -2395,6 +2395,211 @@ try {
           Object.keys(columns || {}).join(','));
   }
 
+  /* =====================================================================
+     23. A forgotten password
+     ---------------------------------------------------------------------
+     The one flow nobody can test by hand without an inbox, so it is worth
+     the trouble of testing here.
+
+     NO EMAIL IS SENT BY MOST OF THIS
+     auth.admin.generateLink mints the same link the email would have carried
+     and hands it back instead of posting it, which is how the whole journey
+     below happens without a mailbox: the link is followed, the token is read
+     out of where the browser would have found it, and the new password is
+     sent to the endpoint the page sends it to.
+
+     WHAT IS BEING PROVED, IN ORDER OF HOW MUCH IT MATTERS
+       - asking about an address says nothing about whether it has an account
+       - a token nobody issued is refused
+       - the emailed link works exactly once
+       - the old password stops working and the new one starts
+       - every session the account had elsewhere is dead afterwards
+       - and none of it signs anybody in
+     ===================================================================== */
+
+  console.log('\n23. A FORGOTTEN PASSWORD — asked for, followed, and changed');
+
+  {
+    /* ---- asking: the answer must not reveal who has an account ---------- */
+
+    const nobody = 'nosuchperson-' + stamp + '@verify.invalid';
+
+    const missing = await call('POST', '/api/auth/forgot', { body: { email: nobody } });
+    const present = await call('POST', '/api/auth/forgot',
+                               { body: { email: people.shopper.email } });
+
+    /* The built-in mail service has its own hourly limit, and being throttled
+       is a legitimate answer rather than a fault — it is a fact about recent
+       requests and not about the address. The pair is still required to match
+       each other, which is the part that matters. */
+    const throttled = missing.status === 429 || present.status === 429;
+
+    if (throttled) {
+      console.log('  note    the mail service is rate-limiting; the sending ' +
+                  'checks are what is left');
+    } else {
+      check('asking about an address with no account is answered normally',
+            missing.status === 200 && missing.body.data.sent === true,
+            missing.status + ' ' + JSON.stringify(missing.body).slice(0, 120));
+    }
+
+    check('AND AN ADDRESS THAT HAS ONE IS ANSWERED IDENTICALLY',
+          missing.status === present.status &&
+          JSON.stringify(missing.body) === JSON.stringify(present.body),
+          missing.status + ' ' + JSON.stringify(missing.body).slice(0, 90) +
+          '  vs  ' + present.status + ' ' + JSON.stringify(present.body).slice(0, 90));
+
+    const malformed = await call('POST', '/api/auth/forgot',
+                                 { body: { email: 'not-an-address' } });
+    check('a malformed address is refused', malformed.status === 400, malformed.status);
+
+    await expectStatus('GET /api/auth/forgot — not a method it has', 405,
+                       'GET', '/api/auth/forgot');
+
+    /* ---- a fresh account, so nothing above depends on what follows ------ */
+
+    const person = {
+      email: 'apireset-' + stamp + '@verify.invalid',
+      password: randomBytes(24).toString('hex')
+    };
+    const chosen = randomBytes(24).toString('hex');
+
+    const { data: born, error: bornErr } = await admin.auth.admin.createUser({
+      email: person.email, password: person.password, email_confirm: true
+    });
+
+    if (bornErr) {
+      fail('could not create the account for the reset check — ' + bornErr.message);
+    } else {
+      madeUsers.push(born.user.id);
+
+      /* A session made BEFORE the reset, standing in for the other device the
+         reset is meant to throw off. Its own client, so nothing else in this
+         file is affected by what happens to it. */
+      const elsewhere = createClient(url, anonKey, { auth: { persistSession: false } });
+      const { data: standing } = await elsewhere.auth.signInWithPassword({
+        email: person.email, password: person.password
+      });
+
+      /* ---- the link, as the email would have carried it ----------------- */
+
+      const { data: link, error: linkErr } = await admin.auth.admin.generateLink({
+        type: 'recovery', email: person.email
+      });
+
+      if (linkErr || !link || !link.properties || !link.properties.action_link) {
+        fail('could not mint a recovery link — ' +
+             ((linkErr && linkErr.message) || 'no action_link came back'));
+      } else {
+        /* Following it is what a browser does when somebody clicks the link.
+           redirect: 'manual' stops at the hop so the fragment can be read —
+           which is exactly where the page at /reset-password reads it from,
+           and the reason the tokens are in a fragment at all is that a
+           fragment is never sent to a server. */
+        const hop = await fetch(link.properties.action_link, { redirect: 'manual' });
+        const landing = hop.headers.get('location') || '';
+        const hash = landing.indexOf('#') > -1 ? landing.slice(landing.indexOf('#') + 1) : '';
+        const token = new URLSearchParams(hash).get('access_token') || '';
+
+        check('THE EMAILED LINK HANDS BACK A TOKEN', !!token,
+              hop.status + ' -> ' + landing.slice(0, 100));
+
+        /* ---- what the endpoint refuses ---------------------------------- */
+
+        const junk = await call('POST', '/api/auth/reset',
+          { body: { token: 'ey' + randomBytes(40).toString('hex'), password: chosen } });
+
+        check('A TOKEN NOBODY ISSUED IS REFUSED', junk.status === 401,
+              junk.status + ' ' + JSON.stringify(junk.body).slice(0, 100));
+
+        const weak = await call('POST', '/api/auth/reset',
+                                { body: { token: token, password: 'short' } });
+
+        check('a password under eight characters is refused', weak.status === 400,
+              weak.status + ' ' + JSON.stringify(weak.body).slice(0, 100));
+
+        const noToken = await call('POST', '/api/auth/reset', { body: { password: chosen } });
+        check('and so is a request with no token at all', noToken.status === 400,
+              noToken.status);
+
+        /* ---- the change itself ------------------------------------------ */
+
+        if (token) {
+          const res = await fetch(BASE + '/api/auth/reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: token, password: chosen })
+          });
+
+          const payload = await res.json();
+
+          check('THE PASSWORD IS CHANGED',
+                res.status === 200 && payload.ok && payload.data.done === true,
+                res.status + ' ' + JSON.stringify(payload).slice(0, 140));
+
+          check('and the answer names the account it changed, read from the token',
+                payload.ok && payload.data.email === person.email,
+                payload.ok ? payload.data.email : '-');
+
+          /* The cookies that come back are empty ones with Max-Age=0 — the
+             clearing, not a session. A value after zb_at= would mean this
+             endpoint had signed somebody in, which is what the shop's owner
+             asked it not to do. */
+          const raw = typeof res.headers.getSetCookie === 'function'
+            ? res.headers.getSetCookie()
+            : [res.headers.get('set-cookie')].filter(Boolean);
+
+          check('IT DOES NOT SIGN ANYBODY IN',
+                !raw.some((c) => /zb_(at|rt)=[^;\s]/.test(String(c))),
+                raw.join(' ').slice(0, 100));
+
+          check('and it clears this browser\'s cookies rather than leaving dead ones',
+                raw.some((c) => /zb_at=/.test(String(c)) && /Max-Age=0/.test(String(c))),
+                raw.join(' ').slice(0, 100));
+
+          /* ---- and now the passwords have swapped places ---------------- */
+
+          const stale = await call('POST', '/api/auth/login',
+            { body: { email: person.email, password: person.password } });
+
+          check('THE OLD PASSWORD NO LONGER WORKS', stale.status === 401,
+                stale.status + ' ' + JSON.stringify(stale.body).slice(0, 100));
+
+          const fresh = await call('POST', '/api/auth/login',
+            { body: { email: person.email, password: chosen } });
+
+          check('AND THE NEW ONE DOES', fresh.status === 200,
+                fresh.status + ' ' + JSON.stringify(fresh.body).slice(0, 100));
+
+          /* ---- the other device ---------------------------------------- */
+
+          /* Whoever knew the old password may still be signed in somewhere.
+             Their access token cannot be taken back — it is a signed
+             statement with an hour on it — but the refresh token behind it
+             can be, and without one the session dies at the hour. */
+          if (standing && standing.session) {
+            const renew = await elsewhere.auth.refreshSession({
+              refresh_token: standing.session.refresh_token
+            });
+
+            check('EVERY SESSION ELSEWHERE IS ENDED BY THE CHANGE',
+                  !!renew.error || !renew.data.session,
+                  renew.error ? renew.error.message : 'the old session renewed itself');
+          }
+
+          /* ---- and the link is spent ----------------------------------- */
+
+          const twice = await fetch(link.properties.action_link, { redirect: 'manual' });
+          const second = twice.headers.get('location') || '';
+
+          check('THE EMAILED LINK WORKS ONCE AND ONLY ONCE',
+                !/access_token=/.test(second),
+                twice.status + ' -> ' + second.slice(0, 110));
+        }
+      }
+    }
+  }
+
 } catch (err) {
   fail('the run stopped: ' + err.message);
 } finally {

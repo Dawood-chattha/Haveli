@@ -168,6 +168,58 @@ window.ZB = window.ZB || {};
     },
 
     /**
+     * Ask for a password-reset email.
+     *
+     * Resolves with the message to show, and resolves the same way whether or
+     * not that address has an account — the server answers identically on
+     * purpose, so that this cannot be used to find out which addresses are
+     * registered. A caller must therefore never word its own success message
+     * as though an email definitely went somewhere.
+     *
+     * Nothing about the visitor changes: no cookie, no session, no user.
+     */
+    requestReset: function (email) {
+      return call('/api/auth/forgot', {
+        method: 'POST',
+        body: { email: email }
+      });
+    },
+
+    /**
+     * Set a new password, using the one-time token from the email's link.
+     *
+     * THE TOKEN IS PASSED IN AND NEVER KEPT
+     * It arrives in the URL, is read once by the page at /reset-password, and
+     * lives in a local variable there for as long as that page is open. It is
+     * not written to localStorage, not to sessionStorage, and not to a cookie:
+     * it is a key to an account, and the whole reason the session itself is
+     * kept in an HttpOnly cookie is that keys to accounts do not belong
+     * anywhere a script can read them later.
+     *
+     * This does not sign anybody in — no cookies come back. The answer
+     * carries the account's address so the sign-in form can be filled in.
+     */
+    resetPassword: function (token, password) {
+      return call('/api/auth/reset', {
+        method: 'POST',
+        body: { token: token, password: password }
+      }).then(function (data) {
+        /* Every session for this account was just revoked, including this
+           browser's if it had one. Saying so locally keeps the header from
+           showing a signed-in badge for an account that can no longer make a
+           request. */
+        if (Auth.user) {
+          Auth.user = null;
+          Auth.loaded = true;
+          Auth.ready = Promise.resolve(null);
+          emit();
+        }
+
+        return data;
+      });
+    },
+
+    /**
      * Sign out.
      *
      * The local user is cleared whatever happens. A logout that reports

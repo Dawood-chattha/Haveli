@@ -21,7 +21,15 @@
 
    RATE LIMITING
    Supabase applies its own limits to this call. A limit of this project's own
-   belongs in Phase 12, alongside the rest of the abuse handling.
+   needs state shared between serverless instances — a counter held in one
+   instance's memory resets whenever the platform starts another, which looks
+   like a limit and is not — so it belongs with the rest of the abuse
+   handling rather than being faked here.
+
+   THE PASSWORD BEHIND THIS FORM CAN BE CHANGED
+   api/auth/forgot.js emails a one-time link and api/auth/reset.js accepts the
+   new password. Neither of them signs anybody in: both end at this endpoint,
+   which stays the only door.
    ========================================================================= */
 
 'use strict';

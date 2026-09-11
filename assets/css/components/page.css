@@ -305,6 +305,25 @@
   color: var(--c-muted);
 }
 
+/* The notes carry the page's only way out of a dead end — "back to sign in",
+   "request a new link" — so a link inside one is underlined and inked rather
+   than left to be found by hovering. */
+.account__note a {
+  color: var(--c-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Sits with the field it belongs under rather than a paragraph's distance
+   from it: "Forgot password?" answers a question the password box just
+   raised. */
+.account__aside {
+  margin-top: calc(var(--sp-2) * -1);
+  font-size: var(--fs-xs);
+  color: var(--c-muted);
+  text-align: right;
+}
+
 /* A refused sign-in. Colour carries the meaning here but is not carrying it
    alone: the message says what went wrong in words, and the element switches
    to role="alert" so a screen reader is told as well. */

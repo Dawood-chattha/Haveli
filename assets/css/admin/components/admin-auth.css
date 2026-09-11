@@ -400,6 +400,60 @@
   color: var(--c-muted);
 }
 
+.auth__forgot-lead { margin: 0 0 8px; }
+
+/* The field and its button sit on one line on a desktop and stack on a
+   phone, where a 42px-tall button beside a field leaves the field too narrow
+   to read an address in. */
+.auth__forgot-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.auth__forgot-row .auth__input {
+  flex: 1 1 12rem;
+  min-height: 40px;
+}
+
+.auth__forgot-send {
+  flex: 0 0 auto;
+  /* 44px is the touch minimum this screen holds itself to elsewhere; the
+     field beside it is 40px, so the row is set by the button. */
+  min-height: 44px;
+  padding: 0 var(--sp-4);
+  border: var(--bw) solid var(--c-ink);
+  border-radius: var(--a-r-control);
+  background: var(--c-ink);
+  color: #fff;
+  font: inherit;
+  font-size: var(--fs-xs);
+  letter-spacing: .02em;
+  cursor: pointer;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.auth__forgot-send:hover { opacity: .88; }
+
+.auth__forgot-send[disabled] {
+  opacity: .55;
+  cursor: default;
+}
+
+.auth__forgot-said:empty { display: none; }
+
+.auth__forgot-said {
+  margin: 8px 0 0;
+  color: var(--c-body);
+}
+
+/* Colour is not carrying this alone: the text says what went wrong, and the
+   element switches to role="alert" so it is announced too. */
+.auth__forgot-said.is-error {
+  color: var(--c-danger);
+  font-weight: var(--fw-medium);
+}
+
 /* -------------------------------------------------------------------------
    SUBMIT
    ------------------------------------------------------------------------- */

@@ -57,6 +57,15 @@ window.ZB.pages = window.ZB.pages || {};
               '<label class="field-label">Password' +
                 '<input class="field" type="password" name="password" autocomplete="current-password" required>' +
               '</label>' +
+
+              /* Under the password box rather than under the button, because
+                 it answers the question the password box has just raised.
+                 A link and not a button: it is a different page, it should be
+                 openable in a new tab, and it works with the script broken. */
+              '<p class="account__aside">' +
+                '<a href="' + ui.href('/reset-password') + '">Forgot your password?</a>' +
+              '</p>' +
+
               '<button class="btn btn--primary btn--block" type="submit">Sign in</button>' +
               '<p class="account__note" role="status"></p>' +
             '</form>' +

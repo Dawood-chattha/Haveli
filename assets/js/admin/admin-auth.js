@@ -18,6 +18,10 @@
                    now: POST /api/auth/logout, which revokes the session
                         upstream and clears the cookies
 
+     requestReset  was: nothing — the screen said plainly that password
+                        recovery needed a service and none was connected
+                   now: POST /api/auth/forgot, which emails a one-time link
+
      currentUser   was: a value held in memory
                    now: what the server last reported, via ZB.auth
 
@@ -124,6 +128,43 @@ window.ZB = window.ZB || {};
         }
         return user;
       });
+    },
+
+    /**
+     * Ask for a password-reset email.
+     *
+     * The same endpoint the storefront uses, for the same reason signIn is:
+     * two paths to one account's password would be two places for a flaw.
+     *
+     * IT ANSWERS THE SAME WAY FOR AN ADDRESS WITH NO ACCOUNT
+     * Deliberately, and it matters more here than on the shop's own page. An
+     * owner sign-in screen that confirmed which addresses have accounts would
+     * confirm which address is the owner's, which is the one address worth
+     * knowing to anybody trying to get into this panel. So the screen below
+     * repeats the server's wording rather than inventing a friendlier one.
+     *
+     * WHERE THE LINK GOES
+     * To /reset-password on the storefront, which is where the new password is
+     * chosen — by the owner and by customers alike, because it is the same
+     * account system. There is nothing about the panel on that page, and the
+     * owner comes back here to sign in afterwards.
+     */
+    requestReset: function (email) {
+      if (!email) {
+        return Promise.reject({
+          message: 'Enter the email address of the account.',
+          fields: { email: 'Enter your email address.' }
+        });
+      }
+
+      if (!EMAIL.test(email)) {
+        return Promise.reject({
+          message: 'That does not look like an email address.',
+          fields: { email: 'That does not look like an email address.' }
+        });
+      }
+
+      return ZB.auth.requestReset(email);
     },
 
     signOut: function () {
