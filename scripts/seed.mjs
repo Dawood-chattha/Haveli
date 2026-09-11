@@ -404,12 +404,90 @@ async function removeByIds(table, ids, size = 200) {
   console.log('  ' + table.padEnd(15) + gone + ' demo rows removed');
 }
 
+/* -------------------------------------------------------------------------
+   Which rows in the database were made by this script
+
+   THIS USED TO BE ANSWERED BY THE GENERATOR, AND THE ANSWER WENT WRONG
+   `--remove-demo` originally deleted the ids that buildProducts() had just
+   generated, on the reasoning that generating them twice gives the same list.
+   That held until assets/js/catalogue.js was rewired to fetch the catalogue
+   from the API instead of building it from data/catalogue.js. From then on
+   ZB.catalogue.all() returned nothing here, buildProducts() produced an empty
+   list, and `npm run seed:demo:remove` reported success having deleted
+   nothing at all, while five hundred and sixty demo products sat in the shop.
+
+   A command whose whole job is deleting things, which cheerfully reports
+   having done it and has not, is the worst shape a bug can take. So the
+   question is now asked of the database, which is where the rows actually
+   are, and answered from the rows themselves.
+
+   HOW A DEMO ROW IS RECOGNISED
+   Every id this script writes is uuid5 of a fixed namespace and the row's own
+   natural key — 'product:' plus the slug, 'banner:' plus the position. So a
+   row is one of this script's if recomputing that from the row gives back the
+   row's own id, and it cannot be one otherwise: a product added through the
+   admin panel gets a random uuid, which will not match its slug by accident.
+
+   That is a stronger test than the old one and it is checked per row, so a
+   catalogue that is half demo and half real is sorted correctly rather than
+   being treated as one or the other.
+   ------------------------------------------------------------------------- */
+
+async function sortDemoFromReal(table, columns, idFor, pageSize = 1000) {
+  const demo = [];
+  const theirs = [];
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await db.from(table)
+      .select(columns)
+      .order('id')
+      .range(from, from + pageSize - 1);
+
+    if (error) throw new Error('reading ' + table + ': ' + error.message);
+    if (!data.length) break;
+
+    for (const row of data) {
+      (idFor(row) === row.id ? demo : theirs).push(row);
+    }
+
+    if (data.length < pageSize) break;
+  }
+
+  return { demo, theirs };
+}
+
 if (REMOVE) {
   console.log('\nRemoving demo content...');
   console.log('  (categories are NOT touched — they are the shop\'s real structure)');
 
-  await removeByIds('products', products.map((p) => p.id));
-  await removeByIds('banners', banners.map((b) => b.id));
+  const p = await sortDemoFromReal('products', 'id, slug, title',
+    (row) => (row.slug ? uuid5('product:' + row.slug) : ''));
+
+  /* A banner has no slug to derive from, only the position it was seeded at.
+     A generous ceiling costs nothing: it is arithmetic, not a query. */
+  const bannerIds = new Set();
+  for (let i = 0; i < 500; i++) bannerIds.add(uuid5('banner:' + i));
+
+  const b = await sortDemoFromReal('banners', 'id, headline, sort', (row) =>
+    bannerIds.has(row.id) ? row.id : '');
+
+  console.log('  found      ' + p.demo.length + ' demo products, ' +
+              b.demo.length + ' demo banners');
+
+  /* The reassuring half of the report. Anything listed here is staying, and
+     saying so by name is the difference between trusting this command and
+     holding one's breath through it. */
+  if (p.theirs.length || b.theirs.length) {
+    console.log('  keeping    ' + p.theirs.length + ' products and ' +
+                b.theirs.length + ' banners that this script did not write:');
+    p.theirs.slice(0, 20).forEach((row) =>
+      console.log('               ' + (row.title || row.slug || row.headline || row.id)));
+    if (p.theirs.length > 20) console.log('               ... and ' +
+                                          (p.theirs.length - 20) + ' more');
+  }
+
+  await removeByIds('products', p.demo.map((row) => row.id));
+  await removeByIds('banners', b.demo.map((row) => row.id));
 
   console.log('\nRemaining:');
   for (const table of ['categories', 'products', 'product_images', 'banners']) {
