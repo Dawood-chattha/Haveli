@@ -42,6 +42,9 @@ var REQUIRED = {
 var OPTIONAL = {
   ALLOWED_ORIGINS: 'Comma-separated origins allowed to call the API from a browser',
   SITE_URL: 'This deployment public origin, used to build password-reset links',
+  EMAIL_API_KEY: 'Transactional mail provider key (server only)',
+  EMAIL_FROM: 'The address order emails are sent from',
+  EMAIL_FROM_NAME: 'The name beside that address in an inbox',
   LOG_LEVEL: 'debug | info | error (default: info)'
 };
 
@@ -138,6 +141,31 @@ var Env = {
   siteUrl: function () {
     return read('SITE_URL').replace(/\/+$/, '');
   },
+
+  /**
+   * The transactional mail account.
+   *
+   * OPTIONAL, AND UNSET IS A WORKING STATE
+   * A shop with no mail account takes orders perfectly well; what it does not
+   * do is tell anybody about them afterwards. api/_lib/email.js checks and
+   * says so once rather than failing, because the alternative — refusing an
+   * order because a third party could not be reached — is worse than a
+   * missing email by a wide margin.
+   *
+   * The key is as much a secret as any other and is read here for the same
+   * reason everything else is: one file to audit. It must never reach a
+   * response body, a log line or a page.
+   */
+  emailKey: function () { return read('EMAIL_API_KEY'); },
+
+  /** The address messages are sent from. Must be one the provider has
+      verified, or every message is refused. */
+  emailFrom: function () { return read('EMAIL_FROM'); },
+
+  /* The shop's own name is a fair fallback here, unlike an invented contact
+     address: it is the real name of the real shop, and a message from
+     "HAVELI" is what a customer expects to see. */
+  emailFromName: function () { return read('EMAIL_FROM_NAME') || 'HAVELI'; },
 
   logLevel: function () { return read('LOG_LEVEL') || 'info'; },
 

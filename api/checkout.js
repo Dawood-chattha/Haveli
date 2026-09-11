@@ -2,6 +2,12 @@
    api/checkout.js
    -------------------------------------------------------------------------
    POST /api/checkout      place an order
+
+   A RECEIPT GOES OUT AFTERWARDS, AND CANNOT LOSE THE ORDER
+   The confirmation email is sent once the order is written, through
+   api/_lib/email.js, which never throws. A mail service that is down means a
+   customer with an order and no receipt; it does not and must not mean a
+   refused order.
    GET  /api/checkout      what the checkout page needs to draw itself
 
    WHAT THE BROWSER IS TRUSTED FOR: WHICH PRODUCTS, WHICH SIZES, HOW MANY.
@@ -37,6 +43,7 @@ var respond = require('./_lib/respond');
 var validate = require('./_lib/validate');
 var shape = require('./_lib/shape');
 var auth = require('./_lib/auth');
+var orderEmail = require('./_lib/order-email');
 var db = require('./_lib/supabase');
 var Errors = require('./_lib/errors');
 var log = require('./_lib/log');
@@ -217,7 +224,41 @@ async function place(req) {
 
   if (full.error) throw Errors.internal().causedBy(new Error(full.error.message));
 
-  return { order: shape.customerOrder(full.data) };
+  var order = shape.customerOrder(full.data);
+
+  /* ---- tell them it happened ------------------------------------------ */
+
+  /* AWAITED, BUT ITS FAILURE IS NOT THIS ORDER'S PROBLEM
+     api/_lib/email.js never throws: it returns whether it managed to send.
+     So the order is already written and paid-for-on-delivery by the time
+     this runs, and the worst case is a customer with an order and no
+     receipt — which is what happened on every order until now.
+
+     Awaited rather than left running, because a serverless function is
+     stopped the moment it answers. A promise nobody waited for is a message
+     that may or may not have left, depending on how quickly the platform
+     tears the instance down, which is a worse thing to own than a request
+     that takes a fraction of a second longer.
+
+     The shop's own name, so the message is signed by the shop rather than by
+     a hard-coded word. Read as the server because settings are not public in
+     full and this is one field of them. */
+  var named = await db.asAdmin()
+    .from('settings').select('store').eq('id', true).maybeSingle();
+
+  var shopName = (named.data && named.data.store && named.data.store.name) || 'HAVELI';
+
+  var posted = await orderEmail.send(order, user.email, order.address && order.address.name,
+                                     shopName);
+
+  if (!posted.sent) {
+    /* Worth a line, because a shop whose receipts have quietly stopped going
+       out looks exactly like a shop whose receipts are going out. */
+    log.info('order placed but no receipt was sent',
+             { ref: order.ref, reason: posted.reason });
+  }
+
+  return { order: order };
 }
 
 /* ------------------------------------------------------------------------- */
