@@ -19,7 +19,16 @@
                    somebody pasting a line of server code into a frontend
                    file. This runs on every phase from here on.
 
-     3. IGNORES    .env.local is genuinely ignored by git. A .gitignore rule
+     3. ROUTES     The route table in api/_routes/index.js names every file
+                   under _routes and no others. The table is written by hand
+                   on purpose — see the note at the top of it — and a list by
+                   hand goes stale. An endpoint added without a line there
+                   would answer 404 for a reason nothing else explains; one
+                   left there after its file went would crash the whole API
+                   on the first request, because the table is loaded as a
+                   unit.
+
+     4. IGNORES    .env.local is genuinely ignored by git. A .gitignore rule
                    that looks right and does not match is indistinguishable
                    from a correct one until the day the file is committed.
 
@@ -27,9 +36,10 @@
    ========================================================================= */
 
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
-import { join, relative, extname } from 'node:path';
+import { join, relative, extname, sep } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -115,10 +125,80 @@ for (const file of shipped) {
 if (!leaks) pass(shipped.length + ' files scanned, none mention a server secret');
 
 /* -------------------------------------------------------------------------
-   3. .env.local cannot be committed
+   3. The route table matches the files
+   -------------------------------------------------------------------------
+   api/[...route].js serves every endpoint from one table, and the table is
+   a literal list of requires rather than a directory scan — because Vercel
+   bundles a function by tracing the requires it can SEE, and a path computed
+   at runtime is invisible to that. A scanned route would work perfectly here
+   and be missing from the deployment.
+
+   The cost of writing it out is that it can drift from the files beside it.
+   This is what stops that drift reaching a deployment.
    ------------------------------------------------------------------------- */
 
-console.log('\n3. .env.local is ignored by git');
+console.log('\n3. the route table names every endpoint');
+
+{
+  const routesDir = join(ROOT, 'api', '_routes');
+
+  /* The key a file answers to: its path under _routes, without .js, and
+     without a trailing /index — the same two rules the table is written by. */
+  const onDisk = walk(routesDir)
+    .filter((file) => extname(file) === '.js')
+    .map((file) => relative(routesDir, file).split(sep).join('/'))
+    .filter((rel) => rel !== 'index.js')
+    .map((rel) => rel.replace(/\.js$/, '').replace(/\/index$/, ''))
+    .sort();
+
+  let table = null;
+
+  try {
+    /* Required rather than parsed. Loading it is also the check that every
+       endpoint it names parses and can be constructed — which is the failure
+       that would otherwise wait for the first request in production. */
+    table = createRequire(import.meta.url)(join(routesDir, 'index.js'));
+  } catch (err) {
+    fail('api/_routes/index.js could not be loaded\n' + String(err.message));
+  }
+
+  if (table) {
+    const listed = Object.keys(table).sort();
+
+    const missing = onDisk.filter((key) => listed.indexOf(key) === -1);
+    const extra = listed.filter((key) => onDisk.indexOf(key) === -1);
+
+    if (missing.length) {
+      fail('these endpoints exist but are not in the table, so they would ' +
+           'answer 404:\n        ' + missing.join('\n        '));
+    }
+
+    if (extra.length) {
+      fail('the table names these and there is no such file:\n        ' +
+           extra.join('\n        '));
+    }
+
+    if (!missing.length && !extra.length) {
+      pass(listed.length + ' endpoints, all present and all listed');
+    }
+
+    /* A table entry that is not a function would pass the name check and
+       fail on the first request instead. */
+    const notCallable = listed.filter((key) => typeof table[key] !== 'function');
+
+    if (notCallable.length) {
+      fail('these do not export a handler:\n        ' + notCallable.join('\n        '));
+    } else if (listed.length) {
+      pass('every one of them exports a handler');
+    }
+  }
+}
+
+/* -------------------------------------------------------------------------
+   4. .env.local cannot be committed
+   ------------------------------------------------------------------------- */
+
+console.log('\n4. .env.local is ignored by git');
 
 try {
   execFileSync('git', ['check-ignore', '-q', '.env.local'], { cwd: ROOT, stdio: 'pipe' });

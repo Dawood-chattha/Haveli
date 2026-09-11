@@ -12,7 +12,7 @@
 
    This serves the same three things `vercel.json` describes:
 
-     /api/*     the serverless functions, imported and called directly
+     /api/*     handed to api/[...route].js, the same dispatcher Vercel runs
      files      assets/, data/, dev/, admin/ served from disk
      anything   else falls through to index.html, which is what makes the
                 storefront's client-side routes survive a refresh
@@ -26,9 +26,9 @@
 
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, extname, normalize } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -141,89 +141,36 @@ const PASSTHROUGH = ['assets', 'data', 'dev', 'admin', 'favicon.ico'];
    ------------------------------------------------------------------------- */
 
 /**
- * Find the file that serves a path, the way Vercel does.
+ * Load the dispatcher — the same one Vercel runs.
  *
- * Three shapes, tried in this order:
+ * THIS SERVER USED TO HAVE A ROUTER OF ITS OWN
+ * It resolved /api/admin/products/42 to admin/products/[id].js by looking at
+ * the filesystem, which is what Vercel did too, and the two agreed because
+ * somebody kept them agreeing. That was one router too many: a path that
+ * worked here and 404'd in production would have been a bug with no symptom
+ * until after a deployment.
  *
- *   /api/catalogue            api/catalogue.js
- *   /api/admin/products       api/admin/products/index.js
- *   /api/admin/products/42    api/admin/products/[id].js   -> params.id = '42'
+ * There is one router now, in api/[...route].js, and this calls it. What runs
+ * on a laptop is the code that runs on the internet, including the part that
+ * decides which endpoint a request belongs to.
  *
- * Order matters. A literal file wins over a dynamic one, so an endpoint
- * called /api/admin/products/export would be served by export.js if it
- * existed, rather than being swallowed by [id].js and arriving as a product
- * id of "export".
+ * RELOADED ON EVERY REQUEST, WHICH IS THIS SERVER'S WHOLE PURPOSE
+ * Emptying require.cache of everything under api/ is what makes an edit
+ * visible without a restart, and it has to be everything: a change to
+ * api/_lib/shape.js is invisible otherwise. The dispatcher requires the route
+ * table, the table requires all thirty-seven endpoints, and every one of them
+ * comes back fresh.
  *
- * Only the last segment is matched dynamically, which is all this API needs.
- * Vercel supports a bracket at any depth; adding that here before something
- * uses it would be inventing a requirement.
+ * That is exactly the wrong thing to do in production — Vercel loads each
+ * module once per instance and keeps it — and exactly the right thing in a
+ * server that is restarted all day.
  */
-async function resolveEndpoint(pathname) {
-  const rel = pathname.replace(/^\/+/, '').replace(/\/+$/, '');
-
-  /* An underscore prefix marks a shared module, not a route — the same rule
-     Vercel applies, restated here so /api/_lib/env cannot be fetched. */
-  if (rel.split('/').some((part) => part.startsWith('_'))) return null;
-
-  const exists = async (f) => {
-    try { return (await stat(f)).isFile(); } catch { return false; }
-  };
-
-  const candidates = [
-    { file: join(ROOT, rel + '.js'), params: {} },
-    { file: join(ROOT, rel, 'index.js'), params: {} }
-  ];
-
-  const parts = rel.split('/');
-  if (parts.length > 1) {
-    const last = parts.pop();
-    const dir = join(ROOT, parts.join('/'));
-
-    /* Which bracket file is present is discovered rather than assumed, so
-       [id].js and [slug].js both work and the parameter is named by the
-       file that claimed it. */
-    let names = [];
-    try {
-      names = readdirSync(dir).filter((n) => /^\[[^\]]+\]\.js$/.test(n));
-    } catch { /* no such directory */ }
-
-    for (const name of names) {
-      const param = name.slice(1, -4).replace(/\]$/, '');
-      candidates.push({ file: join(dir, name), params: { [param]: last } });
-    }
-  }
-
-  for (const candidate of candidates) {
-    if (await exists(candidate.file)) return candidate;
-  }
-  return null;
-}
-
-/**
- * Import a function module fresh on every request.
- *
- * THE QUERY STRING ALONE DOES NOT DO THIS, AND LOOKED LIKE IT DID
- * `?t=` busts the ES module cache. Every endpoint here is CommonJS, because
- * the site's own .js files are and package.json has no "type": "module" to
- * say otherwise — and the CommonJS loader resolves by filename and ignores
- * the query entirely. So an edited endpoint kept serving its old code, and
- * the way that surfaced was a bug fix that changed nothing followed by a
- * test that failed identically twice.
- *
- * Emptying require.cache of everything under api/ is what actually reloads
- * it, and it has to be everything rather than just the endpoint: a change to
- * api/_lib/shape.js is exactly as invisible otherwise.
- *
- * Both caches leak a little per request. That matters in a long-running
- * server and does not in one that is restarted all day.
- */
-async function loadEndpoint(file) {
+function loadDispatcher() {
   for (const cached of Object.keys(require.cache)) {
     if (cached.startsWith(API_DIR)) delete require.cache[cached];
   }
 
-  const mod = await import(pathToFileURL(file).href + '?t=' + Date.now());
-  return mod.default || mod;
+  return require(join(API_DIR, '[...route].js'));
 }
 
 /**
@@ -326,14 +273,19 @@ const server = createServer(async (req, res) => {
   /* ---- /api/* ---- */
 
   if (pathname === '/api' || pathname.startsWith('/api/')) {
-    const found = await resolveEndpoint(pathname);
-    const handler = found ? await loadEndpoint(found.file) : null;
+    let handler;
 
-    if (!handler) {
-      res.statusCode = 404;
+    try {
+      handler = loadDispatcher();
+    } catch (err) {
+      /* A route file with a syntax error, or a table naming one that is not
+         there. Worth saying loudly and precisely: the alternative is every
+         endpoint answering 500 with the reason only in this window. */
+      console.error('  !! the API could not be loaded:', err.message);
+      res.statusCode = 500;
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.end(JSON.stringify({ ok: false, error: { code: 'not_found', message: 'No such endpoint.' } }));
-      log(404);
+      res.end(JSON.stringify({ ok: false, error: { code: 'server_error', message: 'The API could not be loaded.' } }));
+      log(500);
       return;
     }
 
@@ -346,11 +298,11 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    /* Vercel gives endpoints one object holding both the query string and
-       any dynamic path segment, so an endpoint reads req.query.id whether
-       the id arrived in the path or after a ?. The path wins: a request for
-       /api/admin/products/42?id=99 is about product 42. */
-    req.query = { ...Object.fromEntries(url.searchParams.entries()), ...found.params };
+    /* Only the query string. The dispatcher adds any dynamic path segment on
+       top of it, exactly as it does on Vercel — and resolves a clash the same
+       way, so /api/admin/products/42?id=99 is about product 42 in both
+       places. Everything about that decision now lives in one file. */
+    req.query = Object.fromEntries(url.searchParams.entries());
 
     try {
       await handler(req, res);
