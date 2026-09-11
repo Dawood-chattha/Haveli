@@ -1,0 +1,44 @@
+# =============================================================================
+# .vercelignore — what does not belong on the internet
+# -----------------------------------------------------------------------------
+# Everything in this repository that is not the shop. None of it is secret —
+# this project has no credentials in source, and a check in
+# scripts/check-syntax.mjs fails the build if one ever appears — but "not
+# secret" is not the same as "worth publishing".
+#
+# The rule being applied is the smallest possible public surface. A file that
+# nobody needs and that nobody can ask for is a file that cannot be read
+# wrongly, cannot be probed, and cannot come up in a search.
+#
+# WHY EACH ONE
+#
+#   dev/       A development web server, complete with its own routing. It
+#              never runs on Vercel — the platform serves the files and the
+#              functions itself — so shipping it would be publishing a second
+#              server that happens not to be listening.
+#
+#   db/        The schema, the policies and the migrations. RLS is the
+#              security boundary and it holds whether or not anybody can read
+#              the file that declares it, so this is not a hole being closed.
+#              It is simply a map of the database with no reason to be handed
+#              out at the front door.
+#
+#   scripts/   The seed, the verification suites and make-admin.mjs. They run
+#              on a machine with the service role key in its environment, and
+#              that environment is nowhere near a browser. Publishing them
+#              tells a reader exactly which administrative commands exist.
+#
+#   .env.example
+#              Committed on purpose and safe by design — every value in it is
+#              a placeholder. It is for whoever clones the repository, not for
+#              whoever visits the shop.
+#
+# WHAT IS NOT IGNORED, AND MUST NOT BE
+#   index.html, admin/, assets/, data/, api/  — the shop, the panel, and the
+#   functions. data/ in particular is still fetched by both documents.
+# =============================================================================
+
+dev/
+db/
+scripts/
+.env.example
