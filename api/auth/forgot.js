@@ -28,22 +28,24 @@
    sign in is the only person who will ever need it.
 
    RATE LIMITING
-   Supabase enforces its own limit on how often a reset email may be sent to
-   one address, and a 429 from it is passed through below rather than being
-   swallowed into the standard answer — a caller who is being throttled can
-   act on that, and it says nothing about whether the account exists.
+   This endpoint sends an email to somebody else's inbox on the say-so of an
+   anonymous request, which makes it the one worth limiting most: four an hour
+   for an address, twenty an hour from one place. Both counts are kept in the
+   database — see api/_lib/rate-limit.js.
 
-   There is deliberately no limiter of this project's own here yet. A counter
-   held in one serverless instance's memory would reset whenever the platform
-   started a new instance, which is to say it would look like a limit and not
-   be one. Real rate limiting needs shared state and is the next phase's work;
-   a fake check now would be worse than the honest absence of one.
+   A refusal is safe to state plainly. It is a fact about how many requests
+   have arrived, not about whether the address has an account, and it reads
+   the same either way.
+
+   Supabase enforces its own limit underneath, and a 429 from it is passed
+   through below for the same reason.
    ========================================================================= */
 
 'use strict';
 
 var respond = require('../_lib/respond');
 var validate = require('../_lib/validate');
+var Limit = require('../_lib/rate-limit');
 var Errors = require('../_lib/errors');
 var Env = require('../_lib/env');
 var db = require('../_lib/supabase');
@@ -75,11 +77,16 @@ function resetPageUrl(req) {
   return proto + '://' + host + '/reset-password';
 }
 
-module.exports = respond.handler(['POST'], async function (req) {
+module.exports = respond.handler(['POST'], async function (req, res) {
 
   var v = validate.body(req);
   var email = v.email('email');
   v.done();
+
+  await Limit.check(req, res, [
+    Limit.byId('forgot', email, Limit.FORGOT_PER_ACCOUNT),
+    Limit.byIp('forgot', Limit.FORGOT_PER_IP)
+  ]);
 
   var redirectTo = resetPageUrl(req);
 

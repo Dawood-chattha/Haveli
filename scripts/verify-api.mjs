@@ -124,6 +124,25 @@ try {
   }
   pass('the server is up and can reach the database');
 
+  /* THE COUNTERS ARE EMPTIED BEFORE ANYTHING ELSE
+     Several sections below call the endpoints that are rate limited, and a
+     second run inside the same hour would otherwise start partway through an
+     allowance and fail for a reason that has nothing to do with the code.
+
+     It is safe to empty: every row in rate_limits is an ephemeral counter
+     that rebuilds itself on the next request, and nothing in the shop's own
+     data is stored there. It is also the one table in this file that is
+     cleared by name rather than by id, which is fine for the same reason —
+     there is nothing here the owner put in. */
+  {
+    const wiped = await admin.from('rate_limits').delete().neq('bucket', '');
+    if (wiped.error) {
+      throw new Error('db/rate-limits.sql has not been run on this project — ' +
+                      wiped.error.message);
+    }
+    pass('the rate-limit counters start empty');
+  }
+
   console.log('\nCreating two temporary accounts...');
 
   for (const [role, person] of Object.entries(people)) {
@@ -2598,6 +2617,160 @@ try {
         }
       }
     }
+  }
+
+  /* =====================================================================
+     24. Rate limiting
+     ---------------------------------------------------------------------
+     The thing this section has to prove is that the limit is REAL, which
+     for this project means one specific thing: that the count is not held
+     in the server's memory. It is checked from two sides — the database
+     function on its own, where the arithmetic can be watched precisely, and
+     then a live endpoint, where the whole path has to work.
+
+     The window is proved as well as the ceiling. A limiter that counts to
+     four and then refuses for ever is not a rate limit, it is a ban, and the
+     difference only shows up an hour later — so a one-second window is used
+     here to make an hour's behaviour visible in a second and a bit.
+     ===================================================================== */
+
+  console.log('\n24. RATE LIMITING — a count that survives this process');
+
+  {
+    const bucket = 'probe:' + randomUUID();
+
+    /* ---- the arithmetic ---------------------------------------------- */
+
+    const hit = async (key, max, window) => {
+      const { data, error } = await admin.rpc('rate_limit_hit', {
+        p_bucket: key, p_limit: max, p_window: window
+      });
+      if (error) throw new Error('rate_limit_hit: ' + error.message);
+      return Array.isArray(data) ? data[0] : data;
+    };
+
+    const first = await hit(bucket, 3, 60);
+    const second = await hit(bucket, 3, 60);
+    const third = await hit(bucket, 3, 60);
+    const fourth = await hit(bucket, 3, 60);
+
+    check('the first three of three are allowed',
+          first.allowed && second.allowed && third.allowed,
+          JSON.stringify([first, second, third]));
+
+    check('AND THE FOURTH IS NOT', fourth.allowed === false,
+          JSON.stringify(fourth));
+
+    check('it counts, rather than only refusing', fourth.hits === 4, fourth.hits);
+
+    check('and it says how long to wait',
+          fourth.retry_after > 0 && fourth.retry_after <= 60,
+          fourth.retry_after);
+
+    /* Hammering a limit that is already reached must not reset it — the
+       count is taken by the same statement that decides, so there is no
+       order in which a caller gets a free attempt. */
+    const fifth = await hit(bucket, 3, 60);
+    check('and hammering it does not reset it',
+          fifth.allowed === false && fifth.hits === 5, JSON.stringify(fifth));
+
+    /* ---- the window rolls -------------------------------------------- */
+
+    const brief = 'probe:' + randomUUID();
+
+    const one = await hit(brief, 1, 1);
+    const two = await hit(brief, 1, 1);
+
+    await new Promise((r) => setTimeout(r, 1300));
+
+    const three = await hit(brief, 1, 1);
+
+    check('a second attempt inside the window is refused',
+          one.allowed === true && two.allowed === false,
+          JSON.stringify([one, two]));
+
+    check('AND THE WINDOW ROLLS RATHER THAN LOCKING FOR EVER',
+          three.allowed === true && three.hits === 1, JSON.stringify(three));
+
+    /* ---- a real endpoint --------------------------------------------- */
+
+    /* /api/auth/forgot is the one with the smallest allowance — four an hour
+       for one address — which makes it the only one that can be taken to its
+       limit here without spending the budget every other section needs. */
+    const mine = 'limitprobe-' + stamp + '@verify.invalid';
+    const theirs = 'limitother-' + stamp + '@verify.invalid';
+
+    let refusal = null;
+    let allowedCount = 0;
+
+    for (let i = 0; i < 5; i++) {
+      const res = await fetch(BASE + '/api/auth/forgot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: mine })
+      });
+
+      if (res.status === 200) allowedCount++;
+      if (res.status === 429 && !refusal) {
+        refusal = { status: res.status, retryAfter: res.headers.get('retry-after'),
+                    body: await res.json() };
+      }
+    }
+
+    check('four requests for one address get through', allowedCount === 4,
+          'got ' + allowedCount);
+
+    check('AND THE FIFTH IS REFUSED', refusal !== null && refusal.status === 429,
+          refusal ? refusal.status : 'nothing was refused');
+
+    if (refusal) {
+      check('with Retry-After, so a caller is not left guessing',
+            Number(refusal.retryAfter) > 0, refusal.retryAfter);
+
+      check('and a message that says how long',
+            /try again in/i.test(refusal.body.error.message),
+            refusal.body.error.message);
+
+      check('as a 429 and not a 400 dressed up as one',
+            refusal.body.error.code === 'too_many_requests',
+            refusal.body.error.code);
+    }
+
+    /* THE LIMIT IS THAT ADDRESS'S, NOT THE WHOLE SHOP'S
+       This is the check that would catch a bucket key built wrongly — one
+       customer being locked out because another one forgot their password is
+       a far worse failure than no limit at all. */
+    const other = await call('POST', '/api/auth/forgot', { body: { email: theirs } });
+
+    check('ANOTHER ADDRESS IS UNAFFECTED', other.status === 200,
+          other.status + ' ' + JSON.stringify(other.body).slice(0, 100));
+
+    /* ---- and none of it is reachable from a browser ------------------- */
+
+    const browser = createClient(url, anonKey, { auth: { persistSession: false } });
+
+    const peek = await browser.from('rate_limits').select('bucket').limit(1);
+    check('A BROWSER\'S KEY CANNOT READ THE COUNTERS',
+          !!peek.error || (peek.data || []).length === 0,
+          peek.error ? peek.error.message : JSON.stringify(peek.data));
+
+    const wipe = await browser.from('rate_limits').delete().neq('bucket', '').select('bucket');
+    check('nor clear them, which would be the way round one',
+          !!wipe.error || (wipe.data || []).length === 0,
+          wipe.error ? wipe.error.message : JSON.stringify(wipe.data));
+
+    const ring = await browser.rpc('rate_limit_hit',
+      { p_bucket: bucket, p_limit: 3, p_window: 60 });
+
+    check('AND CANNOT CALL THE COUNTER ITSELF', !!ring.error,
+          ring.error ? ring.error.message : JSON.stringify(ring.data));
+
+    /* Called by a browser, rate_limit_hit would be a way of spending somebody
+       else's allowance for them — a defence turned into a lock-out. */
+
+    /* ---- tidy up ------------------------------------------------------ */
+
+    await admin.from('rate_limits').delete().neq('bucket', '');
   }
 
 } catch (err) {

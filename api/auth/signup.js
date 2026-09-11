@@ -48,19 +48,28 @@
 
 var respond = require('../_lib/respond');
 var validate = require('../_lib/validate');
+var Limit = require('../_lib/rate-limit');
 var Errors = require('../_lib/errors');
 var db = require('../_lib/supabase');
 var log = require('../_lib/log');
 
 var MIN_PASSWORD = 8;
 
-module.exports = respond.handler(['POST'], async function (req) {
+module.exports = respond.handler(['POST'], async function (req, res) {
 
   var v = validate.body(req);
   var email = v.email('email');
   var password = v.str('password', { min: MIN_PASSWORD, max: 200 });
   var name = v.str('name', { optional: true, max: 80 });
   v.done();
+
+  /* BY ADDRESS ONLY, AND NOTHING BY EMAIL
+     A per-email limit here would be a way of asking whether an address is
+     registered: an attacker would watch for the request that behaves
+     differently the second time. The whole endpoint is built so that an
+     address that is taken and one that is free are answered identically, and
+     a limit keyed on the address would undo that from the side. */
+  await Limit.check(req, res, [Limit.byIp('signup', Limit.SIGNUP_PER_IP)]);
 
   var anon = db.asUser({ headers: {} });
 

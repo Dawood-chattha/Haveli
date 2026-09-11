@@ -20,11 +20,13 @@
    endpoint checks the database itself, and so does every RLS policy.
 
    RATE LIMITING
-   Supabase applies its own limits to this call. A limit of this project's own
-   needs state shared between serverless instances — a counter held in one
-   instance's memory resets whenever the platform starts another, which looks
-   like a limit and is not — so it belongs with the rest of the abuse
-   handling rather than being faked here.
+   Two limits, counted in the database so that they survive this function
+   being replaced between one request and the next: a strict one per account
+   and a loose one per address. The two attacks are different shapes and one
+   number cannot catch both — api/_lib/rate-limit.js explains which is which
+   and why the per-address one is the loose one.
+
+   Supabase applies its own limits underneath these.
 
    THE PASSWORD BEHIND THIS FORM CAN BE CHANGED
    api/auth/forgot.js emails a one-time link and api/auth/reset.js accepts the
@@ -37,6 +39,7 @@
 var respond = require('../_lib/respond');
 var validate = require('../_lib/validate');
 var Cookies = require('../_lib/cookies');
+var Limit = require('../_lib/rate-limit');
 var Errors = require('../_lib/errors');
 var db = require('../_lib/supabase');
 var log = require('../_lib/log');
@@ -51,6 +54,19 @@ module.exports = respond.handler(['POST'], async function (req, res) {
      Refusing a short one here would only refuse a legitimate old account. */
   var password = v.str('password', { min: 1, max: 200 });
   v.done();
+
+  /* AFTER VALIDATION, BEFORE THE PASSWORD IS CHECKED
+     After, because the per-account limit needs the address the caller gave
+     and there is no point counting a body that never named one. Before,
+     because the whole purpose is that the password is not tried.
+
+     A refusal here says nothing about whether the account exists — it is a
+     fact about how many attempts have arrived, and it reads the same for an
+     address that has never been registered. */
+  await Limit.check(req, res, [
+    Limit.byId('login', email, Limit.LOGIN_PER_ACCOUNT),
+    Limit.byIp('login', Limit.LOGIN_PER_IP)
+  ]);
 
   var anon = db.asUser({ headers: {} });
 

@@ -52,6 +52,7 @@
 var respond = require('../_lib/respond');
 var validate = require('../_lib/validate');
 var Cookies = require('../_lib/cookies');
+var Limit = require('../_lib/rate-limit');
 var Errors = require('../_lib/errors');
 var Env = require('../_lib/env');
 var log = require('../_lib/log');
@@ -102,6 +103,13 @@ module.exports = respond.handler(['POST'], async function (req, res) {
   var token = v.str('token', { min: MIN_TOKEN, max: MAX_TOKEN });
   var password = v.str('password', { min: MIN_PASSWORD, max: 200 });
   v.done();
+
+  /* BY ADDRESS ONLY
+     There is nothing else to key on. The token names an account, but reading
+     which one means asking the auth service, which is the expensive call this
+     limit exists to protect — and a limit keyed on a value the caller made up
+     would be one an attacker could vary their way out of. */
+  await Limit.check(req, res, [Limit.byIp('reset', Limit.RESET_PER_IP)]);
 
   /* ---- change it -------------------------------------------------------- */
 
