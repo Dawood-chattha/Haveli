@@ -102,6 +102,19 @@ function identify(buffer) {
  * for an arbitrary image type, so every upload in production was refused with
  * "No file arrived" while every upload locally worked.
  *
+ * WHAT VERCEL ACTUALLY DOES, MEASURED RATHER THAN ASSUMED
+ * The same picture, posted four times to the deployed endpoint:
+ *
+ *   image/png                  the body arrives EMPTY
+ *   application/octet-stream   the body arrives intact
+ *   text/plain                 the body arrives decoded, and is refused below
+ *   no content-type at all     the body arrives EMPTY
+ *
+ * So the panel sends octet-stream — see Repo.uploadImage in
+ * data/admin/admin-repo.js — and loses nothing by it, because the type stored
+ * here has always come from the file's own first bytes rather than from the
+ * header.
+ *
  * So the Buffer is taken when it is offered and the request is read directly
  * when it is not. Reading directly is the general case and the one that needs
  * the care: a stream that has already been consumed will never emit 'end'

@@ -157,6 +157,27 @@ window.ZB = window.ZB || {};
    * reads the first bytes to see what it actually is, checks the size, and
    * decides the name itself.
    */
+  /**
+   * Send a picture to the shop, and get back the address it now lives at.
+   *
+   * THE HEADER SAYS octet-stream AND NOT image/png, ON PURPOSE
+   * It used to send the file's own type, which is the obvious and correct
+   * thing to do and which broke every upload in production. Vercel's runtime
+   * reads the request body itself before the function sees it, and for an
+   * image/* type it hands over nothing: the endpoint was refusing uploads
+   * with "No file arrived" while the same picture went through perfectly on
+   * a laptop. The same bytes under application/octet-stream arrive intact.
+   * Proved by sending one picture four times under four headers, rather than
+   * reasoned about.
+   *
+   * NOTHING IS LOST BY LYING TO THE HEADER, BECAUSE NOBODY BELIEVED IT
+   * api/_routes/admin/uploads.js has never trusted this value. It identifies
+   * a JPEG, a PNG or a WebP from the first bytes of the file and stores THAT
+   * as the type — deliberately, because a content-type header is written by
+   * whoever made the request and a file called a picture is not one. So the
+   * header was already decoration, and it is now decoration that survives the
+   * journey.
+   */
   Repo.uploadImage = function (file, kind) {
     if (!file) return Promise.reject(new Error('No file was chosen.'));
 
@@ -165,7 +186,7 @@ window.ZB = window.ZB || {};
       credentials: 'same-origin',
       headers: {
         Accept: 'application/json',
-        'Content-Type': file.type || 'application/octet-stream'
+        'Content-Type': 'application/octet-stream'
       },
       body: file
     }).then(function (res) {
