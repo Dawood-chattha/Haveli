@@ -125,7 +125,12 @@ function loadFrontendData() {
     'data/collections.js',
     'data/editorial.js',
 
-    'assets/js/catalogue.js'
+    /* THE GENERATOR, NOT THE STOREFRONT'S COPY
+       assets/js/catalogue.js used to build the demo catalogue and now loads
+       the real one from /api/catalogue. Reading it here produced zero
+       products and a seed that quietly did nothing. The generator lives in
+       scripts/demo-catalogue.js now — see its header. */
+    'scripts/demo-catalogue.js'
   ];
 
   for (const rel of files) {
